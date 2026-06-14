@@ -1,6 +1,6 @@
 -- +goose Up
 ALTER TABLE signing_keys
-DROP COLUMN active;
+DROP COLUMN IF EXISTS active;
 
 ALTER TABLE signing_keys
 ADD COLUMN status TEXT NOT NULL default 'ACTIVE';
@@ -11,7 +11,7 @@ ADD COLUMN expired_at TIMESTAMP;
 
 -- +goose Down
 ALTER TABLE signing_keys
-DROP COLUMN  active;
+DROP COLUMN  status;
 
 ALTER TABLE signing_keys
 ADD COLUMN status BOOLEAN NOT NULL DEFAULT true;
