@@ -3,15 +3,15 @@ package handler
 import (
 	"net/http"
 
-	"github.com/Sephy314/chinwag/auth/services"
+	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/labstack/echo/v5"
 )
 
 type JwksHandler struct {
-	service services.JwksService
+	service service.JwksService
 }
 
-func NewJwksHandler(service services.JwksService) *JwksHandler {
+func NewJwksHandler(service service.JwksService) *JwksHandler {
 	return &JwksHandler{
 		service: service,
 	}

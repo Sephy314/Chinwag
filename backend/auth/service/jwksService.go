@@ -1,10 +1,11 @@
-package services
+package service
 
 import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"log"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
@@ -21,24 +22,31 @@ type JwksService struct {
 }
 
 func NewJwksService(repo repo.JwtRepository) *JwksService {
-	return &JwksService{
+	s := &JwksService{
 		jwkSet: jwk.NewSet(),
 		repo:   repo,
 	}
+
+	err := s.LoadJWKS(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return s
 }
 
 func (s *JwksService) LoadJWKS(ctx context.Context) error {
-	cnt, err := s.repo.Count(ctx)
-	if err != nil {
-		return err
-	}
+	//cnt, err := s.repo.Count(ctx)
+	//if err != nil {
+	//	return err
+	//}
 
-	if *cnt <= 0 {
-		err := s.Rotate(ctx)
-		if err != nil {
-			return err
-		}
-	}
+	//if *cnt <= 0 {
+	//	err := s.Rotate(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 
 	dbVersion, err := s.repo.GetVersion(ctx)
 	if err != nil {

@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"context"
@@ -49,4 +49,17 @@ func (s *UserService) CreateUser(ctx context.Context, req structs.CreateUserReq)
 	}
 
 	return newUser, nil
+}
+
+func (s *UserService) GetUser(ctx context.Context, id string) (*domain.User, error) {
+	user, err := s.Repo.GetUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *UserService) DeleteUser(ctx context.Context, id string) error {
+	err := s.Repo.DeleteUser(ctx, id)
+	return err
 }

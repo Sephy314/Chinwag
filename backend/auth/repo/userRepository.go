@@ -10,6 +10,9 @@ import (
 
 type UserRepository interface {
 	CreateUser(ctx context.Context, user domain.User) error
+	GetUser(ctx context.Context, id string) (*domain.User, error)
+	//UpdateUser(ctx context.Context, user domain.User) error
+	DeleteUser(ctx context.Context, id string) error
 }
 
 func NewUserRepository(conn *conn.Connection) UserRepository {
@@ -22,6 +25,22 @@ func NewUserRepository(conn *conn.Connection) UserRepository {
 
 type UserRepo struct {
 	db *sqlx.DB
+}
+
+func (r *UserRepo) GetUser(ctx context.Context, id string) (*domain.User, error) {
+	var user domain.User
+
+	err := r.db.GetContext(ctx, &user, "SELECT * FROM users WHERE id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (r *UserRepo) DeleteUser(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE users SET deleted_at = NOW() WHERE id = $1", id)
+	return err
 }
 
 func (r *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
