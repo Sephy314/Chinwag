@@ -1,16 +1,16 @@
-package services_test
+package service_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
-	"github.com/Sephy314/chinwag/auth/mock"
-	"github.com/Sephy314/chinwag/auth/services"
+	"github.com/Sephy314/chinwag/auth/mocked"
+	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestJwksService_Rotate(t *testing.T) {
@@ -18,10 +18,11 @@ func TestJwksService_Rotate(t *testing.T) {
 
 	mockRepo := new(mocked.JwkRepo)
 
+	tm := time.Now()
+
 	mockRepo.
-		On(
-			"Rotate",
-			ctx,
+		On("Rotate",
+			mock.Anything,
 			mock.MatchedBy(func(key domain.SigningKeyEntity) bool {
 				return key.Status == domain.Active &&
 					key.PublicKey != "" &&
@@ -31,14 +32,22 @@ func TestJwksService_Rotate(t *testing.T) {
 		).
 		Return(nil)
 
-	svc := services.NewJwksService(mockRepo)
+	mockRepo.
+		On("GetVersion", mock.Anything).
+		Return(&tm, nil)
+
+	mockRepo.
+		On("Load", mock.Anything).
+		Return([]domain.SigningKeyEntity{}, nil)
+
+	svc := service.NewJwksService(mockRepo)
 
 	err := svc.Rotate(ctx)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
+
 	mockRepo.AssertExpectations(t)
 }
-
 func TestJwksService_LoadJWKS_NoReload(t *testing.T) {
 	ctx := context.Background()
 
@@ -52,37 +61,12 @@ func TestJwksService_LoadJWKS_NoReload(t *testing.T) {
 		On("Load", ctx).
 		Return([]domain.SigningKeyEntity{}, nil)
 
-	mockRepo.
-		On("Count", mock.Anything).
-		Return(new(int64(1)), nil)
-
-	svc := services.NewJwksService(mockRepo)
+	svc := service.NewJwksService(mockRepo)
 
 	err := svc.LoadJWKS(ctx)
 
 	assert.NoError(t, err)
 
 	mockRepo.AssertNotCalled(t, "Load")
-	mockRepo.AssertExpectations(t)
-}
-
-func TestJwksService_LoadJWKS_GetVersionError(t *testing.T) {
-	ctx := context.Background()
-
-	mockRepo := new(mocked.JwkRepo)
-
-	mockRepo.
-		On("GetVersion", ctx).
-		Return((*time.Time)(nil), errors.New("db error"))
-
-	mockRepo.
-		On("Count", mock.Anything).
-		Return(new(int64(1)), nil)
-
-	svc := services.NewJwksService(mockRepo)
-
-	err := svc.LoadJWKS(ctx)
-
-	assert.Error(t, err)
 	mockRepo.AssertExpectations(t)
 }

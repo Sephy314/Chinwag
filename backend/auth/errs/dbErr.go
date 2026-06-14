@@ -1,6 +1,7 @@
 package errs
 
 import (
+	"database/sql"
 	"errors"
 	"net/http"
 
@@ -13,18 +14,23 @@ var ErrConflict = &AppError{
 	Message: "User already exists",
 }
 
+var ErrNotFound = &AppError{
+	Status:  http.StatusNotFound,
+	Message: "User not found",
+}
+
 func parseDBError(err error) error {
-	var pgErr *pgconn.PgError
-
-	if !errors.As(err, &pgErr) {
-		return err
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return ErrNotFound
 	}
 
-	switch pgErr.Code {
-	case pgerrcode.UniqueViolation:
-		return ErrConflict
-
-	default:
-		return err
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+		switch pgErr.Code {
+		case pgerrcode.UniqueViolation:
+			return ErrConflict
+		}
 	}
+
+	return err
 }
