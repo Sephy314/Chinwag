@@ -61,3 +61,18 @@ func (h *UserHandler) DeleteUser(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, "ok")
 }
+
+func (h *UserHandler) Login(c *echo.Context) error {
+	var req structs.LoginReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, err.Error())
+	}
+
+	tokens, err := h.Service.Login(c.Request().Context(), req.Email, req.Password)
+	if err != nil {
+
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, tokens)
+}

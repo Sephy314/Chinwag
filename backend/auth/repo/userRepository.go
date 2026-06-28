@@ -13,6 +13,7 @@ type UserRepository interface {
 	GetUser(ctx context.Context, id string) (*domain.User, error)
 	//UpdateUser(ctx context.Context, user domain.User) error
 	DeleteUser(ctx context.Context, id string) error
+	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
 }
 
 func NewUserRepository(conn *conn.Connection) UserRepository {
@@ -58,4 +59,21 @@ func (r *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
 	}
 
 	return nil
+}
+
+func (r *UserRepo) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	var user domain.User
+
+	err := r.db.GetContext(
+		ctx,
+		&user,
+		"SELECT * FROM users WHERE email = $1",
+		email,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }

@@ -11,6 +11,17 @@ type UserRepo struct {
 	mock.Mock
 }
 
+func (m *UserRepo) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	args := m.Called(ctx, email)
+
+	user, ok := args.Get(0).(*domain.User)
+	if !ok {
+		return nil, args.Error(1)
+	}
+
+	return user, args.Error(1)
+}
+
 func (m *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)

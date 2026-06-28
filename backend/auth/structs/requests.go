@@ -5,3 +5,9 @@ type CreateUserReq struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+
+// LoginReq represents the payload for login requests
+type LoginReq struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
