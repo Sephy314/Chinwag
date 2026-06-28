@@ -15,6 +15,13 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
+type JwksServiceImpl interface {
+	LoadJWKS(ctx context.Context) error
+	GetJwkSet(ctx context.Context) (jwk.Set, error)
+	Rotate(ctx context.Context) error
+	GetActiveKey(ctx context.Context) (*domain.SigningKey, error)
+}
+
 type JwksService struct {
 	jwkSet  jwk.Set
 	repo    repo.JwtRepository
@@ -51,6 +58,15 @@ func (s *JwksService) LoadJWKS(ctx context.Context) error {
 	dbVersion, err := s.repo.GetVersion(ctx)
 	if err != nil {
 		return err
+	}
+
+	if dbVersion == nil {
+		err = s.Rotate(ctx)
+		if err != nil {
+			return err
+		}
+
+		dbVersion, err = s.repo.GetVersion(ctx)
 	}
 
 	if dbVersion == nil {
@@ -119,4 +135,34 @@ func (s *JwksService) Rotate(ctx context.Context) error {
 
 	err = s.repo.Rotate(ctx, newKey)
 	return err
+}
+
+func (s *JwksService) GetActiveKey(ctx context.Context) (*domain.SigningKey, error) {
+	key, e := s.repo.GetActiveKey(ctx)
+	if e != nil {
+		return nil, e
+	}
+
+	prv, e := utils.DecodePrivateKey(key.PrivateKey)
+
+	if e != nil {
+		return nil, e
+	}
+
+	pub, e := utils.DecodePublicKey(key.PublicKey)
+
+	if e != nil {
+		return nil, e
+	}
+
+	return &domain.SigningKey{
+		Kid:        key.Kid,
+		PublicKey:  pub,
+		PrivateKey: prv,
+		Status:     key.Status,
+		CreatedAt:  key.CreatedAt,
+		UpdatedAt:  key.UpdatedAt,
+		ExpiredAt:  key.ExpiredAt,
+	}, nil
+
 }

@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
@@ -16,7 +17,7 @@ type JwtRepository interface {
 	ClearRetiredKeys(context.Context) error
 	GetActiveKey(context.Context) (*domain.SigningKeyEntity, error)
 	GetVersion(context.Context) (*time.Time, error)
-	Count(context.Context) (*int64, error)
+	//Count(context.Context) (*int64, error)
 }
 
 type JwtRepo struct {
@@ -147,32 +148,20 @@ func (repo *JwtRepo) GetActiveKey(ctx context.Context) (*domain.SigningKeyEntity
 }
 
 func (repo *JwtRepo) GetVersion(ctx context.Context) (*time.Time, error) {
-	var version time.Time
+	var version sql.NullTime
 
 	err := repo.db.GetContext(
 		ctx,
 		&version,
 		"SELECT MAX(updated_at) FROM signing_keys",
 	)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return &version, nil
-}
-
-func (repo *JwtRepo) Count(ctx context.Context) (*int64, error) {
-	var count int64
-	err := repo.db.GetContext(
-		ctx,
-		&count,
-		"SELECT COUNT(*) FROM signing_keys",
-	)
-
-	if err != nil {
-		return nil, err
+	if !version.Valid {
+		return nil, nil
 	}
 
-	return &count, nil
+	return &version.Time, nil
 }
