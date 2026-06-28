@@ -143,26 +143,6 @@ func (s *JwksService) GetActiveKey(ctx context.Context) (*domain.SigningKey, err
 		return nil, e
 	}
 
-	prv, e := utils.DecodePrivateKey(key.PrivateKey)
-
-	if e != nil {
-		return nil, e
-	}
-
-	pub, e := utils.DecodePublicKey(key.PublicKey)
-
-	if e != nil {
-		return nil, e
-	}
-
-	return &domain.SigningKey{
-		Kid:        key.Kid,
-		PublicKey:  pub,
-		PrivateKey: prv,
-		Status:     key.Status,
-		CreatedAt:  key.CreatedAt,
-		UpdatedAt:  key.UpdatedAt,
-		ExpiredAt:  key.ExpiredAt,
-	}, nil
+	return utils.SigningKeyEntityToSigningKey(*key)
 
 }

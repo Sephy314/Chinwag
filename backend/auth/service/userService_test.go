@@ -2,11 +2,16 @@ package service_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	crand "crypto/rand"
 	"errors"
 	"testing"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/Sephy314/chinwag/auth/domain"
-	mocked "github.com/Sephy314/chinwag/auth/mocked"
+	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/conn/cache"
@@ -16,11 +21,13 @@ import (
 )
 
 func NewTestUserService() (*service.UserService, *mocked.UserRepo) {
-	mckedCache := cache.RedisCache{}
+	mockedCache := cache.RedisCache{}
+	mockedJwkService := mocked.JwkService{}
+	mockedRefreshService := mocked.RefreshTokenService{}
 
 	repos := &mocked.UserRepo{}
 
-	svc := service.NewUserService(&mckedCache, repos)
+	svc := service.NewUserService(&mockedCache, repos, &mockedJwkService, &mockedRefreshService)
 
 	return svc, repos
 }
@@ -34,12 +41,13 @@ func TestUserService_CreateUser(t *testing.T) {
 	ctx := context.Background()
 
 	uname := "testUser"
-	uemail := "testUserEmail"
+	userEmail := "testUserEmail"
+
 	tpw := "testUserPassword"
 
 	req := structs.CreateUserReq{
 		Username: uname,
-		Email:    uemail,
+		Email:    userEmail,
 		Password: tpw,
 	}
 
@@ -49,8 +57,9 @@ func TestUserService_CreateUser(t *testing.T) {
 	}
 
 	require.Equal(t, uname, usr.Name)
-	require.Equal(t, uemail, usr.Email)
+	require.Equal(t, userEmail, usr.Email)
 }
+
 func TestUserService_GetUser(t *testing.T) {
 	ctx := context.Background()
 
@@ -62,7 +71,7 @@ func TestUserService_GetUser(t *testing.T) {
 
 	expected := &domain.User{
 		Id:    "123",
-		Name:  "davie",
+		Name:  "Davie",
 		Email: "davie@test.com",
 	}
 
@@ -117,4 +126,157 @@ func TestUserService_GetUser_Error(t *testing.T) {
 
 	assert.Nil(t, user)
 	assert.ErrorIs(t, err, expectedErr)
+}
+
+// Factories/helpers
+func newMocks() (*mocked.UserRepo, *mocked.JwkService, *mocked.RefreshTokenService) {
+	return new(mocked.UserRepo), new(mocked.JwkService), new(mocked.RefreshTokenService)
+}
+
+func newUserWithPassword(t *testing.T, pw string, email string) *domain.User {
+	if pw == "" {
+		pw = "testPassword"
+	}
+	if email == "" {
+		email = "tester@example.com"
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	return &domain.User{
+		Id:       "uid-1",
+		Name:     "tester",
+		Email:    email,
+		Password: string(hash),
+	}
+}
+
+func newSigningKey(t *testing.T) *domain.SigningKey {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
+	require.NoError(t, err)
+
+	return &domain.SigningKey{
+		Kid:        "kid",
+		PublicKey:  &priv.PublicKey,
+		PrivateKey: priv,
+	}
+}
+
+func newService(repo *mocked.UserRepo, jwk *mocked.JwkService, refresh *mocked.RefreshTokenService) *service.UserService {
+	return &service.UserService{
+		Repo:           repo,
+		JwkService:     jwk,
+		RefreshService: refresh,
+	}
+}
+
+func TestUserService_Login(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo, mockJwk, mockRefresh := newMocks()
+
+	user := newUserWithPassword(t, "testPassword", "tester@example.com")
+
+	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+
+	sk := newSigningKey(t)
+	mockJwk.On("GetActiveKey", mock.Anything).Return(sk, nil)
+
+	mockRefresh.On("InsertRefreshToken", mock.Anything, mock.Anything).Return(nil)
+
+	svc := newService(mockRepo, mockJwk, mockRefresh)
+
+	tokens, err := svc.Login(ctx, user.Email, "testPassword")
+	require.NoError(t, err)
+	require.NotNil(t, tokens)
+	require.NotEmpty(t, tokens.AccessToken)
+	require.NotEmpty(t, tokens.RefreshToken)
+
+	mockRepo.AssertExpectations(t)
+	mockJwk.AssertExpectations(t)
+	mockRefresh.AssertExpectations(t)
+}
+
+func TestUserService_Login_WrongPassword(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo, mockJwk, mockRefresh := newMocks()
+
+	user := newUserWithPassword(t, "testPassword", "tester@example.com")
+
+	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+
+	svc := newService(mockRepo, mockJwk, mockRefresh)
+
+	// Wrong password
+	tokens, err := svc.Login(ctx, user.Email, "wrong-password")
+	assert.Error(t, err)
+	assert.Nil(t, tokens)
+
+	// only repo had expectations
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUserService_Login_JwkError(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo, mockJwk, _ := newMocks()
+
+	user := newUserWithPassword(t, "testPassword", "tester@example.com")
+
+	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+
+	mockJwk.On("GetActiveKey", mock.Anything).Return((*domain.SigningKey)(nil), errors.New("jwk fetch failed"))
+
+	svc := newService(mockRepo, mockJwk, nil)
+
+	tokens, err := svc.Login(ctx, user.Email, "testPassword")
+	assert.Error(t, err)
+	assert.Nil(t, tokens)
+
+	mockRepo.AssertExpectations(t)
+	mockJwk.AssertExpectations(t)
+}
+
+func TestUserService_Login_RefreshInsertError(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo, mockJwk, mockRefresh := newMocks()
+
+	user := newUserWithPassword(t, "testPassword", "tester@example.com")
+
+	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+
+	sk := newSigningKey(t)
+	mockJwk.On("GetActiveKey", mock.Anything).Return(sk, nil)
+
+	mockRefresh.On("InsertRefreshToken", mock.Anything, mock.Anything).Return(errors.New("db insert failed"))
+
+	svc := newService(mockRepo, mockJwk, mockRefresh)
+
+	tokens, err := svc.Login(ctx, user.Email, "testPassword")
+	assert.Error(t, err)
+	assert.Nil(t, tokens)
+
+	mockRepo.AssertExpectations(t)
+	mockJwk.AssertExpectations(t)
+	mockRefresh.AssertExpectations(t)
+}
+
+func TestUserService_Login_GetUser_Error_SQLi(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo, mockJwk, _ := newMocks()
+
+	maliciousEmail := "test' OR '1'='1"
+
+	mockRepo.On("GetUser", mock.Anything, maliciousEmail).Return((*domain.User)(nil), errors.New("sql error"))
+
+	svc := newService(mockRepo, mockJwk, nil)
+
+	tokens, err := svc.Login(ctx, maliciousEmail, "doesn't matter")
+	assert.Error(t, err)
+	assert.Nil(t, tokens)
+
+	mockRepo.AssertExpectations(t)
 }

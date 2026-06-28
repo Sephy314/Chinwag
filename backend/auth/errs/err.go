@@ -3,6 +3,8 @@ package errs
 import (
 	"errors"
 	"net/http"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AppError struct {
@@ -16,6 +18,7 @@ func (e *AppError) Error() string {
 
 func ParseError(err error) (int, string) {
 	listErrParsers := []func(error) error{
+		parseAuthError,
 		parseDBError,
 	}
 
@@ -27,5 +30,17 @@ func ParseError(err error) (int, string) {
 		}
 	}
 
-	return http.StatusInternalServerError, err.Error()
+	// For any other error, return a generic AppError to avoid leaking internal details
+	return http.StatusInternalServerError, "Internal Server Error"
+}
+
+func parseAuthError(err error) error {
+	if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+		return &AppError{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid Creds",
+		}
+	}
+
+	return err
 }

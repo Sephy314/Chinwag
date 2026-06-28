@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/Sephy314/chinwag/auth/handler"
+	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn"
@@ -22,7 +23,7 @@ func SetUpAuthRouter(e *echo.Echo) {
 	userRepo := repo.NewUserRepository(conns)
 	jwksRepo := repo.NewJwtRepository(conns)
 
-	userService := service.NewUserService(cacheRedis, userRepo)
+	userService := service.NewUserService(cacheRedis, userRepo, &mocked.JwkService{}, &mocked.RefreshTokenService{})
 	jwksService := service.NewJwksService(jwksRepo)
 
 	userHandler := handler.NewUserHandler(userService)
@@ -34,7 +35,10 @@ func SetUpAuthRouter(e *echo.Echo) {
 
 		auth.POST("/user", userHandler.CreateUser)
 
+		auth.POST("/login", userHandler.Login)
+
 		auth.GET("/.well-known/jwks.json", jwksHandler.ServeJWKS)
+
 	}
 
 }

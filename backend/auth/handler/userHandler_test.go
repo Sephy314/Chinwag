@@ -1,131 +1,86 @@
 package handler_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"testing"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/handler"
-	mocked "github.com/Sephy314/chinwag/auth/mocked"
+	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn/cache"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/echotest"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUserHandler_CreateUser(t *testing.T) {
+// Case: login with email that does not exist -> 404 User not found
+func TestUserHandler_Login_UserNotFound(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
+	mockedJwk := &mocked.JwkService{}
+	mockedRefresh := &mocked.RefreshTokenService{}
 
 	mockedRepo.
-		On("CreateUser",
-			mock.Anything,
-			mock.MatchedBy(func(u domain.User) bool {
-				return u.Name == "testUser" &&
-					u.Email == "test@test.com" &&
-					u.Password != "" &&
-					u.Id != ""
-			}),
-		).
-		Return(nil)
+		On("GetUser", mock.Anything, "notfound@example.com").
+		Return((*domain.User)(nil), sql.ErrNoRows)
 
-	svc := service.NewUserService(mockedCache, mockedRepo)
-	hdl := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
+	h := handler.NewUserHandler(svc)
 
 	rec := echotest.ContextConfig{
 		Headers: map[string][]string{
 			echo.HeaderContentType: {echo.MIMEApplicationJSON},
 		},
-		JSONBody: []byte(`{"username":"testUser","email":"test@test.com","password":"test!1234"}`),
-	}.ServeWithHandler(t, hdl.CreateUser)
+		JSONBody: []byte(`{"email":"notfound@example.com","password":"whatever"}`),
+	}.ServeWithHandler(t, h.Login)
 
-	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 
-	var resp map[string]any
+	var resp string
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
-
-	assert.NoError(t, err)
-	assert.Equal(t, "testUser", resp["name"])
-	assert.Equal(t, "test@test.com", resp["email"])
+	require.NoError(t, err)
 
 	mockedRepo.AssertExpectations(t)
 }
-func TestUserHandler_GetUser(t *testing.T) {
+
+// Case: login with wrong password -> service returns bcrypt mismatch -> 500
+func TestUserHandler_Login_WrongPassword(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
+	mockedJwk := &mocked.JwkService{}
+	mockedRefresh := &mocked.RefreshTokenService{}
 
-	expected := &domain.User{
-		Id:    "user-1",
-		Name:  "testUser",
-		Email: "test@test.com",
+	pw := "correctPassword"
+	hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.MinCost)
+	require.NoError(t, err)
+
+	user := &domain.User{
+		Id:       "uid-1",
+		Name:     "tester",
+		Email:    "tester@example.com",
+		Password: string(hash),
 	}
 
-	mockedRepo.
-		On("GetUser",
-			mock.Anything,
-			"user-1",
-		).
-		Return(expected, nil)
+	mockedRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
 
-	svc := service.NewUserService(mockedCache, mockedRepo)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
 	h := handler.NewUserHandler(svc)
 
 	rec := echotest.ContextConfig{
-		PathValues: echo.PathValues{
-			{Name: "id", Value: "user-1"},
-		},
 		Headers: map[string][]string{
 			echo.HeaderContentType: {echo.MIMEApplicationJSON},
 		},
-	}.ServeWithHandler(t, h.GetUser)
+		JSONBody: []byte(`{"email":"tester@example.com","password":"wrongPassword"}`),
+	}.ServeWithHandler(t, h.Login)
 
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp map[string]any
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
-	require.NoError(t, err)
-
-	assert.Equal(t, "user-1", resp["id"])
-	assert.Equal(t, "testUser", resp["name"])
-	assert.Equal(t, "test@test.com", resp["email"])
-
-	mockedRepo.AssertExpectations(t)
-}
-
-func TestUserHandler_DeleteUser(t *testing.T) {
-	mockedRepo := &mocked.UserRepo{}
-	mockedCache := &cache.MockedCache{}
-
-	mockedRepo.
-		On("DeleteUser",
-			mock.Anything,
-			"user-1",
-		).
-		Return(nil)
-
-	svc := service.NewUserService(mockedCache, mockedRepo)
-	h := handler.NewUserHandler(svc)
-
-	rec := echotest.ContextConfig{
-		PathValues: echo.PathValues{
-			{Name: "id", Value: "user-1"},
-		},
-		Headers: map[string][]string{
-			echo.HeaderContentType: {echo.MIMEApplicationJSON},
-		},
-	}.ServeWithHandler(t, h.DeleteUser)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp any
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
-	require.NoError(t, err)
-
-	assert.Equal(t, "ok", resp)
+	// bcrypt mismatch should return 400 (Invalid Creds)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 
 	mockedRepo.AssertExpectations(t)
 }

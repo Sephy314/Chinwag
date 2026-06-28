@@ -94,3 +94,25 @@ func DecodePrivateKey(raw string) (*ecdsa.PrivateKey, error) {
 
 	return x509.ParseECPrivateKey(b)
 }
+
+func SigningKeyEntityToSigningKey(key domain.SigningKeyEntity) (*domain.SigningKey, error) {
+	pub, err := DecodePublicKey(key.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	priv, err := DecodePrivateKey(key.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain.SigningKey{
+		Kid:        key.Kid,
+		PublicKey:  pub,
+		PrivateKey: priv,
+		Status:     key.Status,
+		CreatedAt:  key.CreatedAt,
+		UpdatedAt:  key.UpdatedAt,
+		ExpiredAt:  key.ExpiredAt,
+	}, nil
+}

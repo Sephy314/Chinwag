@@ -32,11 +32,12 @@ func (m *JwkService) Rotate(ctx context.Context) error {
 	return args.Error(0)
 }
 
-func (m *JwkService) GetActiveKey(ctx context.Context) (*domain.SigningKeyEntity, error) {
+func (m *JwkService) GetActiveKey(ctx context.Context) (*domain.SigningKey, error) {
 	args := m.Called(ctx)
-	var key *domain.SigningKeyEntity
+	var key *domain.SigningKey
 	if args.Get(0) != nil {
-		key = args.Get(0).(*domain.SigningKeyEntity)
+		key = args.Get(0).(*domain.SigningKey)
 	}
+
 	return key, args.Error(1)
 }
