@@ -37,7 +37,7 @@ func TestJwksHandler_ServeJWKS_Success(t *testing.T) {
 
 	mockService := service.NewJwksService(&mockedRepo)
 
-	hdl := handler.NewJwksHandler(*mockService)
+	hdl := handler.NewJwksHandler(mockService)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil)
 	rec := httptest.NewRecorder()

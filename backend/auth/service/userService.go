@@ -14,6 +14,7 @@ import (
 type UserService struct {
 	Repo  repo.UserRepository
 	Cache cache.Cache
+	JwksService
 }
 
 func NewUserService(cache cache.Cache, repo repo.UserRepository) *UserService {

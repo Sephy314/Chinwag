@@ -26,7 +26,7 @@ func SetUpAuthRouter(e *echo.Echo) {
 	jwksService := service.NewJwksService(jwksRepo)
 
 	userHandler := handler.NewUserHandler(userService)
-	jwksHandler := handler.NewJwksHandler(*jwksService)
+	jwksHandler := handler.NewJwksHandler(jwksService)
 
 	auth := e.Group("/auth")
 	{

@@ -19,6 +19,11 @@ var ErrNotFound = &AppError{
 	Message: "User not found",
 }
 
+var ErrCacheNotFound = &AppError{
+	Status:  http.StatusNotFound,
+	Message: "Cached data not found",
+}
+
 func parseDBError(err error) error {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
