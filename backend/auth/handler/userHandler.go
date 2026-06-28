@@ -3,9 +3,11 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
+	"github.com/Sephy314/chinwag/auth/utils"
 	"github.com/labstack/echo/v5"
 )
 
@@ -43,9 +45,17 @@ func (h *UserHandler) CreateUser(c *echo.Context) error {
 }
 
 func (h *UserHandler) GetUser(c *echo.Context) error {
+	var user *domain.User
+	var err error
+
 	id := c.Param("id")
 
-	user, err := h.Service.GetUser(c.Request().Context(), id)
+	if utils.IsEmail(id) {
+		user, err = h.Service.GetUserByEmail(c.Request().Context(), id)
+	} else {
+		user, err = h.Service.GetUser(c.Request().Context(), id)
+	}
+
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
