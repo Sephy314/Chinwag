@@ -1,7 +1,7 @@
 package router
 
 import (
-	"fmt"
+	"log"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/handler"
@@ -9,6 +9,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/keyProvider"
 	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
 )
@@ -34,6 +35,8 @@ func SetUpAuthRouter(e *echo.Echo) {
 
 	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService)
 
+	keyProvider.InjectProvider(jwksService)
+
 	userHandler := handler.NewUserHandler(userService)
 	jwksHandler := handler.NewJwksHandler(jwksService)
 
@@ -55,10 +58,10 @@ func SetUpAuthRouter(e *echo.Echo) {
 	authPriv := e.Group("/auth")
 
 	authPriv.Use(echojwt.WithConfig(echojwt.Config{
-		KeyFunc: jwtService.KeyFunc,
+		KeyFunc: keyProvider.KeyFunc,
 		ErrorHandler: func(c *echo.Context, err error) error {
-			fmt.Println("JWT ERROR:", err)
-			return echo.NewHTTPError(401, err.Error())
+			log.Println(err)
+			return echo.ErrUnauthorized
 		},
 	}))
 

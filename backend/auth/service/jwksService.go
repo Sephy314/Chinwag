@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
+	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
@@ -144,5 +145,26 @@ func (s *JwksService) GetActiveKey(ctx context.Context) (*domain.SigningKey, err
 	}
 
 	return utils.SigningKeyEntityToSigningKey(*key)
+
+}
+
+func (s *JwksService) GetPublicKey(ctx context.Context, kid string) (*ecdsa.PublicKey, error) {
+	err := s.LoadJWKS(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	foundJwk, o := s.jwkSet.LookupKeyID(kid)
+
+	if !o {
+		return nil, errs.ErrNoKey
+	}
+
+	var pub ecdsa.PublicKey
+	if err := jwk.Export(foundJwk, &pub); err != nil {
+		return nil, err
+	}
+
+	return &pub, nil
 
 }
