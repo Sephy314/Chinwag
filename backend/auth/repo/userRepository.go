@@ -31,7 +31,7 @@ type UserRepo struct {
 func (r *UserRepo) GetUser(ctx context.Context, id string) (*domain.User, error) {
 	var user domain.User
 
-	err := r.db.GetContext(ctx, &user, "SELECT * FROM users WHERE id = $1", id)
+	err := r.db.GetContext(ctx, &user, `SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (r *UserRepo) GetUser(ctx context.Context, id string) (*domain.User, error)
 }
 
 func (r *UserRepo) DeleteUser(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE users SET deleted_at = NOW() WHERE id = $1", id)
+	_, err := r.db.ExecContext(ctx, `UPDATE users SET deleted_at = NOW() WHERE id = $1`, id)
 	return err
 }
 
@@ -67,7 +67,7 @@ func (r *UserRepo) GetUserByEmail(ctx context.Context, email string) (*domain.Us
 	err := r.db.GetContext(
 		ctx,
 		&user,
-		"SELECT * FROM users WHERE email = $1",
+		"SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL",
 		email,
 	)
 

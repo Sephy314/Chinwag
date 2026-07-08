@@ -1,8 +1,6 @@
 package router
 
 import (
-	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"time"
 
@@ -13,8 +11,6 @@ import (
 	"github.com/Sephy314/chinwag/conn/cache"
 	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
-	gjwt "github.com/golang-jwt/jwt/v4"
-	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
 func SetUpAuthRouter(e *echo.Echo) {
@@ -41,61 +37,34 @@ func SetUpAuthRouter(e *echo.Echo) {
 	userHandler := handler.NewUserHandler(userService)
 	jwksHandler := handler.NewJwksHandler(jwksService)
 
-	auth := e.Group("/auth")
+	authPub := e.Group("/auth")
 	{
-		auth.GET("/health", userHandler.Health)
+		authPub.GET("/health", userHandler.Health)
 
-		auth.GET("/user/:id", userHandler.GetUser)
-		auth.POST("/user", userHandler.CreateUser)
+		authPub.GET("/user/:id", userHandler.GetUser)
+		authPub.POST("/user", userHandler.CreateUser)
 
-		auth.POST("/login", userHandler.Login)
+		authPub.POST("/login", userHandler.Login)
 
-		auth.GET("/.well-known/jwks.json", jwksHandler.ServeJWKS)
+		authPub.GET("/.well-known/jwks.json", jwksHandler.ServeJWKS)
 
-		auth.POST("/refresh", refreshTokenHandler.Refresh)
+		authPub.POST("/refresh", refreshTokenHandler.Refresh)
 
 	}
 
-	auth.Use(echojwt.WithConfig(echojwt.Config{
-		KeyFunc: func(token *gjwt.Token) (interface{}, error) {
-			kidVal, ok := token.Header["kid"]
-			if !ok {
-				return nil, fmt.Errorf("missing kid header")
-			}
-			kid, ok := kidVal.(string)
-			if !ok || kid == "" {
-				return nil, fmt.Errorf("invalid kid header")
-			}
+	authPriv := e.Group("/auth")
 
-			keys, err := jwksService.GetJwkSet(context.Background())
-			if err != nil {
-				return nil, err
-			}
-
-			for _, k := range keys.Keys() {
-				v, err := k.Get(jwk.KeyIDKey)
-				if err != nil {
-					continue
-				}
-				if ks, ok := v.(string); ok && ks == kid {
-					// try to materialize into ecdsa.PublicKey
-					var pub ecdsa.PublicKey
-					if err := k.Raw(&pub); err == nil {
-						return &pub, nil
-					}
-					// fallback to Materialize
-					raw, err := k.Materialize()
-					if err == nil {
-						if p, ok := raw.(*ecdsa.PublicKey); ok {
-							return p, nil
-						}
-					}
-				}
-			}
-
-			return nil, fmt.Errorf("public key for kid %s not found", kid)
+	authPriv.Use(echojwt.WithConfig(echojwt.Config{
+		KeyFunc: jwtService.KeyFunc,
+		ErrorHandler: func(c *echo.Context, err error) error {
+			fmt.Println("JWT ERROR:", err)
+			return echo.NewHTTPError(401, err.Error())
 		},
 	}))
+
+	{
+		authPriv.GET("/whoami", userHandler.WhoAmI)
+	}
 
 	//
 	//policy := []middleware.PathAuthenticatedPolicy{

@@ -16,7 +16,7 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
-func ParseError(err error) (int, string) {
+func ParseError(err error) (int, any) {
 	listErrParsers := []func(error) error{
 		parseAuthError,
 		parseDBError,
@@ -26,7 +26,11 @@ func ParseError(err error) (int, string) {
 		parsed := parser(err)
 
 		if a, ok := errors.AsType[*AppError](parsed); ok {
-			return a.Status, a.Message
+			data := map[string]string{
+				"error": a.Message,
+			}
+
+			return a.Status, data
 		}
 	}
 

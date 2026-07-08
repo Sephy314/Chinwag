@@ -1,8 +1,9 @@
 package router
 
 import (
-	"github.com/Sephy314/chinwag/auth/router"
+	authRouter "github.com/Sephy314/chinwag/auth/router"
 	"github.com/Sephy314/chinwag/conn"
+	roomRouter "github.com/Sephy314/chinwag/room/router"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -23,7 +24,8 @@ func SetUpRouter() (*echo.Echo, error) {
 		AllowOrigins: []string{"*"},
 	}))
 
-	router.SetUpAuthRouter(e)
+	authRouter.SetUpAuthRouter(e)
+	roomRouter.SetUpRoomRouter(e)
 
 	return e, nil
 }

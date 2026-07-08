@@ -8,10 +8,10 @@ import (
 )
 
 type JwksHandler struct {
-	service service.JwksServiceImpl
+	service service.JwksServiceInterface
 }
 
-func NewJwksHandler(service service.JwksServiceImpl) *JwksHandler {
+func NewJwksHandler(service service.JwksServiceInterface) *JwksHandler {
 	return &JwksHandler{
 		service: service,
 	}

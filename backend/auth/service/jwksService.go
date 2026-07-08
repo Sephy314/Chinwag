@@ -10,12 +10,12 @@ import (
 
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/repo"
-	"github.com/Sephy314/chinwag/auth/utils"
+	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
-type JwksServiceImpl interface {
+type JwksServiceInterface interface {
 	LoadJWKS(ctx context.Context) error
 	GetJwkSet(ctx context.Context) (jwk.Set, error)
 	Rotate(ctx context.Context) error

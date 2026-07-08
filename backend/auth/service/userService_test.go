@@ -177,7 +177,7 @@ func TestUserService_Login(t *testing.T) {
 
 	user := newUserWithPassword(t, "testPassword", "tester@example.com")
 
-	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+	mockRepo.On("GetUserByEmail", mock.Anything, user.Email).Return(user, nil)
 
 	sk := newSigningKey(t)
 	mockJwk.On("GetActiveKey", mock.Anything).Return(sk, nil)
@@ -204,7 +204,7 @@ func TestUserService_Login_WrongPassword(t *testing.T) {
 
 	user := newUserWithPassword(t, "testPassword", "tester@example.com")
 
-	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+	mockRepo.On("GetUserByEmail", mock.Anything, user.Email).Return(user, nil)
 
 	svc := newService(mockRepo, mockJwk, mockRefresh)
 
@@ -224,7 +224,7 @@ func TestUserService_Login_JwkError(t *testing.T) {
 
 	user := newUserWithPassword(t, "testPassword", "tester@example.com")
 
-	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+	mockRepo.On("GetUserByEmail", mock.Anything, user.Email).Return(user, nil)
 
 	mockJwk.On("GetActiveKey", mock.Anything).Return((*domain.SigningKey)(nil), errors.New("jwk fetch failed"))
 
@@ -245,7 +245,7 @@ func TestUserService_Login_RefreshInsertError(t *testing.T) {
 
 	user := newUserWithPassword(t, "testPassword", "tester@example.com")
 
-	mockRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+	mockRepo.On("GetUserByEmail", mock.Anything, user.Email).Return(user, nil)
 
 	sk := newSigningKey(t)
 	mockJwk.On("GetActiveKey", mock.Anything).Return(sk, nil)
@@ -270,7 +270,7 @@ func TestUserService_Login_GetUser_Error_SQLi(t *testing.T) {
 
 	maliciousEmail := "test' OR '1'='1"
 
-	mockRepo.On("GetUser", mock.Anything, maliciousEmail).Return((*domain.User)(nil), errors.New("sql error"))
+	mockRepo.On("GetUserByEmail", mock.Anything, maliciousEmail).Return((*domain.User)(nil), errors.New("sql error"))
 
 	svc := newService(mockRepo, mockJwk, nil)
 
