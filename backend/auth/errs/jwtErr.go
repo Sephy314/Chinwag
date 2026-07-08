@@ -12,4 +12,9 @@ var (
 		Status:  http.StatusBadRequest,
 		Message: "Invalid token",
 	}
+
+	ErrNoKey = &AppError{
+		Status:  http.StatusBadRequest,
+		Message: "No key",
+	}
 )
