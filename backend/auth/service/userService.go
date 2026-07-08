@@ -7,8 +7,8 @@ import (
 	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/auth/structs"
-	"github.com/Sephy314/chinwag/auth/utils"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,15 +16,15 @@ import (
 type UserService struct {
 	Repo           repo.UserRepository
 	Cache          cache.Cache
-	JwkService     JwksServiceImpl
-	RefreshService RefreshTokenServiceImpl
+	JwkService     JwksServiceInterface
+	RefreshService RefreshTokenServiceInterface
 }
 
 func NewUserService(
 	cache cache.Cache,
 	repo repo.UserRepository,
-	jwkService JwksServiceImpl,
-	refreshService RefreshTokenServiceImpl,
+	jwkService JwksServiceInterface,
+	refreshService RefreshTokenServiceInterface,
 ) *UserService {
 	return &UserService{
 		Repo:           repo,
@@ -80,7 +80,7 @@ func (s *UserService) DeleteUser(ctx context.Context, id string) error {
 }
 
 func (s *UserService) Login(ctx context.Context, email string, pw string) (*structs.TokenSet, error) {
-	user, err := s.Repo.GetUser(ctx, email)
+	user, err := s.Repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, errs.ErrInvalidCreds
 	}
@@ -98,7 +98,7 @@ func (s *UserService) Login(ctx context.Context, email string, pw string) (*stru
 		return nil, err
 	}
 
-	accessToken, err := utils.NewToken(user.Id, key.PrivateKey)
+	accessToken, err := utils.NewToken(user.Id, user.Role, key.PrivateKey, key.Kid)
 	if err != nil {
 		return nil, err
 	}

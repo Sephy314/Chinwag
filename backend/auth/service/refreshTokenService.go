@@ -9,7 +9,7 @@ import (
 	"github.com/Sephy314/chinwag/conn/cache"
 )
 
-type RefreshTokenServiceImpl interface {
+type RefreshTokenServiceInterface interface {
 	GetUserIdByRefreshToken(ctx context.Context, refreshToken string) (*string, error)
 	InsertRefreshToken(ctx context.Context, token structs.RefreshToken) error
 	RemoveRefreshToken(ctx context.Context, tokenId string) error
@@ -22,7 +22,9 @@ type RefreshTokenService struct {
 }
 
 func (r *RefreshTokenService) GetUserIdByRefreshToken(ctx context.Context, refreshToken string) (*string, error) {
-	token, err := r.Cache.Get(ctx, r.RefreshTokenPrefix+refreshToken)
+	key := r.RefreshTokenPrefix + refreshToken
+
+	token, err := r.Cache.Get(ctx, key)
 	if err != nil {
 		return nil, errs.ErrCacheNotFound
 	}
@@ -35,7 +37,7 @@ func (r *RefreshTokenService) InsertRefreshToken(ctx context.Context, token stru
 		ctx,
 		r.RefreshTokenPrefix+token.RefreshToken,
 		token.Subject,
-		r.RefreshTokenTTL,
+		time.Hour*24*14,
 	)
 }
 

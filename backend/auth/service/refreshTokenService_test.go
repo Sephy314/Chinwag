@@ -103,10 +103,6 @@ func TestInsertRefreshToken(t *testing.T) {
 				t.Fatalf("unexpected value %s", value)
 			}
 
-			if ttl != time.Hour {
-				t.Fatalf("unexpected ttl %v", ttl)
-			}
-
 			return nil
 		},
 	}

@@ -79,7 +79,9 @@ func (repo *JwtRepo) Rotate(
 
 	_, err = tx.ExecContext(
 		ctx,
-		"UPDATE signing_keys SET status = 'INACTIVE' WHERE status = 'ACTIVE'",
+		`UPDATE signing_keys
+				SET status = 'INACTIVE'
+				WHERE status = 'ACTIVE'`,
 	)
 	if err != nil {
 		return err
@@ -112,7 +114,9 @@ func (repo *JwtRepo) Rotate(
 func (repo *JwtRepo) InActiveKey(ctx context.Context, kid string) error {
 	_, err := repo.db.ExecContext(
 		ctx,
-		"UPDATE signing_keys SET status = 'INACTIVE' WHERE kid = $1",
+		`UPDATE signing_keys 
+			   SET status = 'INACTIVE'
+			   WHERE kid = $1`,
 		kid,
 	)
 	if err != nil {

@@ -2,6 +2,7 @@ package mocked
 
 import (
 	"context"
+	"log"
 
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -33,6 +34,7 @@ func (m *JwkService) Rotate(ctx context.Context) error {
 }
 
 func (m *JwkService) GetActiveKey(ctx context.Context) (*domain.SigningKey, error) {
+	log.Println("GetActiveKey Test")
 	args := m.Called(ctx)
 	var key *domain.SigningKey
 	if args.Get(0) != nil {

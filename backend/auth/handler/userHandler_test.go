@@ -27,7 +27,7 @@ func TestUserHandler_Login_UserNotFound(t *testing.T) {
 	mockedRefresh := &mocked.RefreshTokenService{}
 
 	mockedRepo.
-		On("GetUser", mock.Anything, "notfound@example.com").
+		On("GetUserByEmail", mock.Anything, "notfound@example.com").
 		Return((*domain.User)(nil), sql.ErrNoRows)
 
 	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
@@ -42,11 +42,17 @@ func TestUserHandler_Login_UserNotFound(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
-	var resp string
+	var resp struct {
+		Error string `json:"error"`
+	}
+
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
 
+	require.Equal(t, "Invalid Credentials", resp.Error)
+
 	mockedRepo.AssertExpectations(t)
+
 }
 
 // Case: login with wrong password -> service returns bcrypt mismatch -> 500
@@ -67,7 +73,7 @@ func TestUserHandler_Login_WrongPassword(t *testing.T) {
 		Password: string(hash),
 	}
 
-	mockedRepo.On("GetUser", mock.Anything, user.Email).Return(user, nil)
+	mockedRepo.On("GetUserByEmail", mock.Anything, user.Email).Return(user, nil)
 
 	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
 	h := handler.NewUserHandler(svc)
