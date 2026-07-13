@@ -36,6 +36,7 @@ func SetUpAuthRouter(e *echo.Echo) {
 	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService)
 
 	keyProvider.InjectProvider(jwksService)
+	log.Println("Key Provider Injected")
 
 	userHandler := handler.NewUserHandler(userService)
 	jwksHandler := handler.NewJwksHandler(jwksService)
@@ -69,37 +70,5 @@ func SetUpAuthRouter(e *echo.Echo) {
 		authPriv.GET("/whoami", userHandler.WhoAmI)
 	}
 
-	//
-	//policy := []middleware.PathAuthenticatedPolicy{
-	//	{
-	//		Path:   "health",
-	//		Method: "GET",
-	//		Role:   nil,
-	//		Auth:   false,
-	//	},
-	//	{
-	//		Path:   "user",
-	//		Method: "GET",
-	//		Role:   nil,
-	//		Auth:   false,
-	//	},
-	//	{
-	//		Path:   "login",
-	//		Method: "GET",
-	//		Role:   nil,
-	//		Auth:   false,
-	//	},
-	//	{
-	//		Path:   "refresh",
-	//		Method: "GET",
-	//		Role:   nil,
-	//		Auth:   false,
-	//	},
-	//	{
-	//		Path:   "user",
-	//		Method: "GET",
-	//	},
-	//}
-	//
-	//auth.Use(middleware.AuthMiddleware(policy, jwksService))
+	log.Println("auth routes registered")
 }

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
-	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/repo"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v3/jwk"

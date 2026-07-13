@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
-	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v5"

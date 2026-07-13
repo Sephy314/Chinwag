@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/errs"
 )
 
 type RefreshTokenServiceInterface interface {

@@ -8,6 +8,7 @@ import (
 
 func main() {
 	e, err := router.SetUpRouter()
+
 	if err != nil {
 		log.Fatal(err)
 	}
