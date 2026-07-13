@@ -1,0 +1,169 @@
+package handler_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"testing"
+
+	"github.com/Sephy314/chinwag/room/domain"
+	"github.com/Sephy314/chinwag/room/handler"
+	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/echotest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+type MockRoomService struct {
+	mock.Mock
+}
+
+func (m *MockRoomService) CreateRoom(ctx context.Context, request structs.CreateRoomRequest) (*domain.Room, error) {
+	args := m.Called(ctx, request)
+
+	var room *domain.Room
+	if args.Get(0) != nil {
+		room = args.Get(0).(*domain.Room)
+	}
+
+	return room, args.Error(1)
+}
+
+func (m *MockRoomService) GetRoomById(ctx context.Context, roomId uuid.UUID) (*domain.Room, error) {
+	args := m.Called(ctx, roomId)
+
+	var room *domain.Room
+	if args.Get(0) != nil {
+		room = args.Get(0).(*domain.Room)
+	}
+
+	return room, args.Error(1)
+}
+
+func (m *MockRoomService) GetRoomsByOwnerId(ctx context.Context, ownerId uuid.UUID) ([]domain.Room, error) {
+	args := m.Called(ctx, ownerId)
+
+	var rooms []domain.Room
+	if args.Get(0) != nil {
+		rooms = args.Get(0).([]domain.Room)
+	}
+	return rooms, args.Error(1)
+}
+
+func (m *MockRoomService) DeleteRoom(ctx context.Context, roomId uuid.UUID) error {
+	args := m.Called(ctx, roomId)
+	return args.Error(0)
+}
+
+func TestRoomHandler_CreateRoom_Success(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	ownerID := uuid.New()
+	roomID := uuid.New()
+	req := structs.CreateRoomRequest{
+		Name:        "standup",
+		Description: nil,
+		MaxMembers:  12,
+		OwnerId:     ownerID,
+	}
+	expected := &domain.Room{
+		Id:         roomID,
+		Name:       req.Name,
+		MaxMembers: req.MaxMembers,
+		OwnerId:    ownerID,
+	}
+
+	mockSvc.On("CreateRoom", mock.Anything, req).Return(expected, nil)
+
+	rec := echotest.ContextConfig{
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"standup","max_members":12,"owner_id":"` + ownerID.String() + `"}`),
+	}.ServeWithHandler(t, h.CreateRoom)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp domain.Room
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, roomID, resp.Id)
+	assert.Equal(t, req.Name, resp.Name)
+	assert.Equal(t, req.MaxMembers, resp.MaxMembers)
+	assert.Equal(t, ownerID, resp.OwnerId)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomHandler_GetRoom_InvalidID(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: "not-a-uuid"},
+		},
+	}.ServeWithHandler(t, h.GetRoom)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "GetRoomById", mock.Anything, mock.Anything)
+}
+
+func TestRoomHandler_GetRoomsByOwnerId_Success(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	ownerID := uuid.New()
+	rooms := []domain.Room{
+		{
+			Id:         uuid.New(),
+			Name:       "room-1",
+			MaxMembers: 8,
+			OwnerId:    ownerID,
+		},
+	}
+
+	mockSvc.On("GetRoomsByOwnerId", mock.Anything, ownerID).Return(rooms, nil)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "ownerId", Value: ownerID.String()},
+		},
+	}.ServeWithHandler(t, h.GetRoomsByOwnerId)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp []domain.Room
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Len(t, resp, 1)
+	assert.Equal(t, rooms[0].Name, resp[0].Name)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomHandler_DeleteRoom_NotFound(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	roomID := uuid.New()
+	mockSvc.On("DeleteRoom", mock.Anything, roomID).Return(errors.New("not found"))
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: roomID.String()},
+		},
+	}.ServeWithHandler(t, h.DeleteRoom)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	mockSvc.AssertExpectations(t)
+}
