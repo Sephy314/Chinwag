@@ -3,7 +3,7 @@ package keyProvider
 import (
 	"context"
 
-	"github.com/Sephy314/chinwag/auth/errs"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/golang-jwt/jwt/v5"
 )
 

@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/Sephy314/chinwag/auth/domain"
-	"github.com/Sephy314/chinwag/auth/errs"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
