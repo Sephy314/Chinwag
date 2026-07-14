@@ -8,6 +8,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v5"
@@ -29,10 +30,10 @@ func NewUserHandler(s *service.UserService) *UserHandler {
 // @Description  Check the health status of the auth service
 // @Tags         auth
 // @Produce      json
-// @Success      200 {string} string ""
+// @Success      200 {object} response.Response[string]
 // @Router       /auth/health [get]
 func (h *UserHandler) Health(c *echo.Context) error {
-	return c.JSON(http.StatusOK, "")
+	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
 // CreateUser godoc
@@ -42,15 +43,15 @@ func (h *UserHandler) Health(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Param        request body structs.CreateUserReq true "User registration info" example({"username":"john","email":"john@example.com","password":"secret123"})
-// @Success      200 {object} structs.UserResponse "Successfully created user"
-// @Failure      400 {string} string "Invalid request body"
-// @Failure      409 {object} map[string]string "User already exists"
+// @Success      200 {object} response.Response[structs.UserResponse] "Successfully created user"
+// @Failure      400 {object} response.Response[any] "Invalid request body"
+// @Failure      409 {object} response.Response[any] "User already exists"
 // @Router       /auth/user [post]
 func (h *UserHandler) CreateUser(c *echo.Context) error {
 	var req structs.CreateUserReq
 
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, err.Error())
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
 
 	usr, err := h.Service.CreateUser(c.Request().Context(), req)
@@ -59,9 +60,7 @@ func (h *UserHandler) CreateUser(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	usrProjection := usr.ToProjection()
-
-	return c.JSON(http.StatusOK, usrProjection)
+	return c.JSON(http.StatusOK, response.OK(usr.ToProjection()))
 }
 
 // GetUser godoc
@@ -70,8 +69,8 @@ func (h *UserHandler) CreateUser(c *echo.Context) error {
 // @Tags         auth
 // @Produce      json
 // @Param        id path string true "User ID (UUID) or email address" example(john@example.com)
-// @Success      200 {object} structs.UserResponse "User found"
-// @Failure      404 {object} map[string]string "User not found"
+// @Success      200 {object} response.Response[structs.UserResponse] "User found"
+// @Failure      404 {object} response.Response[any] "User not found"
 // @Router       /auth/user/{id} [get]
 func (h *UserHandler) GetUser(c *echo.Context) error {
 	var user *domain.User
@@ -89,16 +88,25 @@ func (h *UserHandler) GetUser(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, user.ToProjection())
+	return c.JSON(http.StatusOK, response.OK(user.ToProjection()))
 }
 
+// DeleteUser godoc
+// @Summary      Delete a user
+// @Description  Delete a user account by ID
+// @Tags         auth
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "User ID"
+// @Success      200 {object} response.Response[any]
+// @Router       /auth/user/{id} [delete]
 func (h *UserHandler) DeleteUser(c *echo.Context) error {
 	id := c.Param("id")
 	err := h.Service.DeleteUser(c.Request().Context(), id)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
-	return c.JSON(http.StatusOK, "ok")
+	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
 // Login godoc
@@ -108,20 +116,18 @@ func (h *UserHandler) DeleteUser(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Param        request body structs.LoginReq true "Login credentials" example({"email":"john@example.com","password":"secret123"})
-// @Success      200 {object} map[string]interface{} "Returns {\"token\": \"<jwt_access_token>\"}. Refresh token is set as an HttpOnly cookie named \"refresh\"."
-// @Failure      400 {object} map[string]string "Invalid credentials"
+// @Success      200 {object} response.Response[map[string]interface{}] "Returns {\"token\": \"<jwt_access_token>\"}. Refresh token is set as an HttpOnly cookie named \"refresh\"."
+// @Failure      400 {object} response.Response[any] "Invalid credentials"
 // @Router       /auth/login [post]
 func (h *UserHandler) Login(c *echo.Context) error {
 	var req structs.LoginReq
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, err.Error())
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
 
 	tokens, err := h.Service.Login(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
-		status, res := errs.ParseError(err)
-
-		return c.JSON(status, res)
+		return c.JSON(errs.ParseError(err))
 	}
 
 	c.SetCookie(&http.Cookie{
@@ -134,9 +140,9 @@ func (h *UserHandler) Login(c *echo.Context) error {
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, response.OK(map[string]string{
 		"token": tokens.AccessToken,
-	})
+	}))
 }
 
 // WhoAmI godoc
@@ -145,8 +151,8 @@ func (h *UserHandler) Login(c *echo.Context) error {
 // @Tags         auth
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200 {object} map[string]interface{} "Returns {\"user\": {\"id\": \"...\", \"name\": \"...\", \"email\": \"...\"}}"
-// @Failure      401 {string} string "Unauthorized - invalid or missing token"
+// @Success      200 {object} response.Response[map[string]interface{}] "Returns {\"user\": {\"id\": \"...\", \"name\": \"...\", \"email\": \"...\"}}"
+// @Failure      401 {object} response.Response[any] "Unauthorized - invalid or missing token"
 // @Router       /auth/whoami [get]
 func (h *UserHandler) WhoAmI(c *echo.Context) error {
 	token, err := echo.ContextGet[*jwt.Token](c, "user")
@@ -164,7 +170,7 @@ func (h *UserHandler) WhoAmI(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, response.OK(map[string]interface{}{
 		"user": i.ToProjection(),
-	})
+	}))
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -37,12 +38,10 @@ func NewRoomHandler(s service.RoomServiceInterface, memberService service.RoomMe
 // @Description  Check the health status of the room service
 // @Tags         room
 // @Produce      json
-// @Success      200 {object} map[string]string "Returns {\"message\": \"ok\"}"
+// @Success      200 {object} response.Response[any]
 // @Router       /rooms/health [get]
 func (h *RoomHandlerImpl) Health(c *echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "ok",
-	})
+	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
 // CreateRoom godoc
@@ -53,16 +52,14 @@ func (h *RoomHandlerImpl) Health(c *echo.Context) error {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        request body structs.CreateRoomRequest true "Room creation info" example({"name":"general","description":"General chat room","max_members":50})
-// @Success      201 {object} domain.Room "Created room with fields: id (UUID), name, description, max_members, owner_id, created_at, updated_at"
-// @Failure      400 {object} map[string]string "Invalid request body or validation error"
-// @Failure      500 {object} map[string]string "Internal server error"
+// @Success      201 {object} response.Response[domain.Room] "Created room with fields: id (UUID), name, description, max_members, owner_id, created_at, updated_at"
+// @Failure      400 {object} response.Response[any] "Invalid request body or validation error"
+// @Failure      500 {object} response.Response[any] "Internal server error"
 // @Router       /rooms [post]
 func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 	var req structs.CreateRoomRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( err.Error()))
 	}
 
 	ownerId, err := utils.GetUserIdByEchoContext(c)
@@ -78,7 +75,7 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusCreated, room)
+	return c.JSON(http.StatusCreated, response.Created(room))
 }
 
 // GetRoom godoc
@@ -87,16 +84,14 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 // @Tags         room
 // @Produce      json
 // @Param        id path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
-// @Success      200 {object} domain.Room "Room found"
-// @Failure      400 {object} map[string]string "Invalid UUID format"
-// @Failure      404 {object} map[string]string "Room not found"
+// @Success      200 {object} response.Response[domain.Room] "Room found"
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      404 {object} response.Response[any] "Room not found"
 // @Router       /rooms/{id} [get]
 func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid room id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
 	}
 
 	room, err := h.service.GetRoomById(c.Request().Context(), roomId)
@@ -104,7 +99,7 @@ func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, room)
+	return c.JSON(http.StatusOK, response.OK(room))
 }
 
 // ListRooms godoc
@@ -114,23 +109,19 @@ func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 // @Produce      json
 // @Param        ownerId query string false "Filter by owner UUID" example(550e8400-e29b-41d4-a716-446655440000)
 // @Param        memberId query string false "Filter by member UUID" example(550e8400-e29b-41d4-a716-446655440000)
-// @Success      200 {array} domain.Room "Array of rooms"
-// @Failure      400 {object} map[string]string "Invalid UUID format or missing query parameter"
+// @Success      200 {object} response.Response[[]domain.Room] "Array of rooms"
+// @Failure      400 {object} response.Response[any] "Invalid UUID format or missing query parameter"
 // @Router       /rooms [get]
 func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 	ownerIdStr := c.QueryParam("ownerId")
 	memberIdStr := c.QueryParam("memberId")
 
 	if ownerIdStr != "" && memberIdStr != "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "provide only one of ownerId or memberId",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "provide only one of ownerId or memberId"))
 	}
 
 	if ownerIdStr == "" && memberIdStr == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "provide ownerId or memberId query parameter",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "provide ownerId or memberId query parameter"))
 	}
 
 	ctx := c.Request().Context()
@@ -138,28 +129,24 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 	if ownerIdStr != "" {
 		ownerId, err := uuid.Parse(ownerIdStr)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": "invalid ownerId",
-			})
+			return c.JSON(http.StatusBadRequest, response.Error( "invalid ownerId"))
 		}
 		rooms, err := h.service.GetRoomsByOwnerId(ctx, ownerId)
 		if err != nil {
 			return c.JSON(errs.ParseError(err))
 		}
-		return c.JSON(http.StatusOK, rooms)
+		return c.JSON(http.StatusOK, response.OK(rooms))
 	}
 
 	memberId, err := uuid.Parse(memberIdStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid memberId",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid memberId"))
 	}
 	rooms, err := h.memberService.GetRoomsByUserId(ctx, memberId)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
-	return c.JSON(http.StatusOK, rooms)
+	return c.JSON(http.StatusOK, response.OK(rooms))
 }
 
 // DeleteRoom godoc
@@ -169,25 +156,21 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
-// @Success      200 {object} map[string]string "Returns {\"message\": \"ok\"}"
-// @Failure      400 {object} map[string]string "Invalid UUID format"
-// @Failure      500 {object} map[string]string "Internal server error"
+// @Success      200 {object} response.Response[any]
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      500 {object} response.Response[any] "Internal server error"
 // @Router       /rooms/{id} [delete]
 func (h *RoomHandlerImpl) DeleteRoom(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid room id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
 	}
 
 	if err := h.service.DeleteRoom(c.Request().Context(), roomId); err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "ok",
-	})
+	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
 var _ RoomHandler = (*RoomHandlerImpl)(nil)

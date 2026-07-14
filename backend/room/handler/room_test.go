@@ -10,6 +10,7 @@ import (
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/handler"
 	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -100,13 +101,14 @@ func TestRoomHandler_CreateRoom_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
-	var resp domain.Room
+	var resp response.Response[domain.Room]
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, roomID, resp.Id)
-	assert.Equal(t, req.Name, resp.Name)
-	assert.Equal(t, req.MaxMembers, resp.MaxMembers)
-	assert.Equal(t, ownerID, resp.OwnerId)
+	assert.Equal(t, true, resp.Success)
+	assert.Equal(t, roomID, resp.Data.Id)
+	assert.Equal(t, req.Name, resp.Data.Name)
+	assert.Equal(t, req.MaxMembers, resp.Data.MaxMembers)
+	assert.Equal(t, ownerID, resp.Data.OwnerId)
 
 	mockSvc.AssertExpectations(t)
 }
@@ -151,11 +153,11 @@ func TestRoomHandler_ListRooms_ByOwnerId(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp []domain.Room
+	var resp response.Response[[]domain.Room]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp, 1)
-	assert.Equal(t, rooms[0].Name, resp[0].Name)
+	assert.Len(t, resp.Data, 1)
+	assert.Equal(t, rooms[0].Name, resp.Data[0].Name)
 
 	mockSvc.AssertExpectations(t)
 }
@@ -184,11 +186,11 @@ func TestRoomHandler_ListRooms_ByMemberId(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp []domain.Room
+	var resp response.Response[[]domain.Room]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp, 1)
-	assert.Equal(t, rooms[0].Name, resp[0].Name)
+	assert.Len(t, resp.Data, 1)
+	assert.Equal(t, rooms[0].Name, resp.Data[0].Name)
 
 	mockMemberSvc.AssertExpectations(t)
 }

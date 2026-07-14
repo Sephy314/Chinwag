@@ -13,13 +13,13 @@ import (
 	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/echotest"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-// Case: login with email that does not exist -> 404 User not found
 func TestUserHandler_Login_UserNotFound(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
@@ -42,20 +42,15 @@ func TestUserHandler_Login_UserNotFound(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
-	var resp struct {
-		Error string `json:"error"`
-	}
-
+	var resp response.Response[any]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-
-	require.Equal(t, "Invalid Credentials", resp.Error)
+	require.Equal(t, false, resp.Success)
+	require.Equal(t, "Invalid Credentials", resp.Message)
 
 	mockedRepo.AssertExpectations(t)
-
 }
 
-// Case: login with wrong password -> service returns bcrypt mismatch -> 500
 func TestUserHandler_Login_WrongPassword(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
@@ -85,13 +80,11 @@ func TestUserHandler_Login_WrongPassword(t *testing.T) {
 		JSONBody: []byte(`{"email":"tester@example.com","password":"wrongPassword"}`),
 	}.ServeWithHandler(t, h.Login)
 
-	// bcrypt mismatch should return 400 (Invalid Creds)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
 	mockedRepo.AssertExpectations(t)
 }
 
-// Case: GetUser with email format -> success
 func TestUserHandler_GetUser_WithEmail_Success(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
@@ -119,17 +112,17 @@ func TestUserHandler_GetUser_WithEmail_Success(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	var resp map[string]interface{}
+	var resp response.Response[map[string]interface{}]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, "uid-123", resp["id"])
-	require.Equal(t, "john", resp["name"])
-	require.Equal(t, "john@example.com", resp["email"])
+	require.Equal(t, true, resp.Success)
+	require.Equal(t, "uid-123", resp.Data["id"])
+	require.Equal(t, "john", resp.Data["name"])
+	require.Equal(t, "john@example.com", resp.Data["email"])
 
 	mockedRepo.AssertExpectations(t)
 }
 
-// Case: GetUser with email format -> user not found
 func TestUserHandler_GetUser_WithEmail_NotFound(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
@@ -154,7 +147,6 @@ func TestUserHandler_GetUser_WithEmail_NotFound(t *testing.T) {
 	mockedRepo.AssertExpectations(t)
 }
 
-// Case: GetUser with id format -> success
 func TestUserHandler_GetUser_WithID_Success(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}
@@ -182,17 +174,17 @@ func TestUserHandler_GetUser_WithID_Success(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	var resp map[string]interface{}
+	var resp response.Response[map[string]interface{}]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Equal(t, "uid-456", resp["id"])
-	require.Equal(t, "jane", resp["name"])
-	require.Equal(t, "jane@example.com", resp["email"])
+	require.Equal(t, true, resp.Success)
+	require.Equal(t, "uid-456", resp.Data["id"])
+	require.Equal(t, "jane", resp.Data["name"])
+	require.Equal(t, "jane@example.com", resp.Data["email"])
 
 	mockedRepo.AssertExpectations(t)
 }
 
-// Case: GetUser with id format -> user not found
 func TestUserHandler_GetUser_WithID_NotFound(t *testing.T) {
 	mockedRepo := &mocked.UserRepo{}
 	mockedCache := &cache.MockedCache{}

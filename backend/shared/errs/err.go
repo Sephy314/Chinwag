@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/Sephy314/chinwag/shared/response"
+	"github.com/labstack/echo/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,7 +18,19 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
-func ParseError(err error) (int, any) {
+func ParseError(err error) (int, *response.Response[any]) {
+	if he, ok := errors.AsType[*echo.HTTPError](err); ok {
+		msg := he.Message
+		if msg == "" {
+			msg = http.StatusText(he.Code)
+		}
+		return he.Code, response.Error(msg)
+	}
+
+	if code := echo.StatusCode(err); code != 0 {
+		return code, response.Error(http.StatusText(code))
+	}
+
 	listErrParsers := []func(error) error{
 		parseAuthError,
 		parseDBError,
@@ -26,16 +40,11 @@ func ParseError(err error) (int, any) {
 		parsed := parser(err)
 
 		if a, ok := errors.AsType[*AppError](parsed); ok {
-			data := map[string]string{
-				"error": a.Message,
-			}
-
-			return a.Status, data
+			return a.Status, response.Error(a.Message)
 		}
 	}
 
-	// For any other error, return a generic AppError to avoid leaking internal details
-	return http.StatusInternalServerError, "Internal Server Error"
+	return http.StatusInternalServerError, response.Error("Internal Server Error")
 }
 
 func parseAuthError(err error) error {

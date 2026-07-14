@@ -10,6 +10,7 @@ import (
 	"github.com/Sephy314/chinwag/docs"
 	roomRouter "github.com/Sephy314/chinwag/room/router"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -27,18 +28,33 @@ func SetUpRouter() (*echo.Echo, error) {
 	}
 
 	e.HTTPErrorHandler = func(c *echo.Context, err error) {
-		if appErr, ok := errors.AsType[*errs.AppError](err); ok {
-			_ = c.JSON(appErr.Status, map[string]any{
-				"success": false,
-				"message": appErr.Message,
-			})
+		if r, rErr := echo.UnwrapResponse(c.Response()); rErr == nil && r.Committed {
 			return
 		}
 
-		_ = c.JSON(http.StatusInternalServerError, map[string]any{
-			"success": false,
-			"message": "internal server error",
-		})
+		code := http.StatusInternalServerError
+		var msg string
+
+		var sc echo.HTTPStatusCoder
+		if errors.As(err, &sc) {
+			if tmp := sc.StatusCode(); tmp != 0 {
+				code = tmp
+			}
+		}
+
+		if he, ok := errors.AsType[*echo.HTTPError](err); ok {
+			msg = he.Message
+			if msg == "" {
+				msg = http.StatusText(code)
+			}
+		} else if appErr, ok := errors.AsType[*errs.AppError](err); ok {
+			code = appErr.Status
+			msg = appErr.Message
+		} else {
+			msg = http.StatusText(code)
+		}
+
+		_ = c.JSON(code, response.Error(msg))
 	}
 
 	e.Use(middleware.RequestID())

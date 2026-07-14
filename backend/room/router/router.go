@@ -36,6 +36,10 @@ func SetUpRoomRouter(e *echo.Echo) {
 	priv := e.Group("/rooms")
 	priv.Use(echojwt.WithConfig(echojwt.Config{
 		KeyFunc: keyProvider.KeyFunc,
+		ErrorHandler: func(c *echo.Context, err error) error {
+			log.Println(err)
+			return echo.ErrUnauthorized
+		},
 	}))
 	{
 		priv.POST("", roomHandler.CreateRoom)

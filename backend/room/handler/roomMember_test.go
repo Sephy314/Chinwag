@@ -10,6 +10,7 @@ import (
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/handler"
 	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -114,10 +115,10 @@ func TestRoomMemberHandler_AddMember_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
-	var resp map[string]string
+	var resp response.Response[any]
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, "ok", resp["message"])
+	assert.Equal(t, true, resp.Success)
 
 	mockSvc.AssertExpectations(t)
 }
@@ -160,10 +161,10 @@ func TestRoomMemberHandler_RemoveMember_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp map[string]string
+	var resp response.Response[any]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, "ok", resp["message"])
+	assert.Equal(t, true, resp.Success)
 
 	mockSvc.AssertExpectations(t)
 }
@@ -221,10 +222,10 @@ func TestRoomMemberHandler_ListMembers_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp []domain.RoomMember
+	var resp response.Response[[]domain.RoomMember]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp, 2)
+	assert.Len(t, resp.Data, 2)
 
 	mockSvc.AssertExpectations(t)
 }
@@ -268,11 +269,12 @@ func TestRoomMemberHandler_GetMember_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp domain.RoomMember
+	var resp response.Response[domain.RoomMember]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, userID, resp.UserId)
-	assert.Equal(t, roomID, resp.RoomId)
+	assert.Equal(t, true, resp.Success)
+	assert.Equal(t, userID, resp.Data.UserId)
+	assert.Equal(t, roomID, resp.Data.RoomId)
 
 	mockSvc.AssertExpectations(t)
 }
