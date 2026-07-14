@@ -74,7 +74,7 @@ func (m *MockRoomMemberService) SetUserRole(ctx context.Context, userId uuid.UUI
 	return args.Error(0)
 }
 
-func TestRoomMemberHandler_InviteUser_Success(t *testing.T) {
+func TestRoomMemberHandler_AddMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
 	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
@@ -92,10 +92,13 @@ func TestRoomMemberHandler_InviteUser_Success(t *testing.T) {
 	mockSvc.On("InviteUser", mock.Anything, req).Return(nil)
 
 	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+		},
 		Headers: map[string][]string{
 			echo.HeaderContentType: {echo.MIMEApplicationJSON},
 		},
-		JSONBody: []byte(`{"userId":"` + userID.String() + `","roomId":"` + roomID.String() + `","role":1}`),
+		JSONBody: []byte(`{"userId":"` + userID.String() + `","role":1}`),
 	}.ToContextRecorder(t)
 
 	c.Set("user", &jwt.Token{
@@ -104,7 +107,7 @@ func TestRoomMemberHandler_InviteUser_Success(t *testing.T) {
 		},
 	})
 
-	err := h.InviteUser(c)
+	err := h.AddMember(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,22 +122,129 @@ func TestRoomMemberHandler_InviteUser_Success(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
-func TestRoomMemberHandler_GetRoomsByUserId_InvalidID(t *testing.T) {
+func TestRoomMemberHandler_AddMember_InvalidRoomId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
 	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
-			{Name: "userId", Value: "not-a-uuid"},
+			{Name: "roomId", Value: "not-a-uuid"},
 		},
-	}.ServeWithHandler(t, h.GetRoomsByUserId)
+	}.ServeWithHandler(t, h.AddMember)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	mockSvc.AssertNotCalled(t, "GetRoomsByUserId", mock.Anything, mock.Anything)
+	mockSvc.AssertNotCalled(t, "InviteUser", mock.Anything, mock.Anything)
 }
 
-func TestRoomMemberHandler_GetUserByRoomIdAndUserId_Success(t *testing.T) {
+func TestRoomMemberHandler_RemoveMember_Success(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	userID := uuid.New()
+	roomID := uuid.New()
+	req := structs.RoomUser{
+		UserId: userID,
+		RoomId: roomID,
+	}
+
+	mockSvc.On("KickUser", mock.Anything, req).Return(nil)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+			{Name: "userId", Value: userID.String()},
+		},
+	}.ServeWithHandler(t, h.RemoveMember)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]string
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, "ok", resp["message"])
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomMemberHandler_RemoveMember_InvalidRoomId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: "not-a-uuid"},
+			{Name: "userId", Value: uuid.New().String()},
+		},
+	}.ServeWithHandler(t, h.RemoveMember)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "KickUser", mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_RemoveMember_InvalidUserId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: uuid.New().String()},
+			{Name: "userId", Value: "not-a-uuid"},
+		},
+	}.ServeWithHandler(t, h.RemoveMember)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "KickUser", mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_ListMembers_Success(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	roomID := uuid.New()
+	members := []domain.RoomMember{
+		{UserId: uuid.New(), RoomId: roomID, Role: domain.MEMBER},
+		{UserId: uuid.New(), RoomId: roomID, Role: domain.ADMIN},
+	}
+
+	mockSvc.On("GetUserByRoomId", mock.Anything, roomID).Return(members, nil)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+		},
+	}.ServeWithHandler(t, h.ListMembers)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp []domain.RoomMember
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Len(t, resp, 2)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomMemberHandler_ListMembers_InvalidRoomId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: "not-a-uuid"},
+		},
+	}.ServeWithHandler(t, h.ListMembers)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "GetUserByRoomId", mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_GetMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
 	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
@@ -154,7 +264,7 @@ func TestRoomMemberHandler_GetUserByRoomIdAndUserId_Success(t *testing.T) {
 			{Name: "roomId", Value: roomID.String()},
 			{Name: "userId", Value: userID.String()},
 		},
-	}.ServeWithHandler(t, h.GetUserByRoomIdAndUserId)
+	}.ServeWithHandler(t, h.GetMember)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -167,7 +277,39 @@ func TestRoomMemberHandler_GetUserByRoomIdAndUserId_Success(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
-func TestRoomMemberHandler_KickUser_NotFound(t *testing.T) {
+func TestRoomMemberHandler_GetMember_InvalidRoomId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: "not-a-uuid"},
+			{Name: "userId", Value: uuid.New().String()},
+		},
+	}.ServeWithHandler(t, h.GetMember)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "GetUserByRoomIdAndUserId", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_GetMember_InvalidUserId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: uuid.New().String()},
+			{Name: "userId", Value: "not-a-uuid"},
+		},
+	}.ServeWithHandler(t, h.GetMember)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "GetUserByRoomIdAndUserId", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_RemoveMember_NotFound(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
 	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
@@ -182,11 +324,11 @@ func TestRoomMemberHandler_KickUser_NotFound(t *testing.T) {
 	mockSvc.On("KickUser", mock.Anything, req).Return(errors.New("not found"))
 
 	rec := echotest.ContextConfig{
-		Headers: map[string][]string{
-			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+			{Name: "userId", Value: userID.String()},
 		},
-		JSONBody: []byte(`{"userId":"` + userID.String() + `","roomId":"` + roomID.String() + `"}`),
-	}.ServeWithHandler(t, h.KickUser)
+	}.ServeWithHandler(t, h.RemoveMember)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	mockSvc.AssertExpectations(t)

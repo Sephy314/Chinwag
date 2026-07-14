@@ -8,6 +8,7 @@ import (
 	"github.com/Sephy314/chinwag/room/repo"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v5"
 )
 
 type RoomServiceInterface interface {
@@ -26,12 +27,18 @@ func (r *RoomService) CreateRoom(ctx context.Context, request structs.CreateRoom
 	id := uuid.Must(uuid.NewV7())
 	now := time.Now()
 
+	ownerId, ok := ctx.Value("ownerId").(uuid.UUID)
+
+	if !ok {
+		return nil, echo.ErrUnauthorized
+	}
+
 	room := domain.Room{
 		Id:          id,
 		Name:        request.Name,
 		Description: request.Description,
 		MaxMembers:  request.MaxMembers,
-		OwnerId:     request.OwnerId,
+		OwnerId:     ownerId,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		DeletedAt:   nil,

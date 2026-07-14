@@ -41,17 +41,17 @@ func (m *MockRoomRepo) DeleteRoomById(ctx context.Context, roomId uuid.UUID) err
 
 func TestCreateRoom_Success(t *testing.T) {
 	mockRepo := new(MockRoomRepo)
-	ctx := context.Background()
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
 
 	req := structs.CreateRoomRequest{
 		Name:        "Test Room",
 		Description: nil,
 		MaxMembers:  10,
-		OwnerId:     uuid.New(),
 	}
 
 	mockRepo.On("CreateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
-		return room.Name == req.Name && room.MaxMembers == req.MaxMembers && room.OwnerId == req.OwnerId
+		return room.Name == req.Name && room.MaxMembers == req.MaxMembers && room.OwnerId == ownerId
 	})).Return(nil)
 
 	service := NewRoomService(mockRepo)
@@ -61,22 +61,23 @@ func TestCreateRoom_Success(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, req.Name, result.Name)
 	assert.Equal(t, req.MaxMembers, result.MaxMembers)
+	assert.Equal(t, ownerId, result.OwnerId)
 	mockRepo.AssertExpectations(t)
 }
 
 func TestCreateRoom_Failed(t *testing.T) {
 	mockRepo := new(MockRoomRepo)
-	ctx := context.Background()
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
 
 	req := structs.CreateRoomRequest{
 		Name:        "Test Room",
 		Description: nil,
 		MaxMembers:  10,
-		OwnerId:     uuid.New(),
 	}
 
 	mockRepo.On("CreateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
-		return room.Name == req.Name && room.OwnerId == req.OwnerId
+		return room.Name == req.Name && room.OwnerId == ownerId
 	})).Return(errors.New("database error"))
 
 	service := NewRoomService(mockRepo)
@@ -86,6 +87,23 @@ func TestCreateRoom_Failed(t *testing.T) {
 	assert.Equal(t, "database error", err.Error())
 	assert.NotNil(t, result)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateRoom_Unauthorized(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	req := structs.CreateRoomRequest{
+		Name:        "Test Room",
+		Description: nil,
+		MaxMembers:  10,
+	}
+
+	service := NewRoomService(mockRepo)
+	result, err := service.CreateRoom(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
 }
 
 func TestGetRoomById_Success(t *testing.T) {
@@ -229,17 +247,17 @@ func TestDeleteRoom_NotFound(t *testing.T) {
 
 func TestCreateRoom_DuplicateRoom(t *testing.T) {
 	mockRepo := new(MockRoomRepo)
-	ctx := context.Background()
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
 
 	req := structs.CreateRoomRequest{
 		Name:        "Duplicate Room",
 		Description: nil,
 		MaxMembers:  10,
-		OwnerId:     uuid.New(),
 	}
 
 	mockRepo.On("CreateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
-		return room.Name == req.Name && room.OwnerId == req.OwnerId
+		return room.Name == req.Name && room.OwnerId == ownerId
 	})).Return(errors.New("duplicate key value violates unique constraint"))
 
 	service := NewRoomService(mockRepo)

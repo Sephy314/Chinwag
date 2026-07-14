@@ -1,0 +1,600 @@
+basePath: /
+definitions:
+  domain.Room:
+    properties:
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      maxMembers:
+        type: integer
+      name:
+        type: string
+      ownerId:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  domain.RoomMember:
+    properties:
+      joinedAt:
+        type: string
+      leftAt:
+        type: string
+      role:
+        $ref: '#/definitions/github_com_Sephy314_chinwag_room_domain.Role'
+      roomId:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_Sephy314_chinwag_room_domain.Role:
+    enum:
+    - 0
+    - 1
+    type: integer
+    x-enum-varnames:
+    - MEMBER
+    - ADMIN
+  structs.CreateRoomRequest:
+    properties:
+      description:
+        type: string
+      max_members:
+        type: integer
+      name:
+        type: string
+    type: object
+  structs.CreateUserReq:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  structs.LoginReq:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  structs.LoginUserResp:
+    properties:
+      token:
+        type: string
+    type: object
+  structs.UserResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+host: localhost:10080
+info:
+  contact: {}
+  description: Chinwag Chat Application API
+  title: Chinwag API
+  version: "1.0"
+paths:
+  /auth/.well-known/jwks.json:
+    get:
+      description: Return the JSON Web Key Set (JWKS) containing the public keys used
+        to verify JWT tokens issued by this service. The set includes active and inactive
+        (rotated but still valid) ECDSA P-256 keys identified by their kid (key ID).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JWKS set with keys array (each key has kid, kty, crv, x, y
+            fields)
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Serve JWKS
+      tags:
+      - auth
+  /auth/health:
+    get:
+      description: Check the health status of the auth service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Health check
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 'Authenticate with email and password. On success, returns a JWT
+        access token in the response body and sets an HttpOnly refresh token cookie
+        (path: /auth, maxAge: 7 days, secure, SameSite=Lax).'
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.LoginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Returns {\"token\": \"<jwt_access_token>\"}. Refresh token
+            is set as an HttpOnly cookie named \"refresh\".'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid credentials
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      description: 'Issue a new JWT access token using the refresh token stored in
+        the HttpOnly cookie named "refresh". The old refresh token is invalidated
+        and a new refresh token cookie is set (path: /auth, maxAge: 7 days, secure,
+        SameSite=Lax). Returns the new access token in the response body.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Returns {\"token\": \"<new_jwt_access_token>\"}. New refresh
+            token is set as an HttpOnly cookie.'
+          schema:
+            $ref: '#/definitions/structs.LoginUserResp'
+        "400":
+          description: Missing or invalid refresh token cookie
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Refresh token not found (expired or revoked)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh access token
+      tags:
+      - auth
+  /auth/user:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with username, email, and password. Password
+        is hashed with bcrypt before storage.
+      parameters:
+      - description: User registration info
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.CreateUserReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully created user
+          schema:
+            $ref: '#/definitions/structs.UserResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            type: string
+        "409":
+          description: User already exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - auth
+  /auth/user/{id}:
+    get:
+      description: Retrieve user information. The id parameter accepts either a UUID
+        (user ID) or an email address. If the parameter matches an email format, it
+        queries by email; otherwise, it queries by ID.
+      parameters:
+      - description: User ID (UUID) or email address
+        x-example: john@example.com
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User found
+          schema:
+            $ref: '#/definitions/structs.UserResponse'
+        "404":
+          description: User not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get user by ID
+      tags:
+      - auth
+  /auth/whoami:
+    get:
+      description: Retrieve the currently authenticated user's information. Requires
+        a valid JWT access token in the Authorization header (Bearer token). The token's
+        subject claim is used to look up the user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Returns {\"user\": {\"id\": \"...\", \"name\": \"...\", \"email\":
+            \"...\"}}'
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - invalid or missing token
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get current user info
+      tags:
+      - auth
+  /rooms:
+    get:
+      description: Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms
+        joined). Pass exactly one query parameter.
+      parameters:
+      - description: Filter by owner UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: query
+        name: ownerId
+        type: string
+      - description: Filter by member UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: query
+        name: memberId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Array of rooms
+          schema:
+            items:
+              $ref: '#/definitions/domain.Room'
+            type: array
+        "400":
+          description: Invalid UUID format or missing query parameter
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List rooms
+      tags:
+      - room
+    post:
+      consumes:
+      - application/json
+      description: Create a new chat room. The owner is the authenticated user. Returns
+        the created room with generated UUID and timestamps.
+      parameters:
+      - description: Room creation info
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/structs.CreateRoomRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 'Created room with fields: id (UUID), name, description, max_members,
+            owner_id, created_at, updated_at'
+          schema:
+            $ref: '#/definitions/domain.Room'
+        "400":
+          description: Invalid request body or validation error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a chat room
+      tags:
+      - room
+  /rooms/{id}:
+    delete:
+      description: Soft-delete a chat room by UUID. Only the room owner or an admin
+        should call this endpoint.
+      parameters:
+      - description: Room UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Returns {\"message\": \"ok\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a chat room
+      tags:
+      - room
+    get:
+      description: Retrieve chat room information by its UUID.
+      parameters:
+      - description: Room UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Room found
+          schema:
+            $ref: '#/definitions/domain.Room'
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Room not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a chat room
+      tags:
+      - room
+  /rooms/{roomId}/members:
+    get:
+      description: Retrieve all members of a chat room.
+      parameters:
+      - description: Room UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: roomId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Array of room members
+          schema:
+            items:
+              $ref: '#/definitions/domain.RoomMember'
+            type: array
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List room members
+      tags:
+      - room-member
+    post:
+      consumes:
+      - application/json
+      description: Add a user to a chat room. The authenticated user must have the
+        ADMIN role in the specified room. If role is omitted, the user is added as
+        MEMBER.
+      parameters:
+      - description: Room UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: roomId
+        required: true
+        type: string
+      - description: Member to add
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 'Returns {\"message\": \"ok\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request body or UUID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Admin permission is required
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Room or user not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: User is already a member of the room
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a room member
+      tags:
+      - room-member
+  /rooms/{roomId}/members/{userId}:
+    delete:
+      description: Remove a user from a chat room. The authenticated user must have
+        the ADMIN role in the specified room.
+      parameters:
+      - description: Room UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: roomId
+        required: true
+        type: string
+      - description: User UUID to remove
+        x-example: 660e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Returns {\"message\": \"ok\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Room, user, or membership not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove a room member
+      tags:
+      - room-member
+    get:
+      description: Retrieve a specific user's membership info in a specific chat room.
+      parameters:
+      - description: Room UUID
+        x-example: 550e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: roomId
+        required: true
+        type: string
+      - description: User UUID
+        x-example: 660e8400-e29b-41d4-a716-446655440000
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Membership info found
+          schema:
+            $ref: '#/definitions/domain.RoomMember'
+        "400":
+          description: Invalid UUID format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Membership not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a room member
+      tags:
+      - room-member
+  /rooms/health:
+    get:
+      description: Check the health status of the room service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Returns {\"message\": \"ok\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - room
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
