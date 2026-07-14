@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"time"
 
+	"fmt"
+
 	"github.com/Sephy314/chinwag/auth/domain"
-	"github.com/Sephy314/chinwag/conn"
 	"github.com/jmoiron/sqlx"
 )
 
-type JwtRepository interface {
+type JwksRepository interface {
 	Load(context.Context) ([]domain.SigningKeyEntity, error)
 	Rotate(context.Context, domain.SigningKeyEntity) error
 	InActiveKey(context.Context, string) error
@@ -20,23 +21,20 @@ type JwtRepository interface {
 	//Count(context.Context) (*int64, error)
 }
 
-type JwtRepo struct {
-	db *sqlx.DB
+type JwksRepo struct {
+	db sqlx.ExtContext
 }
 
-func NewJwtRepository(conn *conn.Connection) JwtRepository {
-	repo := JwtRepo{
-		db: conn.DB,
-	}
-
-	return &repo
+func NewJwtRepository(db sqlx.ExtContext) JwksRepository {
+	return &JwksRepo{db: db}
 }
 
-func (repo *JwtRepo) Load(ctx context.Context) ([]domain.SigningKeyEntity, error) {
+func (repo *JwksRepo) Load(ctx context.Context) ([]domain.SigningKeyEntity, error) {
 	var signingKeys []domain.SigningKeyEntity
 
-	err := repo.db.SelectContext(
+	err := sqlx.SelectContext(
 		ctx,
+		repo.db,
 		&signingKeys,
 		`
 		SELECT
@@ -62,20 +60,31 @@ func (repo *JwtRepo) Load(ctx context.Context) ([]domain.SigningKeyEntity, error
 	return signingKeys, nil
 }
 
-func (repo *JwtRepo) Rotate(
+func (repo *JwksRepo) Rotate(
 	ctx context.Context,
 	signingKey domain.SigningKeyEntity,
 ) error {
-	tx, err := repo.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
+	var tx *sqlx.Tx
+	var err error
+	ownsTx := false
 
-	defer func() {
+	switch d := repo.db.(type) {
+	case *sqlx.DB:
+		tx, err = d.BeginTxx(ctx, nil)
 		if err != nil {
-			_ = tx.Rollback()
+			return err
 		}
-	}()
+		ownsTx = true
+		defer func() {
+			if err != nil {
+				_ = tx.Rollback()
+			}
+		}()
+	case *sqlx.Tx:
+		tx = d
+	default:
+		return fmt.Errorf("unsupported db type for transaction")
+	}
 
 	_, err = tx.ExecContext(
 		ctx,
@@ -103,15 +112,13 @@ func (repo *JwtRepo) Rotate(
 		return err
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return err
+	if ownsTx {
+		return tx.Commit()
 	}
-
 	return nil
 }
 
-func (repo *JwtRepo) InActiveKey(ctx context.Context, kid string) error {
+func (repo *JwksRepo) InActiveKey(ctx context.Context, kid string) error {
 	_, err := repo.db.ExecContext(
 		ctx,
 		`UPDATE signing_keys 
@@ -126,7 +133,7 @@ func (repo *JwtRepo) InActiveKey(ctx context.Context, kid string) error {
 	return nil
 }
 
-func (repo *JwtRepo) ClearRetiredKeys(ctx context.Context) error {
+func (repo *JwksRepo) ClearRetiredKeys(ctx context.Context) error {
 	_, err := repo.db.ExecContext(
 		ctx,
 		"DELETE FROM signing_keys WHERE status = 'RETIRED'",
@@ -135,11 +142,12 @@ func (repo *JwtRepo) ClearRetiredKeys(ctx context.Context) error {
 	return err
 }
 
-func (repo *JwtRepo) GetActiveKey(ctx context.Context) (*domain.SigningKeyEntity, error) {
+func (repo *JwksRepo) GetActiveKey(ctx context.Context) (*domain.SigningKeyEntity, error) {
 	var signingKey domain.SigningKeyEntity
 
-	err := repo.db.GetContext(
+	err := sqlx.GetContext(
 		ctx,
+		repo.db,
 		&signingKey,
 		"SELECT * FROM signing_keys WHERE status = 'ACTIVE' LIMIT 1",
 	)
@@ -151,11 +159,12 @@ func (repo *JwtRepo) GetActiveKey(ctx context.Context) (*domain.SigningKeyEntity
 	return &signingKey, nil
 }
 
-func (repo *JwtRepo) GetVersion(ctx context.Context) (*time.Time, error) {
+func (repo *JwksRepo) GetVersion(ctx context.Context) (*time.Time, error) {
 	var version sql.NullTime
 
-	err := repo.db.GetContext(
+	err := sqlx.GetContext(
 		ctx,
+		repo.db,
 		&version,
 		"SELECT MAX(updated_at) FROM signing_keys",
 	)

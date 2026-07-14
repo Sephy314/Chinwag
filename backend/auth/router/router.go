@@ -24,13 +24,14 @@ func SetUpAuthRouter(e *echo.Echo) {
 
 	cacheRedis := cache.NewRedisCache(conns.Rds)
 
-	userRepo := repo.NewUserRepository(conns)
-	jwksRepo := repo.NewJwtRepository(conns)
+	userRepo := repo.NewUserRepository(conns.DB)
+	jwksRepo := repo.NewJwtRepository(conns.DB)
+	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
 	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Minute*5)
 
 	jwksService := service.NewJwksService(jwksRepo)
-	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService)
+	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, unitOfWork)
 	jwtService := service.NewJwtService(refreshTokenService, jwksService)
 
 	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService)

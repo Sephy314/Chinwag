@@ -18,19 +18,27 @@ type UserService struct {
 	Cache          cache.Cache
 	JwkService     JwksServiceInterface
 	RefreshService RefreshTokenServiceInterface
+	uow            repo.UnitOfWork
 }
 
 func NewUserService(
 	cache cache.Cache,
-	repo repo.UserRepository,
+	userRepo repo.UserRepository,
 	jwkService JwksServiceInterface,
 	refreshService RefreshTokenServiceInterface,
+	uow ...repo.UnitOfWork,
 ) *UserService {
+	var unitOfWork repo.UnitOfWork
+	if len(uow) > 0 {
+		unitOfWork = uow[0]
+	}
+
 	return &UserService{
-		Repo:           repo,
+		Repo:           userRepo,
 		Cache:          cache,
 		JwkService:     jwkService,
 		RefreshService: refreshService,
+		uow:            unitOfWork,
 	}
 }
 
@@ -53,8 +61,17 @@ func (s *UserService) CreateUser(ctx context.Context, req structs.CreateUserReq)
 		Email:    req.Email,
 	}
 
-	err = s.Repo.CreateUser(ctx, *newUser)
+	if s.uow == nil {
+		err = s.Repo.CreateUser(ctx, *newUser)
+		if err != nil {
+			return nil, err
+		}
+		return newUser, nil
+	}
 
+	err = s.uow.Do(ctx, func(txCtx context.Context, tx repo.Transaction) error {
+		return tx.UserRepo().CreateUser(txCtx, *newUser)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +92,13 @@ func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*domain
 }
 
 func (s *UserService) DeleteUser(ctx context.Context, id string) error {
-	err := s.Repo.DeleteUser(ctx, id)
-	return err
+	if s.uow == nil {
+		return s.Repo.DeleteUser(ctx, id)
+	}
+
+	return s.uow.Do(ctx, func(txCtx context.Context, tx repo.Transaction) error {
+		return tx.UserRepo().DeleteUser(txCtx, id)
+	})
 }
 
 func (s *UserService) Login(ctx context.Context, email string, pw string) (*structs.TokenSet, error) {
