@@ -25,11 +25,11 @@ type JwksServiceInterface interface {
 
 type JwksService struct {
 	jwkSet  jwk.Set
-	repo    repo.JwtRepository
+	repo    repo.JwksRepository
 	version time.Time
 }
 
-func NewJwksService(repo repo.JwtRepository) *JwksService {
+func NewJwksService(repo repo.JwksRepository) *JwksService {
 	s := &JwksService{
 		jwkSet: jwk.NewSet(),
 		repo:   repo,

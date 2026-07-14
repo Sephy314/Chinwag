@@ -4,34 +4,28 @@ import (
 	"context"
 
 	"github.com/Sephy314/chinwag/auth/domain"
-	"github.com/Sephy314/chinwag/conn"
 	"github.com/jmoiron/sqlx"
 )
 
 type UserRepository interface {
 	CreateUser(ctx context.Context, user domain.User) error
 	GetUser(ctx context.Context, id string) (*domain.User, error)
-	//UpdateUser(ctx context.Context, user domain.User) error
 	DeleteUser(ctx context.Context, id string) error
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
 }
 
-func NewUserRepository(conn *conn.Connection) UserRepository {
-	repo := UserRepo{
-		db: conn.DB,
-	}
-
-	return &repo
+func NewUserRepository(db sqlx.ExtContext) UserRepository {
+	return &UserRepo{db: db}
 }
 
 type UserRepo struct {
-	db *sqlx.DB
+	db sqlx.ExtContext
 }
 
 func (r *UserRepo) GetUser(ctx context.Context, id string) (*domain.User, error) {
 	var user domain.User
 
-	err := r.db.GetContext(ctx, &user, `SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
+	err := sqlx.GetContext(ctx, r.db, &user, `SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +58,9 @@ func (r *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
 func (r *UserRepo) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user domain.User
 
-	err := r.db.GetContext(
+	err := sqlx.GetContext(
 		ctx,
+		r.db,
 		&user,
 		"SELECT * FROM users WHERE email = $1 AND deleted_at IS NULL",
 		email,
