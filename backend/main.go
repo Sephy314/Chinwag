@@ -1,3 +1,11 @@
+// @title Chinwag API
+// @version 1.0
+// @description Chinwag Chat Application API
+// @host localhost:10080
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 package main
 
 import (

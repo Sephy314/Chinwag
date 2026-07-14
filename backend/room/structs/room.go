@@ -6,14 +6,13 @@ import (
 )
 
 type CreateRoomRequest struct {
-	Name        string    `json:"name"`
-	Description *string   `json:"description"`
-	MaxMembers  int       `json:"max_members"`
-	OwnerId     uuid.UUID `json:"owner_id"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	MaxMembers  int     `json:"max_members"`
 }
 
 type RoomUser struct {
-	UserId uuid.UUID
-	RoomId uuid.UUID
-	Role   *domain.Role
+	UserId uuid.UUID    `json:"userId"`
+	RoomId uuid.UUID    `json:"roomId"`
+	Role   *domain.Role `json:"role,omitempty"`
 }

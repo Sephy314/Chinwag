@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
@@ -12,11 +13,10 @@ import (
 )
 
 type RoomMemberHandler interface {
-	InviteUser(c *echo.Context) error
-	KickUser(c *echo.Context) error
-	GetUsersByRoomId(c *echo.Context) error
-	GetRoomsByUserId(c *echo.Context) error
-	GetUserByRoomIdAndUserId(c *echo.Context) error
+	AddMember(c *echo.Context) error
+	RemoveMember(c *echo.Context) error
+	ListMembers(c *echo.Context) error
+	GetMember(c *echo.Context) error
 }
 
 type RoomMemberHandlerImpl struct {
@@ -31,23 +31,54 @@ func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService serv
 	}
 }
 
-func (h *RoomMemberHandlerImpl) InviteUser(c *echo.Context) error {
-	var req structs.RoomUser
-	if err := c.Bind(&req); err != nil {
+// AddMember godoc
+// @Summary      Add a room member
+// @Description  Add a user to a chat room. The authenticated user must have the ADMIN role in the specified room. If role is omitted, the user is added as MEMBER.
+// @Tags         room-member
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        request body object true "Member to add" example({"userId":"660e8400-e29b-41d4-a716-446655440000","role":0})
+// @Success      201 {object} map[string]string "Returns {\"message\": \"ok\"}"
+// @Failure      400 {object} map[string]string "Invalid request body or UUID format"
+// @Failure      403 {object} map[string]string "Admin permission is required"
+// @Failure      404 {object} map[string]string "Room or user not found"
+// @Failure      409 {object} map[string]string "User is already a member of the room"
+// @Router       /rooms/{roomId}/members [post]
+func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
+	roomId, err := uuid.Parse(c.Param("roomId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid room id",
+		})
+	}
+
+	var body struct {
+		UserId uuid.UUID    `json:"userId"`
+		Role   *domain.Role `json:"role"`
+	}
+	if err := c.Bind(&body); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})
 	}
 
-	ok, err := utils.IsManager(c, req.RoomId, h.service)
+	ok, err := utils.IsManager(c, roomId, h.service)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
 
 	if !ok {
 		return c.JSON(http.StatusForbidden, map[string]string{
-			"error": "Manager Permission is required",
+			"error": "Admin permission is required",
 		})
+	}
+
+	req := structs.RoomUser{
+		UserId: body.UserId,
+		RoomId: roomId,
+		Role:   body.Role,
 	}
 
 	if err := h.service.InviteUser(c.Request().Context(), req); err != nil {
@@ -59,12 +90,36 @@ func (h *RoomMemberHandlerImpl) InviteUser(c *echo.Context) error {
 	})
 }
 
-func (h *RoomMemberHandlerImpl) KickUser(c *echo.Context) error {
-	var req structs.RoomUser
-	if err := c.Bind(&req); err != nil {
+// RemoveMember godoc
+// @Summary      Remove a room member
+// @Description  Remove a user from a chat room. The authenticated user must have the ADMIN role in the specified room.
+// @Tags         room-member
+// @Produce      json
+// @Security     BearerAuth
+// @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        userId path string true "User UUID to remove" example(660e8400-e29b-41d4-a716-446655440000)
+// @Success      200 {object} map[string]string "Returns {\"message\": \"ok\"}"
+// @Failure      400 {object} map[string]string "Invalid UUID format"
+// @Failure      404 {object} map[string]string "Room, user, or membership not found"
+// @Router       /rooms/{roomId}/members/{userId} [delete]
+func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
+	roomId, err := uuid.Parse(c.Param("roomId"))
+	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
+			"error": "invalid room id",
 		})
+	}
+
+	userId, err := uuid.Parse(c.Param("userId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid user id",
+		})
+	}
+
+	req := structs.RoomUser{
+		UserId: userId,
+		RoomId: roomId,
 	}
 
 	if err := h.service.KickUser(c.Request().Context(), req); err != nil {
@@ -76,7 +131,17 @@ func (h *RoomMemberHandlerImpl) KickUser(c *echo.Context) error {
 	})
 }
 
-func (h *RoomMemberHandlerImpl) GetUsersByRoomId(c *echo.Context) error {
+// ListMembers godoc
+// @Summary      List room members
+// @Description  Retrieve all members of a chat room.
+// @Tags         room-member
+// @Produce      json
+// @Security     BearerAuth
+// @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Success      200 {array} domain.RoomMember "Array of room members"
+// @Failure      400 {object} map[string]string "Invalid UUID format"
+// @Router       /rooms/{roomId}/members [get]
+func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
@@ -92,23 +157,19 @@ func (h *RoomMemberHandlerImpl) GetUsersByRoomId(c *echo.Context) error {
 	return c.JSON(http.StatusOK, members)
 }
 
-func (h *RoomMemberHandlerImpl) GetRoomsByUserId(c *echo.Context) error {
-	userId, err := uuid.Parse(c.Param("userId"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid user id",
-		})
-	}
-
-	rooms, err := h.service.GetRoomsByUserId(c.Request().Context(), userId)
-	if err != nil {
-		return c.JSON(errs.ParseError(err))
-	}
-
-	return c.JSON(http.StatusOK, rooms)
-}
-
-func (h *RoomMemberHandlerImpl) GetUserByRoomIdAndUserId(c *echo.Context) error {
+// GetMember godoc
+// @Summary      Get a room member
+// @Description  Retrieve a specific user's membership info in a specific chat room.
+// @Tags         room-member
+// @Produce      json
+// @Security     BearerAuth
+// @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        userId path string true "User UUID" example(660e8400-e29b-41d4-a716-446655440000)
+// @Success      200 {object} domain.RoomMember "Membership info found"
+// @Failure      400 {object} map[string]string "Invalid UUID format"
+// @Failure      404 {object} map[string]string "Membership not found"
+// @Router       /rooms/{roomId}/members/{userId} [get]
+func (h *RoomMemberHandlerImpl) GetMember(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{

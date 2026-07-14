@@ -26,14 +26,14 @@ func SetUpRoomRouter(e *echo.Echo) {
 	roomHandler := handler.NewRoomHandler(roomService, roomMemberService)
 	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService)
 
-	pub := e.Group("/room")
+	pub := e.Group("/rooms")
 	{
 		pub.GET("/health", roomHandler.Health)
+		pub.GET("", roomHandler.ListRooms)
 		pub.GET("/:id", roomHandler.GetRoom)
-		pub.GET("/owner/:ownerId", roomHandler.GetRoomsByOwnerId)
 	}
 
-	priv := e.Group("/room")
+	priv := e.Group("/rooms")
 	priv.Use(echojwt.WithConfig(echojwt.Config{
 		KeyFunc: keyProvider.KeyFunc,
 	}))
@@ -41,13 +41,11 @@ func SetUpRoomRouter(e *echo.Echo) {
 		priv.POST("", roomHandler.CreateRoom)
 		priv.DELETE("/:id", roomHandler.DeleteRoom)
 
-		priv.POST("/member/invite", roomMemberHandler.InviteUser)
-		priv.POST("/member/kick", roomMemberHandler.KickUser)
+		priv.POST("/:roomId/members", roomMemberHandler.AddMember)
+		priv.DELETE("/:roomId/members/:userId", roomMemberHandler.RemoveMember)
 
-		priv.GET("/member/room/:roomId", roomMemberHandler.GetUsersByRoomId)
-		priv.GET("/member/user/:userId", roomMemberHandler.GetRoomsByUserId)
-
-		priv.GET("/member/room/:roomId/user/:userId", roomMemberHandler.GetUserByRoomIdAndUserId)
+		priv.GET("/:roomId/members", roomMemberHandler.ListMembers)
+		priv.GET("/:roomId/members/:userId", roomMemberHandler.GetMember)
 	}
 
 	log.Println("room routes registered")

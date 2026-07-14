@@ -41,7 +41,8 @@ func (u *stubUnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx
 }
 
 func TestCreateRoom_UsesUnitOfWork(t *testing.T) {
-	ctx := context.Background()
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
 	roomRepo := new(MockRoomRepo)
 	memberRepo := new(MockRoomMemberRepo)
 
@@ -49,15 +50,14 @@ func TestCreateRoom_UsesUnitOfWork(t *testing.T) {
 		Name:        "Transactional Room",
 		Description: nil,
 		MaxMembers:  8,
-		OwnerId:     uuid.New(),
 	}
 
 	roomRepo.On("CreateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
-		return room.Name == req.Name && room.MaxMembers == req.MaxMembers && room.OwnerId == req.OwnerId
+		return room.Name == req.Name && room.MaxMembers == req.MaxMembers && room.OwnerId == ownerId
 	})).Return(nil)
 
 	memberRepo.On("AddMember", ctx, mock.MatchedBy(func(member domain.RoomMember) bool {
-		return member.RoomId != uuid.Nil && member.UserId == req.OwnerId && member.Role == domain.ADMIN
+		return member.RoomId != uuid.Nil && member.UserId == ownerId && member.Role == domain.ADMIN
 	})).Return(nil)
 
 	uow := &stubUnitOfWork{
@@ -110,18 +110,17 @@ func TestInviteUser_UsesUnitOfWork(t *testing.T) {
 }
 
 func TestCreateRoom_TransactionErrorIsReturned(t *testing.T) {
-	ctx := context.Background()
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
 	uowErr := errors.New("tx failed")
 
 	service := NewRoomService(new(MockRoomRepo), &stubUnitOfWork{err: uowErr})
 	room, err := service.CreateRoom(ctx, structs.CreateRoomRequest{
 		Name:       "Broken",
 		MaxMembers: 4,
-		OwnerId:    uuid.New(),
 	})
 
 	assert.Error(t, err)
 	assert.Equal(t, uowErr, err)
 	assert.NotNil(t, room)
 }
-

@@ -28,6 +28,16 @@ func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService 
 	}
 }
 
+// Refresh godoc
+// @Summary      Refresh access token
+// @Description  Issue a new JWT access token using the refresh token stored in the HttpOnly cookie named "refresh". The old refresh token is invalidated and a new refresh token cookie is set (path: /auth, maxAge: 7 days, secure, SameSite=Lax). Returns the new access token in the response body.
+// @Tags         auth
+// @Produce      json
+// @Success      200 {object} structs.LoginUserResp "Returns {\"token\": \"<new_jwt_access_token>\"}. New refresh token is set as an HttpOnly cookie."
+// @Failure      400 {object} map[string]interface{} "Missing or invalid refresh token cookie"
+// @Failure      404 {object} map[string]string "Refresh token not found (expired or revoked)"
+// @Failure      500 {object} map[string]string "Internal server error"
+// @Router       /auth/refresh [post]
 func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	//var req *structs.RefreshRequest
 	//

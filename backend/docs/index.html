@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Chinwag API Docs</title>
+    <link rel="stylesheet" href="swagger-ui/swagger-ui.css">
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="swagger-ui/swagger-ui-bundle.js"></script>
+    <script src="swagger-ui/swagger-ui-standalone-preset.js"></script>
+    <script>
+        SwaggerUIBundle({
+            url: "/swagger/swagger.json",
+            dom_id: '#swagger-ui',
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+            ],
+            layout: "StandaloneLayout"
+        })
+    </script>
+</body>
+</html>
