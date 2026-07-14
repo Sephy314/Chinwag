@@ -2,13 +2,14 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/repo"
 	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v5"
 )
 
 type RoomServiceInterface interface {
@@ -30,7 +31,10 @@ func (r *RoomService) CreateRoom(ctx context.Context, request structs.CreateRoom
 	ownerId, ok := ctx.Value("ownerId").(uuid.UUID)
 
 	if !ok {
-		return nil, echo.ErrUnauthorized
+		return nil, &errs.AppError{
+			Status:  http.StatusUnauthorized,
+			Message: "Unauthorized",
+		}
 	}
 
 	room := domain.Room{

@@ -8,6 +8,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
@@ -33,23 +34,17 @@ func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService 
 // @Description  Issue a new JWT access token using the refresh token stored in the HttpOnly cookie named "refresh". The old refresh token is invalidated and a new refresh token cookie is set (path: /auth, maxAge: 7 days, secure, SameSite=Lax). Returns the new access token in the response body.
 // @Tags         auth
 // @Produce      json
-// @Success      200 {object} structs.LoginUserResp "Returns {\"token\": \"<new_jwt_access_token>\"}. New refresh token is set as an HttpOnly cookie."
-// @Failure      400 {object} map[string]interface{} "Missing or invalid refresh token cookie"
-// @Failure      404 {object} map[string]string "Refresh token not found (expired or revoked)"
-// @Failure      500 {object} map[string]string "Internal server error"
+// @Success      200 {object} response.Response[structs.LoginUserResp] "Returns {\"token\": \"<new_jwt_access_token>\"}. New refresh token is set as an HttpOnly cookie."
+// @Failure      400 {object} response.Response[any] "Missing or invalid refresh token cookie"
+// @Failure      404 {object} response.Response[any] "Refresh token not found (expired or revoked)"
+// @Failure      500 {object} response.Response[any] "Internal server error"
 // @Router       /auth/refresh [post]
 func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
-	//var req *structs.RefreshRequest
-	//
-	//if err := c.Bind(&req); err != nil {
-	//	return c.JSON(http.StatusBadRequest, map[string]interface{}{})
-	//}
-
 	ctx := c.Request().Context()
 
 	cookie, err := c.Cookie("refresh")
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]interface{}{})
+		return c.JSON(http.StatusBadRequest, response.Error("missing refresh token"))
 	}
 
 	uid, err := h.service.GetUserIdByRefreshToken(ctx, cookie.Value)
@@ -84,7 +79,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
 
-	return c.JSON(http.StatusOK, structs.LoginUserResp{
+	return c.JSON(http.StatusOK, response.OK(structs.LoginUserResp{
 		Token: *token,
-	})
+	}))
 }

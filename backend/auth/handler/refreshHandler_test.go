@@ -14,6 +14,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockJwtService is a mock implementation of JwtServiceInterface
 type MockJwtService struct {
 	mock.Mock
 }
@@ -49,7 +49,6 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 	refreshTokenValue := "valid-refresh-token"
 	newAccessToken := "new-access-token"
 
-	// Mock RefreshTokenService
 	mockRefreshTokenService := &mocked.RefreshTokenService{}
 	mockRefreshTokenService.
 		On("GetUserIdByRefreshToken", mock.Anything, refreshTokenValue).
@@ -60,7 +59,6 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 		})).
 		Return(nil)
 
-	// Mock JwtService
 	mockJwtService := &MockJwtService{}
 	mockJwtService.
 		On("NewAccessToken", mock.Anything, userId, domain.USER).
@@ -68,7 +66,6 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 
 	hdl := handler.NewRefreshHandler(mockRefreshTokenService, mockJwtService)
 
-	// Create request with refresh token cookie
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "refresh",
@@ -83,13 +80,12 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var result structs.LoginUserResp
-	err = json.Unmarshal(rec.Body.Bytes(), &result)
-
+	var resp response.Response[structs.LoginUserResp]
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, newAccessToken, result.Token)
+	assert.Equal(t, true, resp.Success)
+	assert.Equal(t, newAccessToken, resp.Data.Token)
 
-	// Verify that the refresh cookie is set
 	cookies := rec.Result().Cookies()
 	refreshCookie := false
 	for _, cookie := range cookies {
@@ -117,7 +113,6 @@ func TestRefreshHandler_Refresh_NoCookie(t *testing.T) {
 
 	hdl := handler.NewRefreshHandler(mockRefreshTokenService, mockJwtService)
 
-	// Create request without refresh token cookie
 	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
 	rec := httptest.NewRecorder()
 
@@ -282,11 +277,9 @@ func TestRefreshHandler_Refresh_RefreshCookieExpiration(t *testing.T) {
 	}
 
 	require.NotNil(t, refreshCookie)
-	// Check that expiration is set to approximately 7 days from now
 	expectedDuration := time.Hour * 24 * 7
 	actualDuration := refreshCookie.Expires.Sub(beforeTime)
 
-	// Allow 1 minute tolerance for test execution time
 	assert.True(t, actualDuration >= expectedDuration-time.Minute && actualDuration <= expectedDuration+time.Minute,
 		"Refresh cookie expiration should be approximately 7 days from now")
 }

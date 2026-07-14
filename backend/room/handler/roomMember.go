@@ -7,6 +7,7 @@ import (
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -40,18 +41,16 @@ func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService serv
 // @Security     BearerAuth
 // @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
 // @Param        request body object true "Member to add" example({"userId":"660e8400-e29b-41d4-a716-446655440000","role":0})
-// @Success      201 {object} map[string]string "Returns {\"message\": \"ok\"}"
-// @Failure      400 {object} map[string]string "Invalid request body or UUID format"
-// @Failure      403 {object} map[string]string "Admin permission is required"
-// @Failure      404 {object} map[string]string "Room or user not found"
-// @Failure      409 {object} map[string]string "User is already a member of the room"
+// @Success      201 {object} response.Response[any]
+// @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
+// @Failure      403 {object} response.Response[any] "Admin permission is required"
+// @Failure      404 {object} response.Response[any] "Room or user not found"
+// @Failure      409 {object} response.Response[any] "User is already a member of the room"
 // @Router       /rooms/{roomId}/members [post]
 func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid room id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
 	}
 
 	var body struct {
@@ -59,9 +58,7 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 		Role   *domain.Role `json:"role"`
 	}
 	if err := c.Bind(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( err.Error()))
 	}
 
 	ok, err := utils.IsManager(c, roomId, h.service)
@@ -70,9 +67,7 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 	}
 
 	if !ok {
-		return c.JSON(http.StatusForbidden, map[string]string{
-			"error": "Admin permission is required",
-		})
+		return c.JSON(http.StatusForbidden, response.Error("Admin permission is required"))
 	}
 
 	req := structs.RoomUser{
@@ -85,9 +80,7 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{
-		"message": "ok",
-	})
+	return c.JSON(http.StatusCreated, response.OK[any](nil))
 }
 
 // RemoveMember godoc
@@ -98,23 +91,19 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 // @Security     BearerAuth
 // @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
 // @Param        userId path string true "User UUID to remove" example(660e8400-e29b-41d4-a716-446655440000)
-// @Success      200 {object} map[string]string "Returns {\"message\": \"ok\"}"
-// @Failure      400 {object} map[string]string "Invalid UUID format"
-// @Failure      404 {object} map[string]string "Room, user, or membership not found"
+// @Success      200 {object} response.Response[any]
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      404 {object} response.Response[any] "Room, user, or membership not found"
 // @Router       /rooms/{roomId}/members/{userId} [delete]
 func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid room id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
 	}
 
 	userId, err := uuid.Parse(c.Param("userId"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid user id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid user id"))
 	}
 
 	req := structs.RoomUser{
@@ -126,9 +115,7 @@ func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "ok",
-	})
+	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
 // ListMembers godoc
@@ -138,15 +125,13 @@ func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
-// @Success      200 {array} domain.RoomMember "Array of room members"
-// @Failure      400 {object} map[string]string "Invalid UUID format"
+// @Success      200 {object} response.Response[[]domain.RoomMember] "Array of room members"
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Router       /rooms/{roomId}/members [get]
 func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid room id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
 	}
 
 	members, err := h.service.GetUserByRoomId(c.Request().Context(), roomId)
@@ -154,7 +139,7 @@ func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, members)
+	return c.JSON(http.StatusOK, response.OK(members))
 }
 
 // GetMember godoc
@@ -165,23 +150,19 @@ func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
 // @Security     BearerAuth
 // @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
 // @Param        userId path string true "User UUID" example(660e8400-e29b-41d4-a716-446655440000)
-// @Success      200 {object} domain.RoomMember "Membership info found"
-// @Failure      400 {object} map[string]string "Invalid UUID format"
-// @Failure      404 {object} map[string]string "Membership not found"
+// @Success      200 {object} response.Response[domain.RoomMember] "Membership info found"
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      404 {object} response.Response[any] "Membership not found"
 // @Router       /rooms/{roomId}/members/{userId} [get]
 func (h *RoomMemberHandlerImpl) GetMember(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid room id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
 	}
 
 	userId, err := uuid.Parse(c.Param("userId"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid user id",
-		})
+		return c.JSON(http.StatusBadRequest, response.Error( "invalid user id"))
 	}
 
 	member, err := h.service.GetUserByRoomIdAndUserId(c.Request().Context(), userId, roomId)
@@ -189,7 +170,7 @@ func (h *RoomMemberHandlerImpl) GetMember(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, member)
+	return c.JSON(http.StatusOK, response.OK(member))
 }
 
 var _ RoomMemberHandler = (*RoomMemberHandlerImpl)(nil)
