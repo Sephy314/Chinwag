@@ -44,18 +44,6 @@ func NewJwksService(repo repo.JwksRepository) *JwksService {
 }
 
 func (s *JwksService) LoadJWKS(ctx context.Context) error {
-	//cnt, err := s.repo.Count(ctx)
-	//if err != nil {
-	//	return err
-	//}
-
-	//if *cnt <= 0 {
-	//	err := s.Rotate(ctx)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-
 	dbVersion, err := s.repo.GetVersion(ctx)
 	if err != nil {
 		return err
@@ -82,6 +70,27 @@ func (s *JwksService) LoadJWKS(ctx context.Context) error {
 
 	if err != nil {
 		return err
+	}
+
+	for _, k := range keys {
+		if k.Status == domain.Active && k.ExpiredAt != nil && time.Now().After(*k.ExpiredAt) {
+			err = s.repo.ExpireActiveKey(ctx)
+			if err != nil {
+				return err
+			}
+
+			err = s.Rotate(ctx)
+			if err != nil {
+				return err
+			}
+
+			keys, err = s.repo.Load(ctx)
+			if err != nil {
+				return err
+			}
+
+			break
+		}
 	}
 
 	set, err := utils.ToJWKS(keys)

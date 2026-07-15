@@ -15,10 +15,10 @@ type JwksRepository interface {
 	Load(context.Context) ([]domain.SigningKeyEntity, error)
 	Rotate(context.Context, domain.SigningKeyEntity) error
 	InActiveKey(context.Context, string) error
+	ExpireActiveKey(context.Context) error
 	ClearRetiredKeys(context.Context) error
 	GetActiveKey(context.Context) (*domain.SigningKeyEntity, error)
 	GetVersion(context.Context) (*time.Time, error)
-	//Count(context.Context) (*int64, error)
 }
 
 type JwksRepo struct {
@@ -131,6 +131,16 @@ func (repo *JwksRepo) InActiveKey(ctx context.Context, kid string) error {
 	}
 
 	return nil
+}
+
+func (repo *JwksRepo) ExpireActiveKey(ctx context.Context) error {
+	_, err := repo.db.ExecContext(
+		ctx,
+		`UPDATE signing_keys
+			   SET status = 'EXPIRED'
+			   WHERE status = 'ACTIVE'`,
+	)
+	return err
 }
 
 func (repo *JwksRepo) ClearRetiredKeys(ctx context.Context) error {

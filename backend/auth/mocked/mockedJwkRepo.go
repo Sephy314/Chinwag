@@ -32,6 +32,11 @@ func (m *JwkRepo) InActiveKey(ctx context.Context, kid string) error {
 	return args.Error(0)
 }
 
+func (m *JwkRepo) ExpireActiveKey(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func (m *JwkRepo) ClearRetiredKeys(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)

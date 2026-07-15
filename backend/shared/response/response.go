@@ -1,13 +1,16 @@
 package response
 
+const RequestIDKey = "request_id"
+
 type Meta struct{}
 
 type Response[T any] struct {
-	Success bool   `json:"success"`
-	Code    string `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-	Data    T      `json:"data,omitempty"`
-	Meta    *Meta  `json:"meta,omitempty"`
+	Success   bool   `json:"success"`
+	Code      string `json:"code,omitempty"`
+	Message   string `json:"message,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	Data      T      `json:"data,omitempty"`
+	Meta      *Meta  `json:"meta,omitempty"`
 }
 
 func OK[T any](data T) *Response[T] {

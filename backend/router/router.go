@@ -8,6 +8,7 @@ import (
 	authRouter "github.com/Sephy314/chinwag/auth/router"
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/docs"
+	appMiddleware "github.com/Sephy314/chinwag/middleware"
 	roomRouter "github.com/Sephy314/chinwag/room/router"
 	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/response"
@@ -58,6 +59,8 @@ func SetUpRouter() (*echo.Echo, error) {
 	}
 
 	e.Use(middleware.RequestID())
+	e.Use(appMiddleware.RequestIDInjector())
+	e.Use(appMiddleware.ResponseIDInjector())
 	e.Use(middleware.RequestLogger())
 
 	e.Use(middleware.Recover())
