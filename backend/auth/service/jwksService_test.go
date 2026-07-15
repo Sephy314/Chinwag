@@ -23,6 +23,11 @@ func (m *MockJwtRepository) InActiveKey(ctx context.Context, kid string) error {
 	return args.Error(0)
 }
 
+func (m *MockJwtRepository) ExpireActiveKey(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func (m *MockJwtRepository) ClearRetiredKeys(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
@@ -279,5 +284,121 @@ func TestJwksService_LoadJWKS_NoReload(t *testing.T) {
 
 	require.NoError(t, err)
 
+	repo.AssertExpectations(t)
+}
+
+func TestJwksService_LoadJWKS_ActiveKeyExpired(t *testing.T) {
+	repo := new(MockJwtRepository)
+
+	now := time.Now()
+	expired := now.Add(-time.Hour)
+
+	expiredKeyEntity := newTestSigningKey()
+	expiredKeyEntity.Kid = "expired-kid"
+	expiredKeyEntity.Status = domain.Active
+	expiredKeyEntity.ExpiredAt = &expired
+
+	newKeyEntity := newTestSigningKey()
+	newKeyEntity.Kid = "new-kid"
+	newKeyEntity.Status = domain.Active
+
+	repo.On(
+		"GetVersion",
+		mock.Anything,
+	).Return(now, nil)
+
+	repo.On(
+		"Load",
+		mock.Anything,
+	).Return(
+		[]domain.SigningKeyEntity{expiredKeyEntity},
+		nil,
+	).Once()
+
+	repo.On(
+		"ExpireActiveKey",
+		mock.Anything,
+	).Return(nil)
+
+	repo.On(
+		"Rotate",
+		mock.Anything,
+		mock.Anything,
+	).Return(nil)
+
+	repo.On(
+		"Load",
+		mock.Anything,
+	).Return(
+		[]domain.SigningKeyEntity{newKeyEntity},
+		nil,
+	).Once()
+
+	svc := NewJwksService(repo)
+
+	require.NotNil(t, svc)
+	repo.AssertCalled(t, "ExpireActiveKey", mock.Anything)
+	repo.AssertCalled(t, "Rotate", mock.Anything, mock.Anything)
+	repo.AssertExpectations(t)
+}
+
+func TestJwksService_Rotate_ActiveKeyExpired(t *testing.T) {
+	repo := new(MockJwtRepository)
+
+	now := time.Now()
+	expired := now.Add(-time.Hour)
+
+	expiredKeyEntity := newTestSigningKey()
+	expiredKeyEntity.Kid = "expired-kid"
+	expiredKeyEntity.Status = domain.Active
+	expiredKeyEntity.ExpiredAt = &expired
+
+	newKeyEntity := newTestSigningKey()
+	newKeyEntity.Kid = "new-kid"
+	newKeyEntity.Status = domain.Active
+
+	repo.On(
+		"GetVersion",
+		mock.Anything,
+	).Return(now, nil)
+
+	repo.On(
+		"Load",
+		mock.Anything,
+	).Return(
+		[]domain.SigningKeyEntity{expiredKeyEntity},
+		nil,
+	).Once()
+
+	repo.On(
+		"ExpireActiveKey",
+		mock.Anything,
+	).Return(nil)
+
+	repo.On(
+		"Rotate",
+		mock.Anything,
+		mock.MatchedBy(func(key domain.SigningKeyEntity) bool {
+			return key.Kid != "" &&
+				key.PublicKey != "" &&
+				key.PrivateKey != "" &&
+				key.Status == domain.Active &&
+				key.ExpiredAt != nil
+		}),
+	).Return(nil)
+
+	repo.On(
+		"Load",
+		mock.Anything,
+	).Return(
+		[]domain.SigningKeyEntity{newKeyEntity},
+		nil,
+	).Once()
+
+	svc := NewJwksService(repo)
+
+	require.NotNil(t, svc)
+	repo.AssertCalled(t, "ExpireActiveKey", mock.Anything)
+	repo.AssertCalled(t, "Rotate", mock.Anything, mock.Anything)
 	repo.AssertExpectations(t)
 }
