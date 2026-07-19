@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -225,6 +227,7 @@ func TestDeleteRoom_Success(t *testing.T) {
 
 	roomId := uuid.New()
 
+	mockRepo.On("GetRoomById", ctx, roomId).Return(domain.Room{Id: roomId}, nil)
 	mockRepo.On("DeleteRoomById", ctx, roomId).Return(nil)
 
 	service := NewRoomService(mockRepo)
@@ -240,13 +243,33 @@ func TestDeleteRoom_NotFound(t *testing.T) {
 
 	roomId := uuid.New()
 
-	mockRepo.On("DeleteRoomById", ctx, roomId).Return(errors.New("not found"))
+	mockRepo.On("GetRoomById", ctx, roomId).Return(domain.Room{}, errors.New("not found"))
 
 	service := NewRoomService(mockRepo)
 	err := service.DeleteRoom(ctx, roomId)
 
 	assert.Error(t, err)
 	assert.Equal(t, "not found", err.Error())
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteRoom_Popped(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	now := time.Now()
+
+	mockRepo.On("GetRoomById", ctx, roomId).Return(domain.Room{
+		Id:       roomId,
+		PoppedAt: &now,
+	}, nil)
+
+	service := NewRoomService(mockRepo)
+	err := service.DeleteRoom(ctx, roomId)
+
+	assert.Error(t, err)
+	assert.Equal(t, errs.ErrRoomPopped, err)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -330,10 +353,10 @@ func TestUpdateRoom_UpdateFailed(t *testing.T) {
 
 	roomId := uuid.New()
 	existingRoom := domain.Room{
-		Id:          roomId,
-		Name:        "Old Name",
-		MaxMembers:  10,
-		OwnerId:     uuid.New(),
+		Id:         roomId,
+		Name:       "Old Name",
+		MaxMembers: 10,
+		OwnerId:    uuid.New(),
 	}
 
 	newName := "New Name"
@@ -383,5 +406,62 @@ func TestUpdateRoom_PartialUpdate(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, "Old Name", result.Name)
 	assert.Equal(t, 50, result.MaxMembers)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoom_Popped(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	now := time.Now()
+	existingRoom := domain.Room{
+		Id:         roomId,
+		Name:       "Popped Room",
+		MaxMembers: 10,
+		OwnerId:    uuid.New(),
+		PoppedAt:   &now,
+	}
+
+	newName := "New Name"
+	req := structs.UpdateRoomRequest{
+		Name: &newName,
+	}
+
+	mockRepo.On("GetRoomById", ctx, roomId).Return(existingRoom, nil)
+
+	service := NewRoomService(mockRepo)
+	result, err := service.UpdateRoom(ctx, roomId, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, errs.ErrRoomPopped, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCreateRoom_WithCustomPopAt(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
+
+	customPopAt := time.Now().Add(48 * time.Hour)
+	req := structs.CreateRoomRequest{
+		Name:        "Custom Pop Room",
+		Description: nil,
+		MaxMembers:  10,
+		PopAt:       &customPopAt,
+	}
+
+	mockRepo.On("CreateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
+		return room.Name == req.Name && room.PopAt.Equal(customPopAt)
+	})).Return(nil)
+
+	service := NewRoomService(mockRepo)
+	result, err := service.CreateRoom(ctx, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, req.Name, result.Name)
+	assert.True(t, result.PopAt.Equal(customPopAt))
 	mockRepo.AssertExpectations(t)
 }

@@ -1,11 +1,14 @@
 package router
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/room/handler"
 	"github.com/Sephy314/chinwag/room/repo"
+	"github.com/Sephy314/chinwag/room/scheduler"
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
 	echojwt "github.com/labstack/echo-jwt/v5"
@@ -22,9 +25,12 @@ func SetUpRoomRouter(e *echo.Echo) {
 	roomMemberRepo := repo.NewRoomMemberRepo(conns.DB)
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 	roomService := service.NewRoomService(roomRepo, unitOfWork)
-	roomMemberService := service.NewRoomMemberService(roomMemberRepo, unitOfWork)
+	roomMemberService := service.NewRoomMemberService(roomMemberRepo, roomRepo, unitOfWork)
 	roomHandler := handler.NewRoomHandler(roomService, roomMemberService)
 	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService)
+
+	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute)
+	go popScheduler.Start(context.Background())
 
 	pub := e.Group("/rooms")
 	{

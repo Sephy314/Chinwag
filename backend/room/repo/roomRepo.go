@@ -28,12 +28,13 @@ func NewRoomRepo(db sqlx.ExtContext) *RoomRepo {
 func (r *RoomRepo) CreateRoom(ctx context.Context, req domain.Room) error {
 	_, err := r.db.ExecContext(
 		ctx,
-		`INSERT INTO rooms (id, name, description, max_members, owner_id) VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO rooms (id, name, description, max_members, owner_id, pop_at) VALUES ($1, $2, $3, $4, $5, $6)`,
 		req.Id,
 		req.Name,
 		req.Description,
 		req.MaxMembers,
 		req.OwnerId,
+		req.PopAt,
 	)
 
 	return err
@@ -47,7 +48,8 @@ func (r *RoomRepo) GetRoomById(ctx context.Context, req uuid.UUID) (domain.Room,
 		&room,
 		`SELECT 
     				 r.id, r.name, r.description, r.max_members, r.owner_id, 
-    			 	 r.created_at, r.updated_at, r.deleted_at
+    			  	 r.pop_at, r.popped_at,
+    			  	 r.created_at, r.updated_at, r.deleted_at
     			FROM rooms r
     			WHERE id = $1 AND
     				deleted_at IS NULL`,
@@ -63,6 +65,7 @@ func (r *RoomRepo) GetRoomsByOwnerId(ctx context.Context, req uuid.UUID) ([]doma
 		r.db,
 		&rooms,
 		`SELECT r.id, r.name, r.description, r.max_members, r.owner_id, 
+       				  r.pop_at, r.popped_at,
        				  r.created_at, r.updated_at, r.deleted_at
 				FROM rooms r
 				WHERE r.owner_id = $1
@@ -77,7 +80,7 @@ func (r *RoomRepo) UpdateRoom(ctx context.Context, room domain.Room) error {
 	res, err := r.db.ExecContext(
 		ctx,
 		`UPDATE rooms SET name = $1, description = $2, max_members = $3, updated_at = NOW()
-		 WHERE id = $4 AND deleted_at IS NULL`,
+		 WHERE id = $4 AND deleted_at IS NULL AND popped_at IS NULL`,
 		room.Name,
 		room.Description,
 		room.MaxMembers,
@@ -102,7 +105,7 @@ func (r *RoomRepo) UpdateRoom(ctx context.Context, room domain.Room) error {
 func (r *RoomRepo) DeleteRoomById(ctx context.Context, req uuid.UUID) error {
 	res, err := r.db.ExecContext(
 		ctx,
-		`UPDATE rooms SET deleted_at = now() WHERE id = $1`,
+		`UPDATE rooms SET deleted_at = now() WHERE id = $1 AND popped_at IS NULL`,
 		req,
 	)
 
