@@ -60,7 +60,7 @@ func (h *RoomHandlerImpl) Health(c *echo.Context) error {
 func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 	var req structs.CreateRoomRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, response.Error( err.Error()))
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
 
 	ownerId, err := utils.GetUserIdByEchoContext(c)
@@ -92,7 +92,7 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
+		return c.JSON(http.StatusBadRequest, response.Error("invalid room id"))
 	}
 
 	room, err := h.service.GetRoomById(c.Request().Context(), roomId)
@@ -118,11 +118,11 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 	memberIdStr := c.QueryParam("memberId")
 
 	if ownerIdStr != "" && memberIdStr != "" {
-		return c.JSON(http.StatusBadRequest, response.Error( "provide only one of ownerId or memberId"))
+		return c.JSON(http.StatusBadRequest, response.Error("provide only one of ownerId or memberId"))
 	}
 
 	if ownerIdStr == "" && memberIdStr == "" {
-		return c.JSON(http.StatusBadRequest, response.Error( "provide ownerId or memberId query parameter"))
+		return c.JSON(http.StatusBadRequest, response.Error("provide ownerId or memberId query parameter"))
 	}
 
 	ctx := c.Request().Context()
@@ -130,7 +130,7 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 	if ownerIdStr != "" {
 		ownerId, err := uuid.Parse(ownerIdStr)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, response.Error( "invalid ownerId"))
+			return c.JSON(http.StatusBadRequest, response.Error("invalid ownerId"))
 		}
 		rooms, err := h.service.GetRoomsByOwnerId(ctx, ownerId)
 		if err != nil {
@@ -141,7 +141,7 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 
 	memberId, err := uuid.Parse(memberIdStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, response.Error( "invalid memberId"))
+		return c.JSON(http.StatusBadRequest, response.Error("invalid memberId"))
 	}
 	rooms, err := h.memberService.GetRoomsByUserId(ctx, memberId)
 	if err != nil {
@@ -196,7 +196,7 @@ func (h *RoomHandlerImpl) UpdateRoom(c *echo.Context) error {
 func (h *RoomHandlerImpl) DeleteRoom(c *echo.Context) error {
 	roomId, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, response.Error( "invalid room id"))
+		return c.JSON(http.StatusBadRequest, response.Error("invalid room id"))
 	}
 
 	if err := h.service.DeleteRoom(c.Request().Context(), roomId); err != nil {

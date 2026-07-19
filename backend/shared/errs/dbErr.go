@@ -24,6 +24,11 @@ var ErrCacheNotFound = &AppError{
 	Message: "Cached data not found",
 }
 
+var ErrRoomPopped = &AppError{
+	Status:  http.StatusGone,
+	Message: "Room has been popped",
+}
+
 func parseDBError(err error) error {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):

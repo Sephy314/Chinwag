@@ -1,14 +1,17 @@
 package structs
 
 import (
+	"time"
+
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/google/uuid"
 )
 
 type CreateRoomRequest struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	MaxMembers  int     `json:"max_members"`
+	Name        string     `json:"name"`
+	Description *string    `json:"description"`
+	MaxMembers  int        `json:"max_members"`
+	PopAt       *time.Time `json:"pop_at,omitempty"`
 }
 
 type UpdateRoomRequest struct {

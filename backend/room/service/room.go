@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var defaultPopDuration = 24 * time.Hour
+
 type RoomServiceInterface interface {
 	CreateRoom(ctx context.Context, request structs.CreateRoomRequest) (*domain.Room, error)
 	GetRoomById(ctx context.Context, roomId uuid.UUID) (*domain.Room, error)
@@ -39,12 +41,18 @@ func (r *RoomService) CreateRoom(ctx context.Context, request structs.CreateRoom
 		}
 	}
 
+	popAt := now.Add(defaultPopDuration)
+	if request.PopAt != nil {
+		popAt = *request.PopAt
+	}
+
 	room := domain.Room{
 		Id:          id,
 		Name:        request.Name,
 		Description: request.Description,
 		MaxMembers:  request.MaxMembers,
 		OwnerId:     ownerId,
+		PopAt:       popAt,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 		DeletedAt:   nil,
@@ -99,8 +107,12 @@ func (r *RoomService) UpdateRoom(ctx context.Context, roomId uuid.UUID, req stru
 		return nil, err
 	}
 
+	if room.PoppedAt != nil {
+		return nil, errs.ErrRoomPopped
+	}
+
 	_, err = patch.Patch(&room, req,
-		patch.WithIgnore("Id", "OwnerId", "CreatedAt", "UpdatedAt", "DeletedAt"),
+		patch.WithIgnore("Id", "OwnerId", "CreatedAt", "UpdatedAt", "DeletedAt", "PopAt", "PoppedAt"),
 	)
 	if err != nil {
 		return nil, err
@@ -125,6 +137,15 @@ func (r *RoomService) UpdateRoom(ctx context.Context, roomId uuid.UUID, req stru
 }
 
 func (r *RoomService) DeleteRoom(ctx context.Context, roomId uuid.UUID) error {
+	room, err := r.repo.GetRoomById(ctx, roomId)
+	if err != nil {
+		return err
+	}
+
+	if room.PoppedAt != nil {
+		return errs.ErrRoomPopped
+	}
+
 	if r.uow == nil {
 		return r.repo.DeleteRoomById(ctx, roomId)
 	}

@@ -7,9 +7,18 @@ import (
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/repo"
 	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/patch"
 	"github.com/google/uuid"
 )
+
+func (s *RoomMemberService) isRoomPopped(ctx context.Context, roomId uuid.UUID) (bool, error) {
+	room, err := s.roomRepo.GetRoomById(ctx, roomId)
+	if err != nil {
+		return false, err
+	}
+	return room.PoppedAt != nil, nil
+}
 
 type RoomMemberServiceInterface interface {
 	InviteUser(ctx context.Context, member structs.RoomUser) error
@@ -24,8 +33,9 @@ type RoomMemberServiceInterface interface {
 }
 
 type RoomMemberService struct {
-	repo repo.RoomMemberRepoInterface
-	uow  repo.UnitOfWork
+	repo     repo.RoomMemberRepoInterface
+	roomRepo repo.RoomRepoInterface
+	uow      repo.UnitOfWork
 }
 
 func (s *RoomMemberService) GetRoomsByUserId(ctx context.Context, userId uuid.UUID) ([]domain.Room, error) {
@@ -33,6 +43,14 @@ func (s *RoomMemberService) GetRoomsByUserId(ctx context.Context, userId uuid.UU
 }
 
 func (s *RoomMemberService) UpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error) {
+	popped, err := s.isRoomPopped(ctx, roomId)
+	if err != nil {
+		return nil, err
+	}
+	if popped {
+		return nil, errs.ErrRoomPopped
+	}
+
 	member, err := s.repo.GetMemberByRoomIdAndMemberId(ctx, roomId, userId)
 	if err != nil {
 		return nil, err
@@ -64,6 +82,14 @@ func (s *RoomMemberService) UpdateRoomMember(ctx context.Context, userId, roomId
 }
 
 func (s *RoomMemberService) SetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error {
+	popped, err := s.isRoomPopped(ctx, roomId)
+	if err != nil {
+		return err
+	}
+	if popped {
+		return errs.ErrRoomPopped
+	}
+
 	if s.uow == nil {
 		return s.repo.SetUserRole(ctx, userId, roomId, role)
 	}
@@ -73,6 +99,14 @@ func (s *RoomMemberService) SetUserRole(ctx context.Context, userId uuid.UUID, r
 	})
 }
 func (s *RoomMemberService) InviteUser(ctx context.Context, member structs.RoomUser) error {
+	popped, err := s.isRoomPopped(ctx, member.RoomId)
+	if err != nil {
+		return err
+	}
+	if popped {
+		return errs.ErrRoomPopped
+	}
+
 	role := domain.MEMBER
 	if member.Role != nil {
 		role = *member.Role
@@ -100,6 +134,14 @@ func (s *RoomMemberService) InviteUser(ctx context.Context, member structs.RoomU
 }
 
 func (s *RoomMemberService) KickUser(ctx context.Context, member structs.RoomUser) error {
+	popped, err := s.isRoomPopped(ctx, member.RoomId)
+	if err != nil {
+		return err
+	}
+	if popped {
+		return errs.ErrRoomPopped
+	}
+
 	if s.uow == nil {
 		return s.repo.RemoveMember(ctx, member.UserId, member.RoomId)
 	}
@@ -140,13 +182,14 @@ func (s *RoomMemberService) HasManagerPermission(ctx context.Context, userId uui
 	return *r == domain.ADMIN, nil
 }
 
-func NewRoomMemberService(roomMemberRepo repo.RoomMemberRepoInterface, uow ...repo.UnitOfWork) *RoomMemberService {
+func NewRoomMemberService(roomMemberRepo repo.RoomMemberRepoInterface, roomRepo repo.RoomRepoInterface, uow ...repo.UnitOfWork) *RoomMemberService {
 	var unitOfWork repo.UnitOfWork
 	if len(uow) > 0 {
 		unitOfWork = uow[0]
 	}
 	return &RoomMemberService{
-		repo: roomMemberRepo,
-		uow:  unitOfWork,
+		repo:     roomMemberRepo,
+		roomRepo: roomRepo,
+		uow:      unitOfWork,
 	}
 }

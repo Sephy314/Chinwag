@@ -67,7 +67,9 @@ func (r *RoomMemberRepo) GetMemberByRoomIdAndMemberId(ctx context.Context, userI
 func (r *RoomMemberRepo) AddMember(ctx context.Context, req domain.RoomMember) error {
 	res, err := r.db.ExecContext(
 		ctx,
-		`INSERT INTO room_member (user_id, room_id, role) VALUES ($1, $2, $3)`,
+		`INSERT INTO room_member (user_id, room_id, role) 
+		 SELECT $1, $2, $3
+		 WHERE EXISTS (SELECT 1 FROM rooms WHERE id = $2 AND popped_at IS NULL AND deleted_at IS NULL)`,
 		req.UserId,
 		req.RoomId,
 		req.Role,
@@ -91,7 +93,8 @@ func (r *RoomMemberRepo) UpdateMember(ctx context.Context, member domain.RoomMem
 	res, err := r.db.ExecContext(
 		ctx,
 		`UPDATE room_member SET role = $1
-		 WHERE user_id = $2 AND room_id = $3 AND left_at IS NULL`,
+		 WHERE user_id = $2 AND room_id = $3 AND left_at IS NULL
+		   AND EXISTS (SELECT 1 FROM rooms WHERE id = $3 AND popped_at IS NULL AND deleted_at IS NULL)`,
 		member.Role,
 		member.UserId,
 		member.RoomId,
@@ -115,7 +118,9 @@ func (r *RoomMemberRepo) UpdateMember(ctx context.Context, member domain.RoomMem
 func (r *RoomMemberRepo) RemoveMember(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) error {
 	res, err := r.db.ExecContext(
 		ctx,
-		`UPDATE room_member SET left_at = now() WHERE user_id = $1 AND room_id = $2`,
+		`UPDATE room_member SET left_at = now() 
+		 WHERE user_id = $1 AND room_id = $2
+		   AND EXISTS (SELECT 1 FROM rooms WHERE id = $2 AND popped_at IS NULL AND deleted_at IS NULL)`,
 		userId,
 		roomId,
 	)
@@ -143,7 +148,7 @@ func (r *RoomMemberRepo) SetUserRole(ctx context.Context, userId uuid.UUID, room
 		`UPDATE room_member
 			   SET role = $1
 			   WHERE user_id = $2 AND room_id = $3
-			   `,
+			     AND EXISTS (SELECT 1 FROM rooms WHERE id = $3 AND popped_at IS NULL AND deleted_at IS NULL)`,
 		role,
 		userId,
 		roomId,
@@ -172,7 +177,7 @@ func (r *RoomMemberRepo) GetRoomsByUserId(ctx context.Context, userId uuid.UUID)
 		ctx,
 		r.db,
 		&rooms,
-		`SELECT rm.id, rm.name, rm.description, rm.max_members, rm.owner_id, rm.created_at, rm.updated_at, rm.deleted_at
+		`SELECT rm.id, rm.name, rm.description, rm.max_members, rm.owner_id, rm.pop_at, rm.popped_at, rm.created_at, rm.updated_at, rm.deleted_at
 				FROM room_member r
 				JOIN rooms rm ON rm.id = r.room_id
 				WHERE r.user_id = $1

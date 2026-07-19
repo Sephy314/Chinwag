@@ -18,6 +18,47 @@ type MockRoomMemberRepo struct {
 	mock.Mock
 }
 
+type MockRoomRepoForMember struct {
+	mock.Mock
+}
+
+func (m *MockRoomRepoForMember) CreateRoom(ctx context.Context, room domain.Room) error {
+	args := m.Called(ctx, room)
+	return args.Error(0)
+}
+
+func (m *MockRoomRepoForMember) GetRoomById(ctx context.Context, roomId uuid.UUID) (domain.Room, error) {
+	args := m.Called(ctx, roomId)
+	return args.Get(0).(domain.Room), args.Error(1)
+}
+
+func (m *MockRoomRepoForMember) GetRoomsByOwnerId(ctx context.Context, ownerId uuid.UUID) ([]domain.Room, error) {
+	args := m.Called(ctx, ownerId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.Room), args.Error(1)
+}
+
+func (m *MockRoomRepoForMember) UpdateRoom(ctx context.Context, room domain.Room) error {
+	args := m.Called(ctx, room)
+	return args.Error(0)
+}
+
+func (m *MockRoomRepoForMember) DeleteRoomById(ctx context.Context, roomId uuid.UUID) error {
+	args := m.Called(ctx, roomId)
+	return args.Error(0)
+}
+
+func newNotPoppedRoomRepo(roomId uuid.UUID) *MockRoomRepoForMember {
+	mockRoomRepo := new(MockRoomRepoForMember)
+	mockRoomRepo.On("GetRoomById", mock.Anything, roomId).Return(domain.Room{
+		Id:    roomId,
+		PopAt: time.Now().Add(24 * time.Hour),
+	}, nil)
+	return mockRoomRepo
+}
+
 func (m *MockRoomMemberRepo) GetMembersByRoomId(ctx context.Context, roomId uuid.UUID) ([]domain.RoomMember, error) {
 	args := m.Called(ctx, roomId)
 	if args.Get(0) == nil {
@@ -77,7 +118,7 @@ func TestInviteUser_Success(t *testing.T) {
 		return member.UserId == userId && member.RoomId == roomId && member.Role == role
 	})).Return(nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.InviteUser(ctx, req)
 
 	assert.NoError(t, err)
@@ -100,7 +141,7 @@ func TestInviteUser_AlreadyExists(t *testing.T) {
 		return member.UserId == userId
 	})).Return(errs.ErrConflict)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.InviteUser(ctx, req)
 
 	assert.Error(t, err)
@@ -124,7 +165,7 @@ func TestInviteUser_Failed(t *testing.T) {
 		return member.UserId == userId
 	})).Return(errors.New("database error"))
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.InviteUser(ctx, req)
 
 	assert.Error(t, err)
@@ -147,7 +188,7 @@ func TestKickUser_Success(t *testing.T) {
 
 	mockRepo.On("RemoveMember", ctx, userId, roomId).Return(nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.KickUser(ctx, req)
 
 	assert.NoError(t, err)
@@ -169,7 +210,7 @@ func TestKickUser_NotFound(t *testing.T) {
 
 	mockRepo.On("RemoveMember", ctx, userId, roomId).Return(errs.ErrNotFound)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.KickUser(ctx, req)
 
 	assert.Error(t, err)
@@ -204,7 +245,7 @@ func TestGetUserByRoomId_Success(t *testing.T) {
 
 	mockRepo.On("GetMembersByRoomId", ctx, roomId).Return(members, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetUserByRoomId(ctx, roomId)
 
 	assert.NoError(t, err)
@@ -223,7 +264,7 @@ func TestGetUserByRoomId_Empty(t *testing.T) {
 
 	mockRepo.On("GetMembersByRoomId", ctx, roomId).Return(members, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetUserByRoomId(ctx, roomId)
 
 	assert.NoError(t, err)
@@ -239,7 +280,7 @@ func TestGetUserByRoomId_Failed(t *testing.T) {
 
 	mockRepo.On("GetMembersByRoomId", ctx, roomId).Return(nil, errors.New("database error"))
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetUserByRoomId(ctx, roomId)
 
 	assert.Error(t, err)
@@ -273,7 +314,7 @@ func TestGetRoomsByUserId_Success(t *testing.T) {
 
 	mockRepo.On("GetRoomsByUserId", ctx, userId).Return(rooms, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetRoomsByUserId(ctx, userId)
 
 	assert.NoError(t, err)
@@ -292,7 +333,7 @@ func TestGetRoomsByUserId_Empty(t *testing.T) {
 
 	mockRepo.On("GetRoomsByUserId", ctx, userId).Return(rooms, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetRoomsByUserId(ctx, userId)
 
 	assert.NoError(t, err)
@@ -308,7 +349,7 @@ func TestGetRoomsByUserId_Failed(t *testing.T) {
 
 	mockRepo.On("GetRoomsByUserId", ctx, userId).Return(nil, errors.New("database error"))
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetRoomsByUserId(ctx, userId)
 
 	assert.Error(t, err)
@@ -327,7 +368,7 @@ func TestSetUserRole_Success(t *testing.T) {
 
 	mockRepo.On("SetUserRole", ctx, userId, roomId, role).Return(nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.SetUserRole(ctx, userId, roomId, role)
 
 	assert.NoError(t, err)
@@ -344,7 +385,7 @@ func TestSetUserRole_NotFound(t *testing.T) {
 
 	mockRepo.On("SetUserRole", ctx, userId, roomId, role).Return(errs.ErrNotFound)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.SetUserRole(ctx, userId, roomId, role)
 
 	assert.Error(t, err)
@@ -362,7 +403,7 @@ func TestSetUserRole_Failed(t *testing.T) {
 
 	mockRepo.On("SetUserRole", ctx, userId, roomId, role).Return(errors.New("database error"))
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	err := service.SetUserRole(ctx, userId, roomId, role)
 
 	assert.Error(t, err)
@@ -384,7 +425,7 @@ func TestGetUserRole_Success(t *testing.T) {
 		Role:   role,
 	}, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetUserRole(ctx, userId, roomId)
 
 	assert.NoError(t, err)
@@ -402,7 +443,7 @@ func TestGetUserRole_NotFound(t *testing.T) {
 
 	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(domain.RoomMember{}, errs.ErrNotFound)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.GetUserRole(ctx, userId, roomId)
 
 	assert.Error(t, err)
@@ -424,7 +465,7 @@ func TestIsManager_True(t *testing.T) {
 		Role:   domain.ADMIN,
 	}, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.HasManagerPermission(ctx, userId, roomId)
 
 	assert.NoError(t, err)
@@ -445,7 +486,7 @@ func TestIsManager_False(t *testing.T) {
 		Role:   domain.MEMBER,
 	}, nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.HasManagerPermission(ctx, userId, roomId)
 
 	assert.NoError(t, err)
@@ -462,7 +503,7 @@ func TestIsManager_Error(t *testing.T) {
 
 	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(domain.RoomMember{}, errs.ErrNotFound)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, new(MockRoomRepoForMember))
 	result, err := service.HasManagerPermission(ctx, userId, roomId)
 
 	assert.Error(t, err)
@@ -494,7 +535,7 @@ func TestUpdateRoomMember_Success(t *testing.T) {
 		return member.UserId == userId && member.RoomId == roomId && member.Role == domain.ADMIN
 	})).Return(nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	result, err := service.UpdateRoomMember(ctx, userId, roomId, req)
 
 	assert.NoError(t, err)
@@ -514,7 +555,7 @@ func TestUpdateRoomMember_NotFound(t *testing.T) {
 
 	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(domain.RoomMember{}, errs.ErrNotFound)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	result, err := service.UpdateRoomMember(ctx, userId, roomId, structs.UpdateRoomMemberRequest{})
 
 	assert.Error(t, err)
@@ -544,7 +585,7 @@ func TestUpdateRoomMember_UpdateFailed(t *testing.T) {
 	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(existingMember, nil)
 	mockRepo.On("UpdateMember", ctx, mock.Anything).Return(errors.New("database error"))
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	result, err := service.UpdateRoomMember(ctx, userId, roomId, req)
 
 	assert.Error(t, err)
@@ -571,11 +612,86 @@ func TestUpdateRoomMember_EmptyRequest(t *testing.T) {
 		return member.Role == domain.MEMBER
 	})).Return(nil)
 
-	service := NewRoomMemberService(mockRepo)
+	service := NewRoomMemberService(mockRepo, newNotPoppedRoomRepo(roomId))
 	result, err := service.UpdateRoomMember(ctx, userId, roomId, structs.UpdateRoomMemberRequest{})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, domain.MEMBER, result.Role)
+	mockRepo.AssertExpectations(t)
+}
+
+func newPoppedRoomRepo(roomId uuid.UUID) *MockRoomRepoForMember {
+	mockRoomRepo := new(MockRoomRepoForMember)
+	mockRoomRepo.On("GetRoomById", mock.Anything, roomId).Return(domain.Room{
+		Id:       roomId,
+		PoppedAt: &time.Time{},
+		PopAt:    time.Now().Add(-24 * time.Hour),
+	}, nil)
+	return mockRoomRepo
+}
+
+func TestInviteUser_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	req := structs.RoomUser{
+		UserId: uuid.New(),
+		RoomId: roomId,
+	}
+
+	service := NewRoomMemberService(mockRepo, newPoppedRoomRepo(roomId))
+	err := service.InviteUser(ctx, req)
+
+	assert.Error(t, err)
+	assert.Equal(t, errs.ErrRoomPopped, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestKickUser_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	req := structs.RoomUser{
+		UserId: uuid.New(),
+		RoomId: roomId,
+	}
+
+	service := NewRoomMemberService(mockRepo, newPoppedRoomRepo(roomId))
+	err := service.KickUser(ctx, req)
+
+	assert.Error(t, err)
+	assert.Equal(t, errs.ErrRoomPopped, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestSetUserRole_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+
+	service := NewRoomMemberService(mockRepo, newPoppedRoomRepo(roomId))
+	err := service.SetUserRole(ctx, uuid.New(), roomId, domain.ADMIN)
+
+	assert.Error(t, err)
+	assert.Equal(t, errs.ErrRoomPopped, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoomMember_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+
+	service := NewRoomMemberService(mockRepo, newPoppedRoomRepo(roomId))
+	result, err := service.UpdateRoomMember(ctx, uuid.New(), roomId, structs.UpdateRoomMemberRequest{})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, errs.ErrRoomPopped, err)
 	mockRepo.AssertExpectations(t)
 }
