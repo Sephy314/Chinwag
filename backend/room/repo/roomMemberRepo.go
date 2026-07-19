@@ -14,6 +14,7 @@ type RoomMemberRepoInterface interface {
 	GetRoomsByUserId(context.Context, uuid.UUID) ([]domain.Room, error)
 	GetMemberByRoomIdAndMemberId(context.Context, uuid.UUID, uuid.UUID) (domain.RoomMember, error)
 	AddMember(context.Context, domain.RoomMember) error
+	UpdateMember(context.Context, domain.RoomMember) error
 	RemoveMember(context.Context, uuid.UUID, uuid.UUID) error
 	SetUserRole(context.Context, uuid.UUID, uuid.UUID, domain.Role) error
 }
@@ -81,6 +82,31 @@ func (r *RoomMemberRepo) AddMember(ctx context.Context, req domain.RoomMember) e
 	}
 	if rows == 0 {
 		return errs.ErrConflict
+	}
+
+	return nil
+}
+
+func (r *RoomMemberRepo) UpdateMember(ctx context.Context, member domain.RoomMember) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member SET role = $1
+		 WHERE user_id = $2 AND room_id = $3 AND left_at IS NULL`,
+		member.Role,
+		member.UserId,
+		member.RoomId,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
 	}
 
 	return nil

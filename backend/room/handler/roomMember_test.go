@@ -75,6 +75,14 @@ func (m *MockRoomMemberService) SetUserRole(ctx context.Context, userId uuid.UUI
 	return args.Error(0)
 }
 
+func (m *MockRoomMemberService) UpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error) {
+	args := m.Called(ctx, userId, roomId, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.RoomMember), args.Error(1)
+}
+
 func TestRoomMemberHandler_AddMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
@@ -331,6 +339,171 @@ func TestRoomMemberHandler_RemoveMember_NotFound(t *testing.T) {
 			{Name: "userId", Value: userID.String()},
 		},
 	}.ServeWithHandler(t, h.RemoveMember)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomMemberHandler_UpdateMember_Success(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	userID := uuid.New()
+	roomID := uuid.New()
+	role := domain.ADMIN
+
+	expected := &domain.RoomMember{
+		UserId: userID,
+		RoomId: roomID,
+		Role:   domain.ADMIN,
+	}
+
+	mockSvc.On("HasManagerPermission", mock.Anything, mock.Anything, roomID).Return(true, nil)
+	mockSvc.On("UpdateRoomMember", mock.Anything, userID, roomID, structs.UpdateRoomMemberRequest{Role: &role}).Return(expected, nil)
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+			{Name: "userId", Value: userID.String()},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"role":1}`),
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": uuid.New().String(),
+		},
+	})
+
+	err := h.UpdateMember(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp response.Response[domain.RoomMember]
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, true, resp.Success)
+	assert.Equal(t, domain.ADMIN, resp.Data.Role)
+	assert.Equal(t, userID, resp.Data.UserId)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomMemberHandler_UpdateMember_InvalidRoomId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: "not-a-uuid"},
+			{Name: "userId", Value: uuid.New().String()},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"role":1}`),
+	}.ServeWithHandler(t, h.UpdateMember)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "UpdateRoomMember", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_UpdateMember_InvalidUserId(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: uuid.New().String()},
+			{Name: "userId", Value: "not-a-uuid"},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"role":1}`),
+	}.ServeWithHandler(t, h.UpdateMember)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "UpdateRoomMember", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_UpdateMember_Forbidden(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	userID := uuid.New()
+	roomID := uuid.New()
+
+	mockSvc.On("HasManagerPermission", mock.Anything, mock.Anything, roomID).Return(false, nil)
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+			{Name: "userId", Value: userID.String()},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"role":1}`),
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": uuid.New().String(),
+		},
+	})
+
+	err := h.UpdateMember(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	mockSvc.AssertNotCalled(t, "UpdateRoomMember", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomMemberHandler_UpdateMember_NotFound(t *testing.T) {
+	mockSvc := new(MockRoomMemberService)
+	mockRoomSvc := new(MockRoomService)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+
+	userID := uuid.New()
+	roomID := uuid.New()
+
+	mockSvc.On("HasManagerPermission", mock.Anything, mock.Anything, roomID).Return(true, nil)
+	mockSvc.On("UpdateRoomMember", mock.Anything, userID, roomID, mock.Anything).Return(nil, errors.New("not found"))
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "roomId", Value: roomID.String()},
+			{Name: "userId", Value: userID.String()},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"role":1}`),
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": uuid.New().String(),
+		},
+	})
+
+	err := h.UpdateMember(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	mockSvc.AssertExpectations(t)

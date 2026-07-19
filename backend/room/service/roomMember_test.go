@@ -44,6 +44,11 @@ func (m *MockRoomMemberRepo) AddMember(ctx context.Context, member domain.RoomMe
 	return args.Error(0)
 }
 
+func (m *MockRoomMemberRepo) UpdateMember(ctx context.Context, member domain.RoomMember) error {
+	args := m.Called(ctx, member)
+	return args.Error(0)
+}
+
 func (m *MockRoomMemberRepo) RemoveMember(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) error {
 	args := m.Called(ctx, userId, roomId)
 	return args.Error(0)
@@ -463,5 +468,114 @@ func TestIsManager_Error(t *testing.T) {
 	assert.Error(t, err)
 	assert.False(t, result)
 	assert.Equal(t, errs.ErrNotFound, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoomMember_Success(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	userId := uuid.New()
+	roomId := uuid.New()
+	role := domain.ADMIN
+
+	existingMember := domain.RoomMember{
+		UserId: userId,
+		RoomId: roomId,
+		Role:   domain.MEMBER,
+	}
+
+	req := structs.UpdateRoomMemberRequest{
+		Role: &role,
+	}
+
+	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(existingMember, nil)
+	mockRepo.On("UpdateMember", ctx, mock.MatchedBy(func(member domain.RoomMember) bool {
+		return member.UserId == userId && member.RoomId == roomId && member.Role == domain.ADMIN
+	})).Return(nil)
+
+	service := NewRoomMemberService(mockRepo)
+	result, err := service.UpdateRoomMember(ctx, userId, roomId, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, domain.ADMIN, result.Role)
+	assert.Equal(t, userId, result.UserId)
+	assert.Equal(t, roomId, result.RoomId)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoomMember_NotFound(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	userId := uuid.New()
+	roomId := uuid.New()
+
+	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(domain.RoomMember{}, errs.ErrNotFound)
+
+	service := NewRoomMemberService(mockRepo)
+	result, err := service.UpdateRoomMember(ctx, userId, roomId, structs.UpdateRoomMemberRequest{})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, errs.ErrNotFound, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoomMember_UpdateFailed(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	userId := uuid.New()
+	roomId := uuid.New()
+	role := domain.ADMIN
+
+	existingMember := domain.RoomMember{
+		UserId: userId,
+		RoomId: roomId,
+		Role:   domain.MEMBER,
+	}
+
+	req := structs.UpdateRoomMemberRequest{
+		Role: &role,
+	}
+
+	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(existingMember, nil)
+	mockRepo.On("UpdateMember", ctx, mock.Anything).Return(errors.New("database error"))
+
+	service := NewRoomMemberService(mockRepo)
+	result, err := service.UpdateRoomMember(ctx, userId, roomId, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "database error", err.Error())
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoomMember_EmptyRequest(t *testing.T) {
+	mockRepo := new(MockRoomMemberRepo)
+	ctx := context.Background()
+
+	userId := uuid.New()
+	roomId := uuid.New()
+
+	existingMember := domain.RoomMember{
+		UserId: userId,
+		RoomId: roomId,
+		Role:   domain.MEMBER,
+	}
+
+	mockRepo.On("GetMemberByRoomIdAndMemberId", ctx, roomId, userId).Return(existingMember, nil)
+	mockRepo.On("UpdateMember", ctx, mock.MatchedBy(func(member domain.RoomMember) bool {
+		return member.Role == domain.MEMBER
+	})).Return(nil)
+
+	service := NewRoomMemberService(mockRepo)
+	result, err := service.UpdateRoomMember(ctx, userId, roomId, structs.UpdateRoomMemberRequest{})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, domain.MEMBER, result.Role)
 	mockRepo.AssertExpectations(t)
 }

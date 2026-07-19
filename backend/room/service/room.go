@@ -9,6 +9,7 @@ import (
 	"github.com/Sephy314/chinwag/room/repo"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/patch"
 	"github.com/google/uuid"
 )
 
@@ -16,6 +17,7 @@ type RoomServiceInterface interface {
 	CreateRoom(ctx context.Context, request structs.CreateRoomRequest) (*domain.Room, error)
 	GetRoomById(ctx context.Context, roomId uuid.UUID) (*domain.Room, error)
 	GetRoomsByOwnerId(ctx context.Context, ownerId uuid.UUID) ([]domain.Room, error)
+	UpdateRoom(ctx context.Context, roomId uuid.UUID, req structs.UpdateRoomRequest) (*domain.Room, error)
 	DeleteRoom(ctx context.Context, roomId uuid.UUID) error
 }
 
@@ -89,6 +91,37 @@ func (r *RoomService) GetRoomsByOwnerId(ctx context.Context, ownerId uuid.UUID) 
 		return nil, err
 	}
 	return rooms, nil
+}
+
+func (r *RoomService) UpdateRoom(ctx context.Context, roomId uuid.UUID, req structs.UpdateRoomRequest) (*domain.Room, error) {
+	room, err := r.repo.GetRoomById(ctx, roomId)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = patch.Patch(&room, req,
+		patch.WithIgnore("Id", "OwnerId", "CreatedAt", "UpdatedAt", "DeletedAt"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.uow == nil {
+		err = r.repo.UpdateRoom(ctx, room)
+		if err != nil {
+			return nil, err
+		}
+		return &room, nil
+	}
+
+	err = r.uow.Do(ctx, func(txCtx context.Context, tx repo.Transaction) error {
+		return tx.RoomRepo().UpdateRoom(txCtx, room)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &room, nil
 }
 
 func (r *RoomService) DeleteRoom(ctx context.Context, roomId uuid.UUID) error {

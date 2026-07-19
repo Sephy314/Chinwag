@@ -11,6 +11,16 @@ type CreateRoomRequest struct {
 	MaxMembers  int     `json:"max_members"`
 }
 
+type UpdateRoomRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	MaxMembers  *int    `json:"max_members,omitempty"`
+}
+
+type UpdateRoomMemberRequest struct {
+	Role *domain.Role `json:"role,omitempty"`
+}
+
 type RoomUser struct {
 	UserId uuid.UUID    `json:"userId"`
 	RoomId uuid.UUID    `json:"roomId"`

@@ -7,6 +7,7 @@ import (
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/repo"
 	"github.com/Sephy314/chinwag/room/structs"
+	"github.com/Sephy314/chinwag/shared/patch"
 	"github.com/google/uuid"
 )
 
@@ -16,6 +17,7 @@ type RoomMemberServiceInterface interface {
 	GetUserByRoomId(ctx context.Context, roomId uuid.UUID) ([]domain.RoomMember, error)
 	GetRoomsByUserId(ctx context.Context, userId uuid.UUID) ([]domain.Room, error)
 	GetUserByRoomIdAndUserId(ctx context.Context, userId, roomId uuid.UUID) (*domain.RoomMember, error)
+	UpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error)
 	SetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error
 	GetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) (*domain.Role, error)
 	HasManagerPermission(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) (bool, error)
@@ -28,6 +30,37 @@ type RoomMemberService struct {
 
 func (s *RoomMemberService) GetRoomsByUserId(ctx context.Context, userId uuid.UUID) ([]domain.Room, error) {
 	return s.repo.GetRoomsByUserId(ctx, userId)
+}
+
+func (s *RoomMemberService) UpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error) {
+	member, err := s.repo.GetMemberByRoomIdAndMemberId(ctx, roomId, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = patch.Patch(&member, req,
+		patch.WithIgnore("RoomId", "UserId", "JoinedAt", "LeftAt"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.uow == nil {
+		err = s.repo.UpdateMember(ctx, member)
+		if err != nil {
+			return nil, err
+		}
+		return &member, nil
+	}
+
+	err = s.uow.Do(ctx, func(txCtx context.Context, tx repo.Transaction) error {
+		return tx.RoomMemberRepo().UpdateMember(txCtx, member)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &member, nil
 }
 
 func (s *RoomMemberService) SetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error {

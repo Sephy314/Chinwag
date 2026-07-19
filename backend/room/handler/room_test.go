@@ -60,6 +60,17 @@ func (m *MockRoomService) DeleteRoom(ctx context.Context, roomId uuid.UUID) erro
 	return args.Error(0)
 }
 
+func (m *MockRoomService) UpdateRoom(ctx context.Context, roomId uuid.UUID, req structs.UpdateRoomRequest) (*domain.Room, error) {
+	args := m.Called(ctx, roomId, req)
+
+	var room *domain.Room
+	if args.Get(0) != nil {
+		room = args.Get(0).(*domain.Room)
+	}
+
+	return room, args.Error(1)
+}
+
 func TestRoomHandler_CreateRoom_Success(t *testing.T) {
 	mockSvc := new(MockRoomService)
 	mockMemberSvc := new(MockRoomMemberService)
@@ -236,5 +247,104 @@ func TestRoomHandler_DeleteRoom_NotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomHandler_UpdateRoom_Success(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	roomID := uuid.New()
+	newName := "Updated Room"
+	newMax := 50
+	req := structs.UpdateRoomRequest{
+		Name:       &newName,
+		MaxMembers: &newMax,
+	}
+	expected := &domain.Room{
+		Id:         roomID,
+		Name:       "Updated Room",
+		MaxMembers: 50,
+		OwnerId:    uuid.New(),
+	}
+
+	mockSvc.On("UpdateRoom", mock.Anything, roomID, req).Return(expected, nil)
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: roomID.String()},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"Updated Room","max_members":50}`),
+	}.ToContextRecorder(t)
+
+	err := h.UpdateRoom(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp response.Response[domain.Room]
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, true, resp.Success)
+	assert.Equal(t, "Updated Room", resp.Data.Name)
+	assert.Equal(t, 50, resp.Data.MaxMembers)
+
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRoomHandler_UpdateRoom_InvalidID(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: "not-a-uuid"},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"test"}`),
+	}.ToContextRecorder(t)
+
+	err := h.UpdateRoom(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "UpdateRoom", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomHandler_UpdateRoom_NotFound(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	roomID := uuid.New()
+	mockSvc.On("UpdateRoom", mock.Anything, roomID, mock.Anything).Return(nil, errors.New("not found"))
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: roomID.String()},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"test"}`),
+	}.ToContextRecorder(t)
+
+	err := h.UpdateRoom(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	mockSvc.AssertExpectations(t)
 }
