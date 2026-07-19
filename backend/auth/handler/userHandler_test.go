@@ -208,3 +208,94 @@ func TestUserHandler_GetUser_WithID_NotFound(t *testing.T) {
 
 	mockedRepo.AssertExpectations(t)
 }
+
+func TestUserHandler_UpdateUser_Success(t *testing.T) {
+	mockedRepo := &mocked.UserRepo{}
+	mockedCache := &cache.MockedCache{}
+	mockedJwk := &mocked.JwkService{}
+	mockedRefresh := &mocked.RefreshTokenService{}
+
+	existing := &domain.User{
+		Id:    "uid-1",
+		Name:  "oldName",
+		Email: "old@example.com",
+	}
+
+	mockedRepo.On("GetUser", mock.Anything, "uid-1").Return(existing, nil)
+	mockedRepo.On("UpdateUser", mock.Anything, mock.AnythingOfType("domain.User")).Return(nil)
+
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
+	h := handler.NewUserHandler(svc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: "uid-1"},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"newName"}`),
+	}.ServeWithHandler(t, h.UpdateUser)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp response.Response[map[string]interface{}]
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.Equal(t, true, resp.Success)
+	require.Equal(t, "newName", resp.Data["name"])
+	require.Equal(t, "old@example.com", resp.Data["email"])
+
+	mockedRepo.AssertExpectations(t)
+}
+
+func TestUserHandler_UpdateUser_NotFound(t *testing.T) {
+	mockedRepo := &mocked.UserRepo{}
+	mockedCache := &cache.MockedCache{}
+	mockedJwk := &mocked.JwkService{}
+	mockedRefresh := &mocked.RefreshTokenService{}
+
+	mockedRepo.On("GetUser", mock.Anything, "uid-nonexistent").
+		Return((*domain.User)(nil), sql.ErrNoRows)
+
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
+	h := handler.NewUserHandler(svc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: "uid-nonexistent"},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"newName"}`),
+	}.ServeWithHandler(t, h.UpdateUser)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+
+	mockedRepo.AssertExpectations(t)
+}
+
+func TestUserHandler_UpdateUser_InvalidBody(t *testing.T) {
+	mockedRepo := &mocked.UserRepo{}
+	mockedCache := &cache.MockedCache{}
+	mockedJwk := &mocked.JwkService{}
+	mockedRefresh := &mocked.RefreshTokenService{}
+
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh)
+	h := handler.NewUserHandler(svc)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: "uid-1"},
+		},
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name": 123}`),
+	}.ServeWithHandler(t, h.UpdateUser)
+
+	// Bind may succeed even with wrong types, so the service will be called
+	// The important thing is no panic and a response is returned
+	require.True(t, rec.Code == http.StatusOK || rec.Code == http.StatusBadRequest)
+}

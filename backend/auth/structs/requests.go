@@ -15,3 +15,9 @@ type LoginReq struct {
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
+
+type UpdateUserReq struct {
+	Name     *string `json:"name,omitempty"`
+	Email    *string `json:"email,omitempty"`
+	Password *string `json:"password,omitempty"`
+}

@@ -11,27 +11,18 @@
     "paths": {
         "/auth/.well-known/jwks.json": {
             "get": {
-                "description": "Return the JSON Web Key Set (JWKS) containing the public keys used to verify JWT tokens issued by this service. The set includes active and inactive (rotated but still valid) ECDSA P-256 keys identified by their kid (key ID).",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "description": "Return the JSON Web Key Set (JWKS) containing the public keys used to verify JWT tokens issued by this service.",
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Serve JWKS",
                 "responses": {
                     "200": {
-                        "description": "JWKS set with keys array (each key has kid, kty, crv, x, y fields)",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
+                        "description": "JWKS set",
+                        "schema": { "$ref": "#/definitions/response.JWKSResponse" }
                     },
                     "500": {
                         "description": "Internal server error",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
@@ -39,35 +30,23 @@
         "/auth/health": {
             "get": {
                 "description": "Check the health status of the auth service",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Health check",
                 "responses": {
                     "200": {
                         "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "schema": { "$ref": "#/definitions/response.Response" }
                     }
                 }
             }
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticate with email and password. On success, returns a JWT access token in the response body and sets an HttpOnly refresh token cookie (path: /auth, maxAge: 7 days, secure, SameSite=Lax).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "description": "Authenticate with email and password. On success, returns a JWT access token and sets an HttpOnly refresh token cookie.",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Login",
                 "parameters": [
                     {
@@ -75,88 +54,53 @@
                         "name": "request",
                         "in": "body",
                         "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/structs.LoginReq"
-                        }
+                        "schema": { "$ref": "#/definitions/structs.LoginReq" }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Returns {\\\"token\\\": \\\"\u003cjwt_access_token\u003e\\\"}. Refresh token is set as an HttpOnly cookie named \\\"refresh\\\".",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
+                        "description": "Login successful",
+                        "schema": { "$ref": "#/definitions/response.TokenResponse" }
                     },
                     "400": {
                         "description": "Invalid credentials",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/auth/refresh": {
             "post": {
-                "description": "Issue a new JWT access token using the refresh token stored in the HttpOnly cookie named \"refresh\". The old refresh token is invalidated and a new refresh token cookie is set (path: /auth, maxAge: 7 days, secure, SameSite=Lax). Returns the new access token in the response body.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "description": "Issue a new JWT access token using the refresh token cookie.",
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Refresh access token",
                 "responses": {
                     "200": {
-                        "description": "Returns {\\\"token\\\": \\\"\u003cnew_jwt_access_token\u003e\\\"}. New refresh token is set as an HttpOnly cookie.",
-                        "schema": {
-                            "$ref": "#/definitions/structs.LoginUserResp"
-                        }
+                        "description": "Token refreshed",
+                        "schema": { "$ref": "#/definitions/response.LoginResponse" }
                     },
                     "400": {
                         "description": "Missing or invalid refresh token cookie",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "404": {
-                        "description": "Refresh token not found (expired or revoked)",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Refresh token not found",
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "500": {
                         "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/auth/user": {
             "post": {
-                "description": "Create a new user account with username, email, and password. Password is hashed with bcrypt before storage.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "description": "Create a new user account with username, email, and password.",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Register a new user",
                 "parameters": [
                     {
@@ -164,45 +108,30 @@
                         "name": "request",
                         "in": "body",
                         "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/structs.CreateUserReq"
-                        }
+                        "schema": { "$ref": "#/definitions/structs.CreateUserReq" }
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "Successfully created user",
-                        "schema": {
-                            "$ref": "#/definitions/structs.UserResponse"
-                        }
+                        "schema": { "$ref": "#/definitions/response.UserResponse" }
                     },
                     "400": {
                         "description": "Invalid request body",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "409": {
                         "description": "User already exists",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/auth/user/{id}": {
             "get": {
-                "description": "Retrieve user information. The id parameter accepts either a UUID (user ID) or an email address. If the parameter matches an email format, it queries by email; otherwise, it queries by ID.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "description": "Retrieve user information by ID or email.",
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Get user by ID",
                 "parameters": [
                     {
@@ -217,63 +146,39 @@
                 "responses": {
                     "200": {
                         "description": "User found",
-                        "schema": {
-                            "$ref": "#/definitions/structs.UserResponse"
-                        }
+                        "schema": { "$ref": "#/definitions/response.UserResponse" }
                     },
                     "404": {
                         "description": "User not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/auth/whoami": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve the currently authenticated user's information. Requires a valid JWT access token in the Authorization header (Bearer token). The token's subject claim is used to look up the user.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
+                "security": [{ "BearerAuth": [] }],
+                "description": "Retrieve the currently authenticated user's information.",
+                "produces": ["application/json"],
+                "tags": ["auth"],
                 "summary": "Get current user info",
                 "responses": {
                     "200": {
-                        "description": "Returns {\\\"user\\\": {\\\"id\\\": \\\"...\\\", \\\"name\\\": \\\"...\\\", \\\"email\\\": \\\"...\\\"}}",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
+                        "description": "Current user info",
+                        "schema": { "$ref": "#/definitions/response.WhoAmIResponse" }
                     },
                     "401": {
                         "description": "Unauthorized - invalid or missing token",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/rooms": {
             "get": {
-                "description": "Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms joined). Pass exactly one query parameter.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room"
-                ],
+                "description": "Retrieve rooms filtered by ownerId or memberId.",
+                "produces": ["application/json"],
+                "tags": ["room"],
                 "summary": "List rooms",
                 "parameters": [
                     {
@@ -293,41 +198,21 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Array of rooms",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/domain.Room"
-                            }
-                        }
+                        "description": "List of rooms",
+                        "schema": { "$ref": "#/definitions/response.RoomListResponse" }
                     },
                     "400": {
                         "description": "Invalid UUID format or missing query parameter",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             },
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new chat room. The owner is the authenticated user. Returns the created room with generated UUID and timestamps.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room"
-                ],
+                "security": [{ "BearerAuth": [] }],
+                "description": "Create a new chat room.",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["room"],
                 "summary": "Create a chat room",
                 "parameters": [
                     {
@@ -335,35 +220,21 @@
                         "name": "request",
                         "in": "body",
                         "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/structs.CreateRoomRequest"
-                        }
+                        "schema": { "$ref": "#/definitions/structs.CreateRoomRequest" }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created room with fields: id (UUID), name, description, max_members, owner_id, created_at, updated_at",
-                        "schema": {
-                            "$ref": "#/definitions/domain.Room"
-                        }
+                        "description": "Room created",
+                        "schema": { "$ref": "#/definitions/response.RoomResponse" }
                     },
                     "400": {
-                        "description": "Invalid request body or validation error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Invalid request body",
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "500": {
                         "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
@@ -371,22 +242,13 @@
         "/rooms/health": {
             "get": {
                 "description": "Check the health status of the room service",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room"
-                ],
+                "produces": ["application/json"],
+                "tags": ["room"],
                 "summary": "Health check",
                 "responses": {
                     "200": {
-                        "description": "Returns {\\\"message\\\": \\\"ok\\\"}",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "OK",
+                        "schema": { "$ref": "#/definitions/response.Response" }
                     }
                 }
             }
@@ -394,12 +256,8 @@
         "/rooms/{id}": {
             "get": {
                 "description": "Retrieve chat room information by its UUID.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room"
-                ],
+                "produces": ["application/json"],
+                "tags": ["room"],
                 "summary": "Get a chat room",
                 "parameters": [
                     {
@@ -414,43 +272,23 @@
                 "responses": {
                     "200": {
                         "description": "Room found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.Room"
-                        }
+                        "schema": { "$ref": "#/definitions/response.RoomResponse" }
                     },
                     "400": {
                         "description": "Invalid UUID format",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "404": {
                         "description": "Room not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             },
             "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Soft-delete a chat room by UUID. Only the room owner or an admin should call this endpoint.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room"
-                ],
+                "security": [{ "BearerAuth": [] }],
+                "description": "Soft-delete a chat room by UUID.",
+                "produces": ["application/json"],
+                "tags": ["room"],
                 "summary": "Delete a chat room",
                 "parameters": [
                     {
@@ -464,49 +302,26 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Returns {\\\"message\\\": \\\"ok\\\"}",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Room deleted",
+                        "schema": { "$ref": "#/definitions/response.Response" }
                     },
                     "400": {
                         "description": "Invalid UUID format",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "500": {
                         "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/rooms/{roomId}/members": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
+                "security": [{ "BearerAuth": [] }],
                 "description": "Retrieve all members of a chat room.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-member"
-                ],
+                "produces": ["application/json"],
+                "tags": ["room-member"],
                 "summary": "List room members",
                 "parameters": [
                     {
@@ -520,41 +335,21 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Array of room members",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/domain.RoomMember"
-                            }
-                        }
+                        "description": "List of room members",
+                        "schema": { "$ref": "#/definitions/response.RoomMemberListResponse" }
                     },
                     "400": {
                         "description": "Invalid UUID format",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             },
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Add a user to a chat room. The authenticated user must have the ADMIN role in the specified room. If role is omitted, the user is added as MEMBER.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-member"
-                ],
+                "security": [{ "BearerAuth": [] }],
+                "description": "Add a user to a chat room.",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["room-member"],
                 "summary": "Add a room member",
                 "parameters": [
                     {
@@ -570,74 +365,39 @@
                         "name": "request",
                         "in": "body",
                         "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
+                        "schema": { "type": "object" }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "Returns {\\\"message\\\": \\\"ok\\\"}",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Member added",
+                        "schema": { "$ref": "#/definitions/response.Response" }
                     },
                     "400": {
                         "description": "Invalid request body or UUID format",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "403": {
                         "description": "Admin permission is required",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "404": {
                         "description": "Room or user not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "409": {
                         "description": "User is already a member of the room",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
         },
         "/rooms/{roomId}/members/{userId}": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve a specific user's membership info in a specific chat room.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-member"
-                ],
+                "security": [{ "BearerAuth": [] }],
+                "description": "Retrieve a specific user's membership info in a chat room.",
+                "produces": ["application/json"],
+                "tags": ["room-member"],
                 "summary": "Get a room member",
                 "parameters": [
                     {
@@ -660,43 +420,23 @@
                 "responses": {
                     "200": {
                         "description": "Membership info found",
-                        "schema": {
-                            "$ref": "#/definitions/domain.RoomMember"
-                        }
+                        "schema": { "$ref": "#/definitions/response.RoomMemberResponse" }
                     },
                     "400": {
                         "description": "Invalid UUID format",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "404": {
                         "description": "Membership not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             },
             "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Remove a user from a chat room. The authenticated user must have the ADMIN role in the specified room.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room-member"
-                ],
+                "security": [{ "BearerAuth": [] }],
+                "description": "Remove a user from a chat room.",
+                "produces": ["application/json"],
+                "tags": ["room-member"],
                 "summary": "Remove a room member",
                 "parameters": [
                     {
@@ -718,31 +458,16 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Returns {\\\"message\\\": \\\"ok\\\"}",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "description": "Member removed",
+                        "schema": { "$ref": "#/definitions/response.Response" }
                     },
                     "400": {
                         "description": "Invalid UUID format",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     },
                     "404": {
                         "description": "Room, user, or membership not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                        "schema": { "$ref": "#/definitions/response.ErrorResponse" }
                     }
                 }
             }
@@ -752,122 +477,206 @@
         "domain.Room": {
             "type": "object",
             "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "maxMembers": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "ownerId": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
+                "createdAt": { "type": "string" },
+                "deletedAt": { "type": "string" },
+                "description": { "type": "string" },
+                "id": { "type": "string" },
+                "maxMembers": { "type": "integer" },
+                "name": { "type": "string" },
+                "ownerId": { "type": "string" },
+                "updatedAt": { "type": "string" }
             }
         },
         "domain.RoomMember": {
             "type": "object",
             "properties": {
-                "joinedAt": {
-                    "type": "string"
-                },
-                "leftAt": {
-                    "type": "string"
-                },
-                "role": {
-                    "$ref": "#/definitions/github_com_Sephy314_chinwag_room_domain.Role"
-                },
-                "roomId": {
-                    "type": "string"
-                },
-                "userId": {
-                    "type": "string"
-                }
+                "joinedAt": { "type": "string" },
+                "leftAt": { "type": "string" },
+                "role": { "$ref": "#/definitions/github_com_Sephy314_chinwag_room_domain.Role" },
+                "roomId": { "type": "string" },
+                "userId": { "type": "string" }
             }
         },
         "github_com_Sephy314_chinwag_room_domain.Role": {
             "type": "integer",
-            "enum": [
-                0,
-                1
-            ],
-            "x-enum-varnames": [
-                "MEMBER",
-                "ADMIN"
+            "enum": [0, 1],
+            "x-enum-varnames": ["MEMBER", "ADMIN"]
+        },
+        "response.Response": {
+            "type": "object",
+            "properties": {
+                "success": { "type": "boolean" },
+                "code": { "type": "string" },
+                "message": { "type": "string" },
+                "request_id": { "type": "string" },
+                "meta": { "type": "object" }
+            }
+        },
+        "response.RoomResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": { "$ref": "#/definitions/domain.Room" }
+                    }
+                }
+            ]
+        },
+        "response.RoomListResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "array",
+                            "items": { "$ref": "#/definitions/domain.Room" }
+                        }
+                    }
+                }
+            ]
+        },
+        "response.UserResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": { "$ref": "#/definitions/structs.UserResponse" }
+                    }
+                }
+            ]
+        },
+        "response.RoomMemberResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": { "$ref": "#/definitions/domain.RoomMember" }
+                    }
+                }
+            ]
+        },
+        "response.RoomMemberListResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "array",
+                            "items": { "$ref": "#/definitions/domain.RoomMember" }
+                        }
+                    }
+                }
+            ]
+        },
+        "response.LoginResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": { "$ref": "#/definitions/structs.LoginUserResp" }
+                    }
+                }
+            ]
+        },
+        "response.TokenResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "token": { "type": "string" }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "response.WhoAmIResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "user": { "$ref": "#/definitions/structs.UserResponse" }
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "response.JWKSResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "data": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            ]
+        },
+        "response.ErrorResponse": {
+            "allOf": [
+                { "$ref": "#/definitions/response.Response" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "success": { "type": "boolean", "example": false },
+                        "message": { "type": "string" }
+                    }
+                }
             ]
         },
         "structs.CreateRoomRequest": {
             "type": "object",
             "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "max_members": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
+                "description": { "type": "string" },
+                "max_members": { "type": "integer" },
+                "name": { "type": "string" }
             }
         },
         "structs.CreateUserReq": {
             "type": "object",
             "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
+                "email": { "type": "string" },
+                "password": { "type": "string" },
+                "username": { "type": "string" }
             }
         },
         "structs.LoginReq": {
             "type": "object",
             "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                }
+                "email": { "type": "string" },
+                "password": { "type": "string" }
             }
         },
         "structs.LoginUserResp": {
             "type": "object",
             "properties": {
-                "token": {
-                    "type": "string"
-                }
+                "token": { "type": "string" }
             }
         },
         "structs.UserResponse": {
             "type": "object",
             "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
+                "email": { "type": "string" },
+                "id": { "type": "string" },
+                "name": { "type": "string" }
             }
         }
     },

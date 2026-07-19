@@ -69,6 +69,7 @@ func SetUpAuthRouter(e *echo.Echo) {
 
 	{
 		authPriv.GET("/whoami", userHandler.WhoAmI)
+		authPriv.PUT("/user/:id", userHandler.UpdateUser)
 	}
 
 	log.Println("auth routes registered")

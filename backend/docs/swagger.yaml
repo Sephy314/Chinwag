@@ -40,6 +40,103 @@ definitions:
     x-enum-varnames:
     - MEMBER
     - ADMIN
+  response.Response:
+    properties:
+      success:
+        type: boolean
+      code:
+        type: string
+      message:
+        type: string
+      request_id:
+        type: string
+      meta:
+        type: object
+    type: object
+  response.RoomResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          $ref: '#/definitions/domain.Room'
+  response.RoomListResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          items:
+            $ref: '#/definitions/domain.Room'
+          type: array
+  response.UserResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          $ref: '#/definitions/structs.UserResponse'
+  response.RoomMemberResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          $ref: '#/definitions/domain.RoomMember'
+  response.RoomMemberListResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          items:
+            $ref: '#/definitions/domain.RoomMember'
+          type: array
+  response.LoginResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          $ref: '#/definitions/structs.LoginUserResp'
+  response.TokenResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+  response.WhoAmIResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/definitions/structs.UserResponse'
+  response.JWKSResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+  response.ErrorResponse:
+    allOf:
+    - $ref: '#/definitions/response.Response'
+    - type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
   structs.CreateRoomRequest:
     properties:
       description:
@@ -89,21 +186,18 @@ paths:
   /auth/.well-known/jwks.json:
     get:
       description: Return the JSON Web Key Set (JWKS) containing the public keys used
-        to verify JWT tokens issued by this service. The set includes active and inactive
-        (rotated but still valid) ECDSA P-256 keys identified by their kid (key ID).
+        to verify JWT tokens issued by this service.
       produces:
       - application/json
       responses:
         "200":
-          description: JWKS set with keys array (each key has kid, kty, crv, x, y
-            fields)
+          description: JWKS set
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/response.JWKSResponse'
         "500":
           description: Internal server error
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Serve JWKS
       tags:
       - auth
@@ -116,7 +210,7 @@ paths:
         "200":
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/response.Response'
       summary: Health check
       tags:
       - auth
@@ -124,9 +218,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Authenticate with email and password. On success, returns a JWT
-        access token in the response body and sets an HttpOnly refresh token cookie
-        (path: /auth, maxAge: 7 days, secure, SameSite=Lax).'
+      description: Authenticate with email and password. On success, returns a JWT
+        access token and sets an HttpOnly refresh token cookie.
       parameters:
       - description: Login credentials
         in: body
@@ -138,51 +231,38 @@ paths:
       - application/json
       responses:
         "200":
-          description: 'Returns {\"token\": \"<jwt_access_token>\"}. Refresh token
-            is set as an HttpOnly cookie named \"refresh\".'
+          description: Login successful
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/response.TokenResponse'
         "400":
           description: Invalid credentials
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Login
       tags:
       - auth
   /auth/refresh:
     post:
-      description: 'Issue a new JWT access token using the refresh token stored in
-        the HttpOnly cookie named "refresh". The old refresh token is invalidated
-        and a new refresh token cookie is set (path: /auth, maxAge: 7 days, secure,
-        SameSite=Lax). Returns the new access token in the response body.'
+      description: Issue a new JWT access token using the refresh token cookie.
       produces:
       - application/json
       responses:
         "200":
-          description: 'Returns {\"token\": \"<new_jwt_access_token>\"}. New refresh
-            token is set as an HttpOnly cookie.'
+          description: Token refreshed
           schema:
-            $ref: '#/definitions/structs.LoginUserResp'
+            $ref: '#/definitions/response.LoginResponse'
         "400":
           description: Missing or invalid refresh token cookie
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
-          description: Refresh token not found (expired or revoked)
+          description: Refresh token not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Refresh access token
       tags:
       - auth
@@ -190,8 +270,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new user account with username, email, and password. Password
-        is hashed with bcrypt before storage.
+      description: Create a new user account with username, email, and password.
       parameters:
       - description: User registration info
         in: body
@@ -205,25 +284,21 @@ paths:
         "200":
           description: Successfully created user
           schema:
-            $ref: '#/definitions/structs.UserResponse'
+            $ref: '#/definitions/response.UserResponse'
         "400":
           description: Invalid request body
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
         "409":
           description: User already exists
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Register a new user
       tags:
       - auth
   /auth/user/{id}:
     get:
-      description: Retrieve user information. The id parameter accepts either a UUID
-        (user ID) or an email address. If the parameter matches an email format, it
-        queries by email; otherwise, it queries by ID.
+      description: Retrieve user information by ID or email.
       parameters:
       - description: User ID (UUID) or email address
         x-example: john@example.com
@@ -237,34 +312,28 @@ paths:
         "200":
           description: User found
           schema:
-            $ref: '#/definitions/structs.UserResponse'
+            $ref: '#/definitions/response.UserResponse'
         "404":
           description: User not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Get user by ID
       tags:
       - auth
   /auth/whoami:
     get:
-      description: Retrieve the currently authenticated user's information. Requires
-        a valid JWT access token in the Authorization header (Bearer token). The token's
-        subject claim is used to look up the user.
+      description: Retrieve the currently authenticated user's information.
       produces:
       - application/json
       responses:
         "200":
-          description: 'Returns {\"user\": {\"id\": \"...\", \"name\": \"...\", \"email\":
-            \"...\"}}'
+          description: Current user info
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/response.WhoAmIResponse'
         "401":
           description: Unauthorized - invalid or missing token
           schema:
-            type: string
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get current user info
@@ -272,8 +341,7 @@ paths:
       - auth
   /rooms:
     get:
-      description: Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms
-        joined). Pass exactly one query parameter.
+      description: Retrieve rooms filtered by ownerId or memberId.
       parameters:
       - description: Filter by owner UUID
         x-example: 550e8400-e29b-41d4-a716-446655440000
@@ -289,25 +357,20 @@ paths:
       - application/json
       responses:
         "200":
-          description: Array of rooms
+          description: List of rooms
           schema:
-            items:
-              $ref: '#/definitions/domain.Room'
-            type: array
+            $ref: '#/definitions/response.RoomListResponse'
         "400":
           description: Invalid UUID format or missing query parameter
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       summary: List rooms
       tags:
       - room
     post:
       consumes:
       - application/json
-      description: Create a new chat room. The owner is the authenticated user. Returns
-        the created room with generated UUID and timestamps.
+      description: Create a new chat room.
       parameters:
       - description: Room creation info
         in: body
@@ -319,31 +382,38 @@ paths:
       - application/json
       responses:
         "201":
-          description: 'Created room with fields: id (UUID), name, description, max_members,
-            owner_id, created_at, updated_at'
+          description: Room created
           schema:
-            $ref: '#/definitions/domain.Room'
+            $ref: '#/definitions/response.RoomResponse'
         "400":
-          description: Invalid request body or validation error
+          description: Invalid request body
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create a chat room
       tags:
       - room
+  /rooms/health:
+    get:
+      description: Check the health status of the room service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Health check
+      tags:
+      - room
   /rooms/{id}:
     delete:
-      description: Soft-delete a chat room by UUID. Only the room owner or an admin
-        should call this endpoint.
+      description: Soft-delete a chat room by UUID.
       parameters:
       - description: Room UUID
         x-example: 550e8400-e29b-41d4-a716-446655440000
@@ -355,23 +425,17 @@ paths:
       - application/json
       responses:
         "200":
-          description: 'Returns {\"message\": \"ok\"}'
+          description: Room deleted
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.Response'
         "400":
           description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal server error
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete a chat room
@@ -392,19 +456,15 @@ paths:
         "200":
           description: Room found
           schema:
-            $ref: '#/definitions/domain.Room'
+            $ref: '#/definitions/response.RoomResponse'
         "400":
           description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Room not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Get a chat room
       tags:
       - room
@@ -422,17 +482,13 @@ paths:
       - application/json
       responses:
         "200":
-          description: Array of room members
+          description: List of room members
           schema:
-            items:
-              $ref: '#/definitions/domain.RoomMember'
-            type: array
+            $ref: '#/definitions/response.RoomMemberListResponse'
         "400":
           description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: List room members
@@ -441,9 +497,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Add a user to a chat room. The authenticated user must have the
-        ADMIN role in the specified room. If role is omitted, the user is added as
-        MEMBER.
+      description: Add a user to a chat room.
       parameters:
       - description: Room UUID
         x-example: 550e8400-e29b-41d4-a716-446655440000
@@ -461,35 +515,25 @@ paths:
       - application/json
       responses:
         "201":
-          description: 'Returns {\"message\": \"ok\"}'
+          description: Member added
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.Response'
         "400":
           description: Invalid request body or UUID format
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "403":
           description: Admin permission is required
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Room or user not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "409":
           description: User is already a member of the room
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Add a room member
@@ -497,8 +541,7 @@ paths:
       - room-member
   /rooms/{roomId}/members/{userId}:
     delete:
-      description: Remove a user from a chat room. The authenticated user must have
-        the ADMIN role in the specified room.
+      description: Remove a user from a chat room.
       parameters:
       - description: Room UUID
         x-example: 550e8400-e29b-41d4-a716-446655440000
@@ -516,30 +559,24 @@ paths:
       - application/json
       responses:
         "200":
-          description: 'Returns {\"message\": \"ok\"}'
+          description: Member removed
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.Response'
         "400":
           description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Room, user, or membership not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Remove a room member
       tags:
       - room-member
     get:
-      description: Retrieve a specific user's membership info in a specific chat room.
+      description: Retrieve a specific user's membership info in a chat room.
       parameters:
       - description: Room UUID
         x-example: 550e8400-e29b-41d4-a716-446655440000
@@ -559,39 +596,20 @@ paths:
         "200":
           description: Membership info found
           schema:
-            $ref: '#/definitions/domain.RoomMember'
+            $ref: '#/definitions/response.RoomMemberResponse'
         "400":
           description: Invalid UUID format
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Membership not found
           schema:
-            additionalProperties:
-              type: string
-            type: object
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get a room member
       tags:
       - room-member
-  /rooms/health:
-    get:
-      description: Check the health status of the room service
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 'Returns {\"message\": \"ok\"}'
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Health check
-      tags:
-      - room
 securityDefinitions:
   BearerAuth:
     in: header

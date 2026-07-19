@@ -280,3 +280,104 @@ func TestUserService_Login_GetUser_Error_SQLi(t *testing.T) {
 
 	mockRepo.AssertExpectations(t)
 }
+
+func TestUserService_UpdateUser_Success(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo := new(mocked.UserRepo)
+	svc := &service.UserService{Repo: mockRepo}
+
+	existing := &domain.User{
+		Id:    "uid-1",
+		Name:  "oldName",
+		Email: "old@example.com",
+	}
+
+	newName := "newName"
+	req := structs.UpdateUserReq{Name: &newName}
+
+	mockRepo.On("GetUser", ctx, "uid-1").Return(existing, nil)
+	mockRepo.On("UpdateUser", ctx, mock.AnythingOfType("domain.User")).Return(nil)
+
+	user, err := svc.UpdateUser(ctx, "uid-1", req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "newName", user.Name)
+	assert.Equal(t, "old@example.com", user.Email)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUserService_UpdateUser_NotFound(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo := new(mocked.UserRepo)
+	svc := &service.UserService{Repo: mockRepo}
+
+	newName := "newName"
+	req := structs.UpdateUserReq{Name: &newName}
+
+	mockRepo.On("GetUser", ctx, "uid-nonexistent").Return((*domain.User)(nil), errors.New("sql: no rows in result set"))
+
+	user, err := svc.UpdateUser(ctx, "uid-nonexistent", req)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUserService_UpdateUser_PasswordHashed(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo := new(mocked.UserRepo)
+	svc := &service.UserService{Repo: mockRepo}
+
+	existing := &domain.User{
+		Id:       "uid-1",
+		Name:     "tester",
+		Email:    "tester@example.com",
+		Password: "oldHash",
+	}
+
+	newPw := "newPassword123"
+	req := structs.UpdateUserReq{Password: &newPw}
+
+	mockRepo.On("GetUser", ctx, "uid-1").Return(existing, nil)
+	mockRepo.On("UpdateUser", ctx, mock.AnythingOfType("domain.User")).Return(nil)
+
+	user, err := svc.UpdateUser(ctx, "uid-1", req)
+
+	assert.NoError(t, err)
+	assert.NotEqual(t, "newPassword123", user.Password)
+	assert.NotEqual(t, "oldHash", user.Password)
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte("newPassword123"))
+	assert.NoError(t, err)
+
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUserService_UpdateUser_DBError(t *testing.T) {
+	ctx := context.Background()
+
+	mockRepo := new(mocked.UserRepo)
+	svc := &service.UserService{Repo: mockRepo}
+
+	existing := &domain.User{
+		Id:    "uid-1",
+		Name:  "tester",
+		Email: "tester@example.com",
+	}
+
+	newName := "updated"
+	req := structs.UpdateUserReq{Name: &newName}
+
+	mockRepo.On("GetUser", ctx, "uid-1").Return(existing, nil)
+	mockRepo.On("UpdateUser", ctx, mock.AnythingOfType("domain.User")).Return(errors.New("db connection lost"))
+
+	user, err := svc.UpdateUser(ctx, "uid-1", req)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.Contains(t, err.Error(), "db connection lost")
+	mockRepo.AssertExpectations(t)
+}

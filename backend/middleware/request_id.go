@@ -25,6 +25,11 @@ func RequestIDInjector() echo.MiddlewareFunc {
 func ResponseIDInjector() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
+			path := c.Request().URL.Path
+			if len(path) >= 8 && path[:8] == "/swagger" {
+				return next(c)
+			}
+
 			rid, _ := echo.ContextGet[string](c, response.RequestIDKey)
 			if rid == "" {
 				return next(c)
