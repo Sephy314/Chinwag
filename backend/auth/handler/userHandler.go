@@ -109,6 +109,35 @@ func (h *UserHandler) DeleteUser(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
+// UpdateUser godoc
+// @Summary      Update a user
+// @Description  Update user information by ID. Only provided fields are updated; omitted fields remain unchanged.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "User ID"
+// @Param        request body structs.UpdateUserReq true "Fields to update" example({"name":"new name"})
+// @Success      200 {object} response.Response[structs.UserResponse] "Successfully updated user"
+// @Failure      400 {object} response.Response[any] "Invalid request body"
+// @Failure      404 {object} response.Response[any] "User not found"
+// @Router       /auth/user/{id} [put]
+func (h *UserHandler) UpdateUser(c *echo.Context) error {
+	id := c.Param("id")
+
+	var req structs.UpdateUserReq
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
+	}
+
+	usr, err := h.Service.UpdateUser(c.Request().Context(), id, req)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, response.OK(usr.ToProjection()))
+}
+
 // Login godoc
 // @Summary      Login
 // @Description  Authenticate with email and password. On success, returns a JWT access token in the response body and sets an HttpOnly refresh token cookie (path: /auth, maxAge: 7 days, secure, SameSite=Lax).

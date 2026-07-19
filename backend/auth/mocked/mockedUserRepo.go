@@ -42,3 +42,8 @@ func (m *UserRepo) DeleteUser(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }
+
+func (m *UserRepo) UpdateUser(ctx context.Context, user domain.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
