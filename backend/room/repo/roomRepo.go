@@ -13,6 +13,7 @@ type RoomRepoInterface interface {
 	CreateRoom(context.Context, domain.Room) error
 	GetRoomById(context.Context, uuid.UUID) (domain.Room, error)
 	GetRoomsByOwnerId(context.Context, uuid.UUID) ([]domain.Room, error)
+	UpdateRoom(context.Context, domain.Room) error
 	DeleteRoomById(context.Context, uuid.UUID) error
 }
 
@@ -70,6 +71,32 @@ func (r *RoomRepo) GetRoomsByOwnerId(ctx context.Context, req uuid.UUID) ([]doma
 		req,
 	)
 	return rooms, err
+}
+
+func (r *RoomRepo) UpdateRoom(ctx context.Context, room domain.Room) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE rooms SET name = $1, description = $2, max_members = $3, updated_at = NOW()
+		 WHERE id = $4 AND deleted_at IS NULL`,
+		room.Name,
+		room.Description,
+		room.MaxMembers,
+		room.Id,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
 }
 
 func (r *RoomRepo) DeleteRoomById(ctx context.Context, req uuid.UUID) error {

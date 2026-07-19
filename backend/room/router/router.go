@@ -43,9 +43,11 @@ func SetUpRoomRouter(e *echo.Echo) {
 	}))
 	{
 		priv.POST("", roomHandler.CreateRoom)
+		priv.PUT("/:id", roomHandler.UpdateRoom)
 		priv.DELETE("/:id", roomHandler.DeleteRoom)
 
 		priv.POST("/:roomId/members", roomMemberHandler.AddMember)
+		priv.PUT("/:roomId/members/:userId", roomMemberHandler.UpdateMember)
 		priv.DELETE("/:roomId/members/:userId", roomMemberHandler.RemoveMember)
 
 		priv.GET("/:roomId/members", roomMemberHandler.ListMembers)

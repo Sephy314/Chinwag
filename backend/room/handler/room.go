@@ -18,6 +18,7 @@ type RoomHandler interface {
 	CreateRoom(c *echo.Context) error
 	GetRoom(c *echo.Context) error
 	ListRooms(c *echo.Context) error
+	UpdateRoom(c *echo.Context) error
 	DeleteRoom(c *echo.Context) error
 }
 
@@ -147,6 +148,38 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 	return c.JSON(http.StatusOK, response.OK(rooms))
+}
+
+// UpdateRoom godoc
+// @Summary      Update a chat room
+// @Description  Update room information by UUID. Only provided fields are updated; omitted fields remain unchanged.
+// @Tags         room
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        request body structs.UpdateRoomRequest true "Fields to update" example({"name":"new name","max_members":100})
+// @Success      200 {object} response.Response[domain.Room] "Successfully updated room"
+// @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
+// @Failure      404 {object} response.Response[any] "Room not found"
+// @Router       /rooms/{id} [put]
+func (h *RoomHandlerImpl) UpdateRoom(c *echo.Context) error {
+	roomId, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid room id"))
+	}
+
+	var req structs.UpdateRoomRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
+	}
+
+	room, err := h.service.UpdateRoom(c.Request().Context(), roomId, req)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, response.OK(room))
 }
 
 // DeleteRoom godoc

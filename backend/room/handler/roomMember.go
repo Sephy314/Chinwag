@@ -18,6 +18,7 @@ type RoomMemberHandler interface {
 	RemoveMember(c *echo.Context) error
 	ListMembers(c *echo.Context) error
 	GetMember(c *echo.Context) error
+	UpdateMember(c *echo.Context) error
 }
 
 type RoomMemberHandlerImpl struct {
@@ -166,6 +167,54 @@ func (h *RoomMemberHandlerImpl) GetMember(c *echo.Context) error {
 	}
 
 	member, err := h.service.GetUserByRoomIdAndUserId(c.Request().Context(), userId, roomId)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, response.OK(member))
+}
+
+// UpdateMember godoc
+// @Summary      Update a room member
+// @Description  Update a member's information in a chat room. The authenticated user must have the ADMIN role. Only provided fields are updated; omitted fields remain unchanged.
+// @Tags         room-member
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        roomId path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        userId path string true "User UUID" example(660e8400-e29b-41d4-a716-446655440000)
+// @Param        request body structs.UpdateRoomMemberRequest true "Fields to update" example({"role":1})
+// @Success      200 {object} response.Response[domain.RoomMember] "Successfully updated member"
+// @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
+// @Failure      403 {object} response.Response[any] "Admin permission is required"
+// @Failure      404 {object} response.Response[any] "Membership not found"
+// @Router       /rooms/{roomId}/members/{userId} [put]
+func (h *RoomMemberHandlerImpl) UpdateMember(c *echo.Context) error {
+	roomId, err := uuid.Parse(c.Param("roomId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid room id"))
+	}
+
+	userId, err := uuid.Parse(c.Param("userId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
+	}
+
+	ok, err := utils.IsManager(c, roomId, h.service)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	if !ok {
+		return c.JSON(http.StatusForbidden, response.Error("Admin permission is required"))
+	}
+
+	var req structs.UpdateRoomMemberRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
+	}
+
+	member, err := h.service.UpdateRoomMember(c.Request().Context(), userId, roomId, req)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}

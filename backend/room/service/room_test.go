@@ -39,6 +39,11 @@ func (m *MockRoomRepo) DeleteRoomById(ctx context.Context, roomId uuid.UUID) err
 	return args.Error(0)
 }
 
+func (m *MockRoomRepo) UpdateRoom(ctx context.Context, room domain.Room) error {
+	args := m.Called(ctx, room)
+	return args.Error(0)
+}
+
 func TestCreateRoom_Success(t *testing.T) {
 	mockRepo := new(MockRoomRepo)
 	ownerId := uuid.New()
@@ -266,5 +271,117 @@ func TestCreateRoom_DuplicateRoom(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "duplicate key value violates unique constraint", err.Error())
 	assert.NotNil(t, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoom_Success(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	existingRoom := domain.Room{
+		Id:          roomId,
+		Name:        "Old Name",
+		Description: nil,
+		MaxMembers:  10,
+		OwnerId:     uuid.New(),
+	}
+
+	newName := "New Name"
+	req := structs.UpdateRoomRequest{
+		Name: &newName,
+	}
+
+	mockRepo.On("GetRoomById", ctx, roomId).Return(existingRoom, nil)
+	mockRepo.On("UpdateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
+		return room.Name == "New Name" && room.Id == roomId
+	})).Return(nil)
+
+	service := NewRoomService(mockRepo)
+	result, err := service.UpdateRoom(ctx, roomId, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "New Name", result.Name)
+	assert.Equal(t, roomId, result.Id)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoom_NotFound(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+
+	mockRepo.On("GetRoomById", ctx, roomId).Return(domain.Room{}, errors.New("not found"))
+
+	service := NewRoomService(mockRepo)
+	result, err := service.UpdateRoom(ctx, roomId, structs.UpdateRoomRequest{})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "not found", err.Error())
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoom_UpdateFailed(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	existingRoom := domain.Room{
+		Id:          roomId,
+		Name:        "Old Name",
+		MaxMembers:  10,
+		OwnerId:     uuid.New(),
+	}
+
+	newName := "New Name"
+	req := structs.UpdateRoomRequest{
+		Name: &newName,
+	}
+
+	mockRepo.On("GetRoomById", ctx, roomId).Return(existingRoom, nil)
+	mockRepo.On("UpdateRoom", ctx, mock.Anything).Return(errors.New("database error"))
+
+	service := NewRoomService(mockRepo)
+	result, err := service.UpdateRoom(ctx, roomId, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "database error", err.Error())
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateRoom_PartialUpdate(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	ctx := context.Background()
+
+	roomId := uuid.New()
+	existingRoom := domain.Room{
+		Id:          roomId,
+		Name:        "Old Name",
+		Description: nil,
+		MaxMembers:  10,
+		OwnerId:     uuid.New(),
+	}
+
+	newMax := 50
+	req := structs.UpdateRoomRequest{
+		MaxMembers: &newMax,
+	}
+
+	mockRepo.On("GetRoomById", ctx, roomId).Return(existingRoom, nil)
+	mockRepo.On("UpdateRoom", ctx, mock.MatchedBy(func(room domain.Room) bool {
+		return room.Name == "Old Name" && room.MaxMembers == 50
+	})).Return(nil)
+
+	service := NewRoomService(mockRepo)
+	result, err := service.UpdateRoom(ctx, roomId, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "Old Name", result.Name)
+	assert.Equal(t, 50, result.MaxMembers)
 	mockRepo.AssertExpectations(t)
 }
