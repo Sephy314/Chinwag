@@ -101,7 +101,7 @@ func TestInviteUser_UsesUnitOfWork(t *testing.T) {
 		},
 	}
 
-	service := NewRoomMemberService(new(MockRoomMemberRepo), newNotPoppedRoomRepo(roomId), uow)
+	service := NewRoomMemberService(new(MockRoomMemberRepo), newNotPoppedRoomRepo(roomId), nil, uow)
 	err := service.InviteUser(ctx, req)
 
 	assert.NoError(t, err)

@@ -29,6 +29,26 @@ var ErrRoomPopped = &AppError{
 	Message: "Room has been popped",
 }
 
+//var ErrInviteExpired = &AppError{
+//	Status:  http.StatusGone,
+//	Message: "Invite link has expired",
+//}
+
+var ErrInviteNotFound = &AppError{
+	Status:  http.StatusNotFound,
+	Message: "Invite link not found",
+}
+
+var ErrAlreadyMember = &AppError{
+	Status:  http.StatusConflict,
+	Message: "User is already a member of this room",
+}
+
+var ErrUserDeleted = &AppError{
+	Status:  http.StatusNotFound,
+	Message: "User not found or has been deleted",
+}
+
 func parseDBError(err error) error {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
