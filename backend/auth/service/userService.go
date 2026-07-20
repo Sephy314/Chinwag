@@ -6,6 +6,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/auth/structs"
+	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/conn/cache"
 	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/patch"
@@ -19,6 +20,7 @@ type UserService struct {
 	Cache          cache.Cache
 	JwkService     JwksServiceInterface
 	RefreshService RefreshTokenServiceInterface
+	RoomMember     bridge.RoomMemberProvider
 	uow            repo.UnitOfWork
 }
 
@@ -27,6 +29,7 @@ func NewUserService(
 	userRepo repo.UserRepository,
 	jwkService JwksServiceInterface,
 	refreshService RefreshTokenServiceInterface,
+	roomMember bridge.RoomMemberProvider,
 	uow ...repo.UnitOfWork,
 ) *UserService {
 	var unitOfWork repo.UnitOfWork
@@ -39,6 +42,7 @@ func NewUserService(
 		Cache:          cache,
 		JwkService:     jwkService,
 		RefreshService: refreshService,
+		RoomMember:     roomMember,
 		uow:            unitOfWork,
 	}
 }
@@ -138,6 +142,10 @@ func (s *UserService) UpdateUser(ctx context.Context, id string, req structs.Upd
 	}
 
 	return user, nil
+}
+
+func (s *UserService) SetRoomMemberProvider(provider bridge.RoomMemberProvider) {
+	s.RoomMember = provider
 }
 
 func (s *UserService) Login(ctx context.Context, email string, pw string) (*structs.TokenSet, error) {

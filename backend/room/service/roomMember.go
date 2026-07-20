@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/repo"
 	"github.com/Sephy314/chinwag/room/structs"
@@ -35,6 +36,7 @@ type RoomMemberServiceInterface interface {
 type RoomMemberService struct {
 	repo     repo.RoomMemberRepoInterface
 	roomRepo repo.RoomRepoInterface
+	User     bridge.UserProvider
 	uow      repo.UnitOfWork
 }
 
@@ -182,7 +184,7 @@ func (s *RoomMemberService) HasManagerPermission(ctx context.Context, userId uui
 	return *r == domain.ADMIN, nil
 }
 
-func NewRoomMemberService(roomMemberRepo repo.RoomMemberRepoInterface, roomRepo repo.RoomRepoInterface, uow ...repo.UnitOfWork) *RoomMemberService {
+func NewRoomMemberService(roomMemberRepo repo.RoomMemberRepoInterface, roomRepo repo.RoomRepoInterface, user bridge.UserProvider, uow ...repo.UnitOfWork) *RoomMemberService {
 	var unitOfWork repo.UnitOfWork
 	if len(uow) > 0 {
 		unitOfWork = uow[0]
@@ -190,6 +192,7 @@ func NewRoomMemberService(roomMemberRepo repo.RoomMemberRepoInterface, roomRepo 
 	return &RoomMemberService{
 		repo:     roomMemberRepo,
 		roomRepo: roomRepo,
+		User:     user,
 		uow:      unitOfWork,
 	}
 }

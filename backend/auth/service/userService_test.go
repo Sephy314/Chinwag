@@ -27,7 +27,7 @@ func NewTestUserService() (*service.UserService, *mocked.UserRepo) {
 
 	repos := &mocked.UserRepo{}
 
-	svc := service.NewUserService(&mockedCache, repos, &mockedJwkService, &mockedRefreshService)
+	svc := service.NewUserService(&mockedCache, repos, &mockedJwkService, &mockedRefreshService, nil)
 
 	return svc, repos
 }

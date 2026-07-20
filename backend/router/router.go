@@ -1,12 +1,15 @@
 package router
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"net/http"
 
 	authRouter "github.com/Sephy314/chinwag/auth/router"
+	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn"
+	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/docs"
 	appMiddleware "github.com/Sephy314/chinwag/middleware"
 	roomRouter "github.com/Sephy314/chinwag/room/router"
@@ -15,6 +18,25 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
+
+type userServiceAdapter struct {
+	svc *service.UserService
+}
+
+func (a *userServiceAdapter) GetUser(ctx context.Context, id string) (*bridge.UserInfo, error) {
+	user, err := a.svc.GetUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &bridge.UserInfo{
+		Id:        user.Id,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      string(user.Role),
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}, nil
+}
 
 func SetUpRouter() (*echo.Echo, error) {
 	_, err := conn.NewConnection()
@@ -92,8 +114,14 @@ func SetUpRouter() (*echo.Echo, error) {
 		return c.HTML(http.StatusOK, string(docs.IndexHTML))
 	})
 
-	authRouter.SetUpAuthRouter(e)
-	roomRouter.SetUpRoomRouter(e)
+	userAdapter := bridge.NewUserAdapter(func(ctx context.Context, id string) (*bridge.UserInfo, error) {
+		return nil, nil
+	})
+
+	roomMemberProv := roomRouter.SetUpRoomRouter(e, userAdapter)
+
+	userService := authRouter.SetUpAuthRouter(e, roomMemberProv)
+	userAdapter.SetUserService(&userServiceAdapter{svc: userService})
 
 	return e, nil
 }

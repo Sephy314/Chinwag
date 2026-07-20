@@ -8,13 +8,14 @@ import (
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn"
+	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/conn/cache"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
 	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
 )
 
-func SetUpAuthRouter(e *echo.Echo) {
+func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider) *service.UserService {
 
 	conns, err := conn.NewConnection()
 
@@ -31,7 +32,7 @@ func SetUpAuthRouter(e *echo.Echo) {
 	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Minute*5)
 
 	jwksService := service.NewJwksService(jwksRepo)
-	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, unitOfWork)
+	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, roomMember, unitOfWork)
 	jwtService := service.NewJwtService(refreshTokenService, jwksService)
 
 	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService)
@@ -73,4 +74,6 @@ func SetUpAuthRouter(e *echo.Echo) {
 	}
 
 	log.Println("auth routes registered")
+
+	return userService
 }
