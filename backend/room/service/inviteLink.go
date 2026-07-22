@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/Sephy314/chinwag/conn/bridge"
@@ -152,6 +151,7 @@ func (s *InviteLinkService) JoinByInviteLink(ctx context.Context, token string, 
 	return nil
 }
 
-func inviteKey(token string) string {
-	return fmt.Sprintf("%s%s", inviteKeyPrefix, token)
-}
+//
+//func inviteKey(token string) string {
+//	return fmt.Sprintf("%s%s", inviteKeyPrefix, token)
+//}

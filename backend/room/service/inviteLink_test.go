@@ -738,6 +738,10 @@ func TestJoinByInviteLink_InviteUserServiceDown(t *testing.T) {
 
 	err := svc.JoinByInviteLink(ctx, token, userId)
 
+	if err == nil {
+		t.Fatal("err should not be nil")
+	}
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "database connection lost")
 
