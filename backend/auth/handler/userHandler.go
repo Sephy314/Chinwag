@@ -42,7 +42,7 @@ func (h *UserHandler) Health(c *echo.Context) error {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body structs.CreateUserReq true "User registration info" example({"username":"john","email":"john@example.com","password":"secret123"})
+// @Param        request body structs.CreateUserReq true "User registration info" 
 // @Success      200 {object} response.Response[structs.UserResponse] "Successfully created user"
 // @Failure      400 {object} response.Response[any] "Invalid request body"
 // @Failure      409 {object} response.Response[any] "User already exists"
@@ -68,7 +68,7 @@ func (h *UserHandler) CreateUser(c *echo.Context) error {
 // @Description  Retrieve user information. The id parameter accepts either a UUID (user ID) or an email address. If the parameter matches an email format, it queries by email; otherwise, it queries by ID.
 // @Tags         auth
 // @Produce      json
-// @Param        id path string true "User ID (UUID) or email address" example(john@example.com)
+// @Param        id path string true "User ID (UUID) or email address" 
 // @Success      200 {object} response.Response[structs.UserResponse] "User found"
 // @Failure      404 {object} response.Response[any] "User not found"
 // @Router       /auth/user/{id} [get]
@@ -117,7 +117,7 @@ func (h *UserHandler) DeleteUser(c *echo.Context) error {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id path string true "User ID"
-// @Param        request body structs.UpdateUserReq true "Fields to update" example({"name":"new name"})
+// @Param        request body structs.UpdateUserReq true "Fields to update" 
 // @Success      200 {object} response.Response[structs.UserResponse] "Successfully updated user"
 // @Failure      400 {object} response.Response[any] "Invalid request body"
 // @Failure      404 {object} response.Response[any] "User not found"
@@ -144,8 +144,8 @@ func (h *UserHandler) UpdateUser(c *echo.Context) error {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body structs.LoginReq true "Login credentials" example({"email":"john@example.com","password":"secret123"})
-// @Success      200 {object} response.Response[map[string]interface{}] "Returns {\"token\": \"<jwt_access_token>\"}. Refresh token is set as an HttpOnly cookie named \"refresh\"."
+// @Param        request body structs.LoginReq true "Login credentials" 
+// @Success      200 {object} response.Response[any] "Returns {\"token\": \"<jwt_access_token>\"}. Refresh token is set as an HttpOnly cookie named \"refresh\"."
 // @Failure      400 {object} response.Response[any] "Invalid credentials"
 // @Router       /auth/login [post]
 func (h *UserHandler) Login(c *echo.Context) error {
@@ -180,7 +180,7 @@ func (h *UserHandler) Login(c *echo.Context) error {
 // @Tags         auth
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200 {object} response.Response[map[string]interface{}] "Returns {\"user\": {\"id\": \"...\", \"name\": \"...\", \"email\": \"...\"}}"
+// @Success      200 {object} response.Response[any] "Returns {\"user\": {\"id\": \"...\", \"name\": \"...\", \"email\": \"...\"}}"
 // @Failure      401 {object} response.Response[any] "Unauthorized - invalid or missing token"
 // @Router       /auth/whoami [get]
 func (h *UserHandler) WhoAmI(c *echo.Context) error {
