@@ -241,8 +241,9 @@ func TestGetMessage_Success(t *testing.T) {
 	authorId := uuid.New()
 	messageId := uuid.New()
 	roomId := uuid.New()
+	userId := authorId
 	now := time.Now()
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), "userId", userId)
 
 	msg := domain.ChatMessage{
 		Id:          messageId,
@@ -254,6 +255,9 @@ func TestGetMessage_Success(t *testing.T) {
 	}
 
 	mockRepo.On("GetMessageById", ctx, messageId).Return(msg, nil)
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+		{UserId: userId.String(), RoomId: roomId.String()},
+	}, nil)
 	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
@@ -268,6 +272,7 @@ func TestGetMessage_Success(t *testing.T) {
 	assert.Equal(t, "Hello", result.Content)
 	assert.Equal(t, "testuser", result.AuthorName)
 	mockRepo.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
 	mockUser.AssertExpectations(t)
 }
 
@@ -468,8 +473,9 @@ func TestListMessages_Success(t *testing.T) {
 
 	roomId := uuid.New()
 	authorId := uuid.New()
+	userId := authorId
 	now := time.Now()
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), "userId", userId)
 
 	msgs := []domain.ChatMessage{
 		{
@@ -490,6 +496,9 @@ func TestListMessages_Success(t *testing.T) {
 		},
 	}
 
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+		{UserId: userId.String(), RoomId: roomId.String()},
+	}, nil)
 	mockRepo.On("ListMessagesByRoomId", ctx, roomId, "", 50).Return(msgs, (*structs.CursorMeta)(nil), nil)
 	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
 		Id:   authorId.String(),
@@ -511,6 +520,7 @@ func TestListMessages_Success(t *testing.T) {
 	assert.Equal(t, 2, len(result))
 	assert.Equal(t, "testuser", result[0].AuthorName)
 	mockRepo.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
 }
 
 func TestListMessages_Empty(t *testing.T) {
@@ -519,8 +529,12 @@ func TestListMessages_Empty(t *testing.T) {
 	mockMember := new(MockMemberProvider)
 
 	roomId := uuid.New()
-	ctx := context.Background()
+	userId := uuid.New()
+	ctx := context.WithValue(context.Background(), "userId", userId)
 
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+		{UserId: userId.String(), RoomId: roomId.String()},
+	}, nil)
 	mockRepo.On("ListMessagesByRoomId", ctx, roomId, "", 50).Return([]domain.ChatMessage{}, (*structs.CursorMeta)(nil), nil)
 
 	req := structs.ListMessagesRequest{
@@ -536,6 +550,7 @@ func TestListMessages_Empty(t *testing.T) {
 	assert.Equal(t, 0, len(result))
 	assert.Nil(t, meta)
 	mockRepo.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
 }
 
 func TestListMessages_InvalidRoomID(t *testing.T) {

@@ -37,7 +37,7 @@ func (r *RefreshTokenService) InsertRefreshToken(ctx context.Context, token stru
 		ctx,
 		r.RefreshTokenPrefix+token.RefreshToken,
 		token.Subject,
-		time.Hour*24*14,
+		r.RefreshTokenTTL,
 	)
 }
 

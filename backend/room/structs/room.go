@@ -24,6 +24,11 @@ type UpdateRoomMemberRequest struct {
 	Role *domain.Role `json:"role,omitempty"`
 }
 
+type AddRoomMemberRequest struct {
+	UserID uuid.UUID    `json:"user_id"`
+	Role   *domain.Role `json:"role,omitempty"`
+}
+
 type RoomUser struct {
 	UserId uuid.UUID    `json:"userId"`
 	RoomId uuid.UUID    `json:"roomId"`

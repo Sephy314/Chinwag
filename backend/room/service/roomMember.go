@@ -119,7 +119,7 @@ func (s *RoomMemberService) InviteUser(ctx context.Context, member structs.RoomU
 			RoomId:   member.RoomId,
 			UserId:   member.UserId,
 			Role:     role,
-			JoinedAt: time.Time{},
+			JoinedAt: time.Now(),
 			LeftAt:   nil,
 		})
 	}
@@ -129,7 +129,7 @@ func (s *RoomMemberService) InviteUser(ctx context.Context, member structs.RoomU
 			RoomId:   member.RoomId,
 			UserId:   member.UserId,
 			Role:     role,
-			JoinedAt: time.Time{},
+			JoinedAt: time.Now(),
 			LeftAt:   nil,
 		})
 	})

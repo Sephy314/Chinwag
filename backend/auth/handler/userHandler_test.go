@@ -106,9 +106,9 @@ func TestUserHandler_GetUser_WithEmail_Success(t *testing.T) {
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
-			{Name: "id", Value: "john@example.com"},
+			{Name: "email", Value: "john@example.com"},
 		},
-	}.ServeWithHandler(t, h.GetUser)
+	}.ServeWithHandler(t, h.GetUserByEmail)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 
@@ -138,9 +138,9 @@ func TestUserHandler_GetUser_WithEmail_NotFound(t *testing.T) {
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
-			{Name: "id", Value: "notfound@example.com"},
+			{Name: "email", Value: "notfound@example.com"},
 		},
-	}.ServeWithHandler(t, h.GetUser)
+	}.ServeWithHandler(t, h.GetUserByEmail)
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
 
@@ -170,7 +170,7 @@ func TestUserHandler_GetUser_WithID_Success(t *testing.T) {
 		PathValues: []echo.PathValue{
 			{Name: "id", Value: "uid-456"},
 		},
-	}.ServeWithHandler(t, h.GetUser)
+	}.ServeWithHandler(t, h.GetUserByID)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 
@@ -202,7 +202,7 @@ func TestUserHandler_GetUser_WithID_NotFound(t *testing.T) {
 		PathValues: []echo.PathValue{
 			{Name: "id", Value: "uid-nonexistent"},
 		},
-	}.ServeWithHandler(t, h.GetUser)
+	}.ServeWithHandler(t, h.GetUserByID)
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
 

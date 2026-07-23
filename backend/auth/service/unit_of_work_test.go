@@ -45,7 +45,7 @@ func TestUserService_CreateUser_UsesUnitOfWork(t *testing.T) {
 	txRepo := new(mocked.UserRepo)
 
 	req := structs.CreateUserReq{
-		Username: "tester",
+		Name:     "tester",
 		Email:    "tester@example.com",
 		Password: "password123",
 	}
@@ -103,7 +103,7 @@ func TestUserService_UnitOfWorkErrorIsReturned(t *testing.T) {
 	}
 
 	_, err := service.CreateUser(ctx, structs.CreateUserReq{
-		Username: "tester",
+		Name:     "tester",
 		Email:    "tester@example.com",
 		Password: "password123",
 	})

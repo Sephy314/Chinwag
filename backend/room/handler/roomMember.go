@@ -3,7 +3,6 @@ package handler
 import (
 	"net/http"
 
-	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
@@ -41,7 +40,7 @@ func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService serv
 // @Produce      json
 // @Security     BearerAuth
 // @Param        roomId path string true "Room UUID" 
-// @Param        request body object true "Member to add" 
+// @Param        request body structs.AddRoomMemberRequest true "Member to add" 
 // @Success      201 {object} response.Response[any]
 // @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
 // @Failure      403 {object} response.Response[any] "Admin permission is required"
@@ -54,10 +53,7 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error("invalid room id"))
 	}
 
-	var body struct {
-		UserId uuid.UUID    `json:"userId"`
-		Role   *domain.Role `json:"role"`
-	}
+	var body structs.AddRoomMemberRequest
 	if err := c.Bind(&body); err != nil {
 		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
@@ -72,7 +68,7 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 	}
 
 	req := structs.RoomUser{
-		UserId: body.UserId,
+		UserId: body.UserID,
 		RoomId: roomId,
 		Role:   body.Role,
 	}
@@ -94,6 +90,7 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 // @Param        userId path string true "User UUID to remove" 
 // @Success      200 {object} response.Response[any]
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      403 {object} response.Response[any] "Admin permission is required"
 // @Failure      404 {object} response.Response[any] "Room, user, or membership not found"
 // @Router       /rooms/{roomId}/members/{userId} [delete]
 func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
@@ -105,6 +102,15 @@ func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 	userId, err := uuid.Parse(c.Param("userId"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
+	}
+
+	ok, err := utils.IsManager(c, roomId, h.service)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	if !ok {
+		return c.JSON(http.StatusForbidden, response.Error("Admin permission is required"))
 	}
 
 	req := structs.RoomUser{
