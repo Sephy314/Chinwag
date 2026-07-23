@@ -61,7 +61,7 @@ func (s *UserService) CreateUser(ctx context.Context, req structs.CreateUserReq)
 
 	newUser := &domain.User{
 		Id:       id,
-		Name:     req.Username,
+		Name:     req.Name,
 		Password: string(hash),
 		Email:    req.Email,
 	}

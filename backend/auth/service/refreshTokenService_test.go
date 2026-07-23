@@ -17,7 +17,7 @@ type MockCache struct {
 }
 
 func (m *MockCache) TTL(_ context.Context, _ string) (time.Duration, error) {
-	panic("implement me")
+	return 0, nil
 }
 
 func (m *MockCache) Get(ctx context.Context, key string) (string, error) {

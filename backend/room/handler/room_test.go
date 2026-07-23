@@ -139,61 +139,80 @@ func TestRoomHandler_GetRoom_InvalidID(t *testing.T) {
 	mockSvc.AssertNotCalled(t, "GetRoomById", mock.Anything, mock.Anything)
 }
 
-func TestRoomHandler_ListRooms_ByOwnerId(t *testing.T) {
+func TestRoomHandler_ListUserRooms_Success(t *testing.T) {
 	mockSvc := new(MockRoomService)
 	mockMemberSvc := new(MockRoomMemberService)
 	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
 
-	ownerID := uuid.New()
-	rooms := []domain.Room{
+	userID := uuid.New()
+	owned := []domain.Room{
 		{
 			Id:         uuid.New(),
-			Name:       "room-1",
+			Name:       "owned-room",
 			MaxMembers: 8,
-			OwnerId:    ownerID,
+			OwnerId:    userID,
 		},
 	}
-
-	mockSvc.On("GetRoomsByOwnerId", mock.Anything, ownerID).Return(rooms, nil)
-
-	rec := echotest.ContextConfig{
-		QueryValues: map[string][]string{
-			"ownerId": {ownerID.String()},
-		},
-	}.ServeWithHandler(t, h.ListRooms)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var resp response.Response[[]domain.Room]
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
-	assert.NoError(t, err)
-	assert.Len(t, resp.Data, 1)
-	assert.Equal(t, rooms[0].Name, resp.Data[0].Name)
-
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRoomHandler_ListRooms_ByMemberId(t *testing.T) {
-	mockSvc := new(MockRoomService)
-	mockMemberSvc := new(MockRoomMemberService)
-	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
-
-	memberID := uuid.New()
-	rooms := []domain.Room{
+	joined := []domain.Room{
 		{
 			Id:         uuid.New(),
-			Name:       "room-2",
+			Name:       "joined-room",
 			MaxMembers: 20,
 		},
 	}
 
-	mockMemberSvc.On("GetRoomsByUserId", mock.Anything, memberID).Return(rooms, nil)
+	mockSvc.On("GetRoomsByOwnerId", mock.Anything, userID).Return(owned, nil)
+	mockMemberSvc.On("GetRoomsByUserId", mock.Anything, userID).Return(joined, nil)
 
 	rec := echotest.ContextConfig{
-		QueryValues: map[string][]string{
-			"memberId": {memberID.String()},
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: userID.String()},
 		},
-	}.ServeWithHandler(t, h.ListRooms)
+	}.ServeWithHandler(t, h.ListUserRooms)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp response.Response[[]domain.Room]
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Len(t, resp.Data, 2)
+	assert.Equal(t, "owned-room", resp.Data[0].Name)
+	assert.Equal(t, "joined-room", resp.Data[1].Name)
+
+	mockSvc.AssertExpectations(t)
+	mockMemberSvc.AssertExpectations(t)
+}
+
+func TestRoomHandler_ListUserRooms_Dedup(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	userID := uuid.New()
+	roomID := uuid.New()
+	owned := []domain.Room{
+		{
+			Id:      roomID,
+			Name:    "shared-room",
+			OwnerId: userID,
+		},
+	}
+	joined := []domain.Room{
+		{
+			Id:      roomID,
+			Name:    "shared-room",
+			OwnerId: userID,
+		},
+	}
+
+	mockSvc.On("GetRoomsByOwnerId", mock.Anything, userID).Return(owned, nil)
+	mockMemberSvc.On("GetRoomsByUserId", mock.Anything, userID).Return(joined, nil)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: userID.String()},
+		},
+	}.ServeWithHandler(t, h.ListUserRooms)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
@@ -201,34 +220,53 @@ func TestRoomHandler_ListRooms_ByMemberId(t *testing.T) {
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Len(t, resp.Data, 1)
-	assert.Equal(t, rooms[0].Name, resp.Data[0].Name)
 
+	mockSvc.AssertExpectations(t)
 	mockMemberSvc.AssertExpectations(t)
 }
 
-func TestRoomHandler_ListRooms_NoParam(t *testing.T) {
-	mockSvc := new(MockRoomService)
-	mockMemberSvc := new(MockRoomMemberService)
-	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
-
-	rec := echotest.ContextConfig{}.ServeWithHandler(t, h.ListRooms)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestRoomHandler_ListRooms_BothParams(t *testing.T) {
+func TestRoomHandler_ListUserRooms_InvalidID(t *testing.T) {
 	mockSvc := new(MockRoomService)
 	mockMemberSvc := new(MockRoomMemberService)
 	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
 
 	rec := echotest.ContextConfig{
-		QueryValues: map[string][]string{
-			"ownerId":  {uuid.New().String()},
-			"memberId": {uuid.New().String()},
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: "not-a-uuid"},
 		},
-	}.ServeWithHandler(t, h.ListRooms)
+	}.ServeWithHandler(t, h.ListUserRooms)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	mockSvc.AssertNotCalled(t, "GetRoomsByOwnerId", mock.Anything, mock.Anything)
+	mockMemberSvc.AssertNotCalled(t, "GetRoomsByUserId", mock.Anything, mock.Anything)
+}
+
+func TestRoomHandler_ListUserRooms_Empty(t *testing.T) {
+	mockSvc := new(MockRoomService)
+	mockMemberSvc := new(MockRoomMemberService)
+	h := handler.NewRoomHandler(mockSvc, mockMemberSvc)
+
+	userID := uuid.New()
+
+	mockSvc.On("GetRoomsByOwnerId", mock.Anything, userID).Return([]domain.Room{}, nil)
+	mockMemberSvc.On("GetRoomsByUserId", mock.Anything, userID).Return([]domain.Room{}, nil)
+
+	rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{
+			{Name: "id", Value: userID.String()},
+		},
+	}.ServeWithHandler(t, h.ListUserRooms)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp response.Response[[]domain.Room]
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Len(t, resp.Data, 0)
+
+	mockSvc.AssertExpectations(t)
+	mockMemberSvc.AssertExpectations(t)
 }
 
 func TestRoomHandler_DeleteRoom_NotFound(t *testing.T) {

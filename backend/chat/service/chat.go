@@ -108,6 +108,25 @@ func (s *ChatService) GetMessage(ctx context.Context, messageId uuid.UUID) (*str
 		return nil, err
 	}
 
+	userId := ctx.Value("userId").(uuid.UUID)
+	members, err := s.member.GetMembersByRoomId(ctx, msg.RoomId.String())
+	if err != nil {
+		return nil, err
+	}
+	isMember := false
+	for _, m := range members {
+		if m.UserId == userId.String() {
+			isMember = true
+			break
+		}
+	}
+	if !isMember {
+		return nil, &errs.AppError{
+			Status:  http.StatusForbidden,
+			Message: "You are not a member of this room",
+		}
+	}
+
 	user, err := s.user.GetUser(ctx, msg.AuthorId.String())
 	if err != nil {
 		return nil, err
@@ -120,6 +139,25 @@ func (s *ChatService) ListMessages(ctx context.Context, req structs.ListMessages
 	roomId, err := uuid.Parse(req.RoomID)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	userId := ctx.Value("userId").(uuid.UUID)
+	members, err := s.member.GetMembersByRoomId(ctx, roomId.String())
+	if err != nil {
+		return nil, nil, err
+	}
+	isMember := false
+	for _, m := range members {
+		if m.UserId == userId.String() {
+			isMember = true
+			break
+		}
+	}
+	if !isMember {
+		return nil, nil, &errs.AppError{
+			Status:  http.StatusForbidden,
+			Message: "You are not a member of this room",
+		}
 	}
 
 	msgs, meta, err := s.repo.ListMessagesByRoomId(ctx, roomId, req.Cursor, req.Limit)

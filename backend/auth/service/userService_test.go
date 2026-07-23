@@ -46,7 +46,7 @@ func TestUserService_CreateUser(t *testing.T) {
 	tpw := "testUserPassword"
 
 	req := structs.CreateUserReq{
-		Username: uname,
+		Name:     uname,
 		Email:    userEmail,
 		Password: tpw,
 	}

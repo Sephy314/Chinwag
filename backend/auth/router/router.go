@@ -29,7 +29,7 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider) *servic
 	jwksRepo := repo.NewJwtRepository(conns.DB)
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
-	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Minute*5)
+	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Hour*24*14)
 
 	jwksService := service.NewJwksService(jwksRepo)
 	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, roomMember, unitOfWork)
@@ -47,7 +47,8 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider) *servic
 	{
 		authPub.GET("/health", userHandler.Health)
 
-		authPub.GET("/user/:id", userHandler.GetUser)
+		authPub.GET("/user/id/:id", userHandler.GetUserByID)
+		authPub.GET("/user/email/:email", userHandler.GetUserByEmail)
 		authPub.POST("/user", userHandler.CreateUser)
 
 		authPub.POST("/login", userHandler.Login)
@@ -71,6 +72,7 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider) *servic
 	{
 		authPriv.GET("/whoami", userHandler.WhoAmI)
 		authPriv.PUT("/user/:id", userHandler.UpdateUser)
+		authPriv.DELETE("/user/:id", userHandler.DeleteUser)
 	}
 
 	log.Println("auth routes registered")

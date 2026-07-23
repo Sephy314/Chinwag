@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
@@ -17,7 +18,7 @@ type RoomHandler interface {
 	Health(c *echo.Context) error
 	CreateRoom(c *echo.Context) error
 	GetRoom(c *echo.Context) error
-	ListRooms(c *echo.Context) error
+	ListUserRooms(c *echo.Context) error
 	UpdateRoom(c *echo.Context) error
 	DeleteRoom(c *echo.Context) error
 }
@@ -103,51 +104,46 @@ func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.OK(room))
 }
 
-// ListRooms godoc
-// @Summary      List rooms
-// @Description  Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms joined). Pass exactly one query parameter.
+// ListUserRooms godoc
+// @Summary      List rooms for a user
+// @Description  Retrieve all rooms associated with a user — both rooms they own and rooms they've joined. Duplicates are removed.
 // @Tags         room
 // @Produce      json
-// @Param        ownerId query string false "Filter by owner UUID" 
-// @Param        memberId query string false "Filter by member UUID" 
+// @Param        id path string true "User UUID"
 // @Success      200 {object} response.Response[[]domain.Room] "Array of rooms"
-// @Failure      400 {object} response.Response[any] "Invalid UUID format or missing query parameter"
-// @Router       /rooms [get]
-func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
-	ownerIdStr := c.QueryParam("ownerId")
-	memberIdStr := c.QueryParam("memberId")
-
-	if ownerIdStr != "" && memberIdStr != "" {
-		return c.JSON(http.StatusBadRequest, response.Error("provide only one of ownerId or memberId"))
-	}
-
-	if ownerIdStr == "" && memberIdStr == "" {
-		return c.JSON(http.StatusBadRequest, response.Error("provide ownerId or memberId query parameter"))
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Router       /users/{id}/rooms [get]
+func (h *RoomHandlerImpl) ListUserRooms(c *echo.Context) error {
+	userId, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
 	}
 
 	ctx := c.Request().Context()
 
-	if ownerIdStr != "" {
-		ownerId, err := uuid.Parse(ownerIdStr)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, response.Error("invalid ownerId"))
-		}
-		rooms, err := h.service.GetRoomsByOwnerId(ctx, ownerId)
-		if err != nil {
-			return c.JSON(errs.ParseError(err))
-		}
-		return c.JSON(http.StatusOK, response.OK(rooms))
-	}
-
-	memberId, err := uuid.Parse(memberIdStr)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, response.Error("invalid memberId"))
-	}
-	rooms, err := h.memberService.GetRoomsByUserId(ctx, memberId)
+	ownedRooms, err := h.service.GetRoomsByOwnerId(ctx, userId)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
-	return c.JSON(http.StatusOK, response.OK(rooms))
+
+	joinedRooms, err := h.memberService.GetRoomsByUserId(ctx, userId)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	seen := make(map[uuid.UUID]bool)
+	var all []domain.Room
+	for _, room := range ownedRooms {
+		seen[room.Id] = true
+		all = append(all, room)
+	}
+	for _, room := range joinedRooms {
+		if !seen[room.Id] {
+			all = append(all, room)
+		}
+	}
+
+	return c.JSON(http.StatusOK, response.OK(all))
 }
 
 // UpdateRoom godoc

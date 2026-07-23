@@ -107,7 +107,7 @@ func TestRoomMemberHandler_AddMember_Success(t *testing.T) {
 		Headers: map[string][]string{
 			echo.HeaderContentType: {echo.MIMEApplicationJSON},
 		},
-		JSONBody: []byte(`{"userId":"` + userID.String() + `","role":1}`),
+		JSONBody: []byte(`{"user_id":"` + userID.String() + `","role":1}`),
 	}.ToContextRecorder(t)
 
 	c.Set("user", &jwt.Token{
@@ -158,19 +158,31 @@ func TestRoomMemberHandler_RemoveMember_Success(t *testing.T) {
 		RoomId: roomID,
 	}
 
+	mockSvc.On("HasManagerPermission", mock.Anything, mock.Anything, roomID).Return(true, nil)
 	mockSvc.On("KickUser", mock.Anything, req).Return(nil)
 
-	rec := echotest.ContextConfig{
+	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
 			{Name: "roomId", Value: roomID.String()},
 			{Name: "userId", Value: userID.String()},
 		},
-	}.ServeWithHandler(t, h.RemoveMember)
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": userID.String(),
+		},
+	})
+
+	err := h.RemoveMember(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp response.Response[any]
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Equal(t, true, resp.Success)
 
@@ -190,6 +202,7 @@ func TestRoomMemberHandler_RemoveMember_InvalidRoomId(t *testing.T) {
 	}.ServeWithHandler(t, h.RemoveMember)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "HasManagerPermission", mock.Anything, mock.Anything, mock.Anything)
 	mockSvc.AssertNotCalled(t, "KickUser", mock.Anything, mock.Anything)
 }
 
@@ -206,6 +219,7 @@ func TestRoomMemberHandler_RemoveMember_InvalidUserId(t *testing.T) {
 	}.ServeWithHandler(t, h.RemoveMember)
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "HasManagerPermission", mock.Anything, mock.Anything, mock.Anything)
 	mockSvc.AssertNotCalled(t, "KickUser", mock.Anything, mock.Anything)
 }
 
@@ -331,14 +345,26 @@ func TestRoomMemberHandler_RemoveMember_NotFound(t *testing.T) {
 		RoomId: roomID,
 	}
 
+	mockSvc.On("HasManagerPermission", mock.Anything, mock.Anything, roomID).Return(true, nil)
 	mockSvc.On("KickUser", mock.Anything, req).Return(errors.New("not found"))
 
-	rec := echotest.ContextConfig{
+	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
 			{Name: "roomId", Value: roomID.String()},
 			{Name: "userId", Value: userID.String()},
 		},
-	}.ServeWithHandler(t, h.RemoveMember)
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": userID.String(),
+		},
+	})
+
+	err := h.RemoveMember(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	mockSvc.AssertExpectations(t)

@@ -4,12 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/response"
-	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v5"
 )
@@ -63,27 +61,39 @@ func (h *UserHandler) CreateUser(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.OK(usr.ToProjection()))
 }
 
-// GetUser godoc
+// GetUserByID godoc
 // @Summary      Get user by ID
-// @Description  Retrieve user information. The id parameter accepts either a UUID (user ID) or an email address. If the parameter matches an email format, it queries by email; otherwise, it queries by ID.
+// @Description  Retrieve user information by UUID
 // @Tags         auth
 // @Produce      json
-// @Param        id path string true "User ID (UUID) or email address" 
+// @Param        id path string true "User ID (UUID)"
 // @Success      200 {object} response.Response[structs.UserResponse] "User found"
 // @Failure      404 {object} response.Response[any] "User not found"
-// @Router       /auth/user/{id} [get]
-func (h *UserHandler) GetUser(c *echo.Context) error {
-	var user *domain.User
-	var err error
-
+// @Router       /auth/user/id/{id} [get]
+func (h *UserHandler) GetUserByID(c *echo.Context) error {
 	id := c.Param("id")
 
-	if utils.IsEmail(id) {
-		user, err = h.Service.GetUserByEmail(c.Request().Context(), id)
-	} else {
-		user, err = h.Service.GetUser(c.Request().Context(), id)
+	user, err := h.Service.GetUser(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
 	}
 
+	return c.JSON(http.StatusOK, response.OK(user.ToProjection()))
+}
+
+// GetUserByEmail godoc
+// @Summary      Get user by email
+// @Description  Retrieve user information by email address
+// @Tags         auth
+// @Produce      json
+// @Param        email path string true "User email address"
+// @Success      200 {object} response.Response[structs.UserResponse] "User found"
+// @Failure      404 {object} response.Response[any] "User not found"
+// @Router       /auth/user/email/{email} [get]
+func (h *UserHandler) GetUserByEmail(c *echo.Context) error {
+	email := c.Param("email")
+
+	user, err := h.Service.GetUserByEmail(c.Request().Context(), email)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}

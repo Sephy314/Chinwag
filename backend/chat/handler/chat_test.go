@@ -204,6 +204,7 @@ func TestChatHandler_GetMessage_Success(t *testing.T) {
 
 	messageID := uuid.New()
 	roomID := uuid.New()
+	userID := uuid.New()
 	now := time.Now()
 
 	expected := &structs.MessageResponse{
@@ -218,17 +219,28 @@ func TestChatHandler_GetMessage_Success(t *testing.T) {
 
 	mockSvc.On("GetMessage", mock.Anything, messageID).Return(expected, nil)
 
-	rec := echotest.ContextConfig{
+	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
 			{Name: "roomId", Value: roomID.String()},
 			{Name: "messageId", Value: messageID.String()},
 		},
-	}.ServeWithHandler(t, h.GetMessage)
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": userID.String(),
+		},
+	})
+
+	err := h.GetMessage(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp response.Response[structs.MessageResponse]
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.True(t, resp.Success)
 	assert.Equal(t, "Hello", resp.Data.Content)
@@ -256,6 +268,7 @@ func TestChatHandler_ListMessages_Success(t *testing.T) {
 	h := handler.NewChatHandler(mockSvc)
 
 	roomID := uuid.New()
+	userID := uuid.New()
 	now := time.Now()
 	msgs := []structs.MessageResponse{
 		{
@@ -277,16 +290,27 @@ func TestChatHandler_ListMessages_Success(t *testing.T) {
 
 	mockSvc.On("ListMessages", mock.Anything, req).Return(msgs, (*structs.CursorMeta)(nil), nil)
 
-	rec := echotest.ContextConfig{
+	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
 			{Name: "roomId", Value: roomID.String()},
 		},
-	}.ServeWithHandler(t, h.ListMessages)
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": userID.String(),
+		},
+	})
+
+	err := h.ListMessages(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp response.Response[[]structs.MessageResponse]
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.True(t, resp.Success)
 	assert.Len(t, resp.Data, 1)
@@ -300,6 +324,7 @@ func TestChatHandler_ListMessages_WithCursor(t *testing.T) {
 	h := handler.NewChatHandler(mockSvc)
 
 	roomID := uuid.New()
+	userID := uuid.New()
 	now := time.Now()
 	cursor := "eyJjcmVhdGVkX2F0IjoiMjAyNi0wNy0yM1QxOTo1OToxMloiLCJpZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCJ9"
 
@@ -328,19 +353,30 @@ func TestChatHandler_ListMessages_WithCursor(t *testing.T) {
 
 	mockSvc.On("ListMessages", mock.Anything, req).Return(msgs, meta, nil)
 
-	rec := echotest.ContextConfig{
+	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
 			{Name: "roomId", Value: roomID.String()},
 		},
 		QueryValues: map[string][]string{
 			"cursor": {cursor},
 		},
-	}.ServeWithHandler(t, h.ListMessages)
+	}.ToContextRecorder(t)
+
+	c.Set("user", &jwt.Token{
+		Claims: jwt.MapClaims{
+			"sub": userID.String(),
+		},
+	})
+
+	err := h.ListMessages(c)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var resp response.Response[[]structs.MessageResponse]
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.True(t, resp.Success)
 	assert.Len(t, resp.Data, 1)

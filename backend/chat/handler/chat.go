@@ -85,7 +85,7 @@ func (h *ChatHandler) CreateMessage(c *echo.Context) error {
 
 // GetMessage godoc
 // @Summary      Get a chat message
-// @Description  Retrieve a single chat message by its UUID.
+// @Description  Retrieve a single chat message by its UUID. The user must be a member of the room.
 // @Tags         chat-message
 // @Produce      json
 // @Security     BearerAuth
@@ -93,6 +93,7 @@ func (h *ChatHandler) CreateMessage(c *echo.Context) error {
 // @Param        messageId path string true "Message UUID" 
 // @Success      200 {object} response.Response[structs.MessageResponse] "Message found"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      403 {object} response.Response[any] "Not a member of this room"
 // @Failure      404 {object} response.Response[any] "Message not found"
 // @Router       /chat/rooms/{roomId}/messages/{messageId} [get]
 func (h *ChatHandler) GetMessage(c *echo.Context) error {
@@ -101,7 +102,14 @@ func (h *ChatHandler) GetMessage(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error("invalid message id"))
 	}
 
-	msg, err := h.svc.GetMessage(c.Request().Context(), messageId)
+	userId, err := utils.GetUserIdByEchoContext(c)
+	if err != nil {
+		return echo.ErrUnauthorized
+	}
+	uid, _ := uuid.Parse(*userId)
+	ctx := context.WithValue(c.Request().Context(), "userId", uid)
+
+	msg, err := h.svc.GetMessage(ctx, messageId)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
@@ -111,7 +119,7 @@ func (h *ChatHandler) GetMessage(c *echo.Context) error {
 
 // ListMessages godoc
 // @Summary      List chat messages
-// @Description  Retrieve messages in a room with cursor-based pagination. Sorted by created_at DESC. Provide the cursor from the previous response to fetch the next page. Default limit is 50, max 200.
+// @Description  Retrieve messages in a room with cursor-based pagination. The user must be a member of the room. Sorted by created_at DESC. Provide the cursor from the previous response to fetch the next page. Default limit is 50, max 200.
 // @Tags         chat-message
 // @Produce      json
 // @Security     BearerAuth
@@ -120,6 +128,7 @@ func (h *ChatHandler) GetMessage(c *echo.Context) error {
 // @Param        limit  query   int    false "Number of messages per page (default 50, max 200)" 
 // @Success      200    {object} response.Response[[]structs.MessageResponse] "Paginated messages with cursor meta"
 // @Failure      400    {object} response.Response[any] "Invalid UUID format"
+// @Failure      403    {object} response.Response[any] "Not a member of this room"
 // @Router       /chat/rooms/{roomId}/messages [get]
 func (h *ChatHandler) ListMessages(c *echo.Context) error {
 	roomId := c.Param("roomId")
@@ -127,13 +136,20 @@ func (h *ChatHandler) ListMessages(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error("room id is required"))
 	}
 
+	userId, err := utils.GetUserIdByEchoContext(c)
+	if err != nil {
+		return echo.ErrUnauthorized
+	}
+	uid, _ := uuid.Parse(*userId)
+	ctx := context.WithValue(c.Request().Context(), "userId", uid)
+
 	req := structs.ListMessagesRequest{
 		RoomID: roomId,
 		Cursor: c.QueryParam("cursor"),
 		Limit:  50,
 	}
 
-	msgs, meta, err := h.svc.ListMessages(c.Request().Context(), req)
+	msgs, meta, err := h.svc.ListMessages(ctx, req)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
