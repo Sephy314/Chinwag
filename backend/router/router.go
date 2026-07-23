@@ -8,6 +8,7 @@ import (
 
 	authRouter "github.com/Sephy314/chinwag/auth/router"
 	"github.com/Sephy314/chinwag/auth/service"
+	chatRouter "github.com/Sephy314/chinwag/chat/router"
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/docs"
@@ -119,6 +120,8 @@ func SetUpRouter() (*echo.Echo, error) {
 	})
 
 	roomMemberProv := roomRouter.SetUpRoomRouter(e, userAdapter)
+
+	chatRouter.SetUpChatRouter(e, userAdapter, roomMemberProv)
 
 	userService := authRouter.SetUpAuthRouter(e, roomMemberProv)
 	userAdapter.SetUserService(&userServiceAdapter{svc: userService})

@@ -52,7 +52,7 @@ func (h *RoomHandlerImpl) Health(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        request body structs.CreateRoomRequest true "Room creation info" example({"name":"general","description":"General chat room","max_members":50})
+// @Param        request body structs.CreateRoomRequest true "Room creation info" 
 // @Success      201 {object} response.Response[domain.Room] "Created room with fields: id (UUID), name, description, max_members, owner_id, created_at, updated_at"
 // @Failure      400 {object} response.Response[any] "Invalid request body or validation error"
 // @Failure      500 {object} response.Response[any] "Internal server error"
@@ -84,7 +84,7 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 // @Description  Retrieve chat room information by its UUID.
 // @Tags         room
 // @Produce      json
-// @Param        id path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        id path string true "Room UUID" 
 // @Success      200 {object} response.Response[domain.Room] "Room found"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      404 {object} response.Response[any] "Room not found"
@@ -108,8 +108,8 @@ func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 // @Description  Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms joined). Pass exactly one query parameter.
 // @Tags         room
 // @Produce      json
-// @Param        ownerId query string false "Filter by owner UUID" example(550e8400-e29b-41d4-a716-446655440000)
-// @Param        memberId query string false "Filter by member UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        ownerId query string false "Filter by owner UUID" 
+// @Param        memberId query string false "Filter by member UUID" 
 // @Success      200 {object} response.Response[[]domain.Room] "Array of rooms"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format or missing query parameter"
 // @Router       /rooms [get]
@@ -157,8 +157,8 @@ func (h *RoomHandlerImpl) ListRooms(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        id path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
-// @Param        request body structs.UpdateRoomRequest true "Fields to update" example({"name":"new name","max_members":100})
+// @Param        id path string true "Room UUID" 
+// @Param        request body structs.UpdateRoomRequest true "Fields to update" 
 // @Success      200 {object} response.Response[domain.Room] "Successfully updated room"
 // @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
 // @Failure      404 {object} response.Response[any] "Room not found"
@@ -188,7 +188,7 @@ func (h *RoomHandlerImpl) UpdateRoom(c *echo.Context) error {
 // @Tags         room
 // @Produce      json
 // @Security     BearerAuth
-// @Param        id path string true "Room UUID" example(550e8400-e29b-41d4-a716-446655440000)
+// @Param        id path string true "Room UUID" 
 // @Success      200 {object} response.Response[any]
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      500 {object} response.Response[any] "Internal server error"
