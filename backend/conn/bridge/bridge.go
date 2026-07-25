@@ -68,7 +68,7 @@ func (a *UserAdapter) GetUser(ctx context.Context, id string) (*UserInfo, error)
 }
 
 type RoomMemberAdapter struct {
-	getRoomsByUserId  func(ctx context.Context, userId string) ([]RoomInfo, error)
+	getRoomsByUserId   func(ctx context.Context, userId string) ([]RoomInfo, error)
 	getMembersByRoomId func(ctx context.Context, roomId string) ([]RoomMemberInfo, error)
 }
 
@@ -77,7 +77,7 @@ func NewRoomMemberAdapter(
 	getMembersByRoomId func(ctx context.Context, roomId string) ([]RoomMemberInfo, error),
 ) *RoomMemberAdapter {
 	return &RoomMemberAdapter{
-		getRoomsByUserId:  getRoomsByUserId,
+		getRoomsByUserId:   getRoomsByUserId,
 		getMembersByRoomId: getMembersByRoomId,
 	}
 }

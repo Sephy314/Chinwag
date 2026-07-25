@@ -231,8 +231,8 @@ func TestCreateInviteLink_CustomTTL(t *testing.T) {
 	req := structs.CreateInviteLinkRequest{TTLHours: &ttlHours}
 
 	expected := &structs.InviteLinkResponse{
-		Token:     uuid.New().String(),
-		RoomId:    roomID.String(),
+		Token:  uuid.New().String(),
+		RoomId: roomID.String(),
 	}
 
 	mockSvc.On("CreateInviteLink", mock.Anything, roomID, userID, req).Return(expected, nil)
@@ -278,8 +278,8 @@ func TestCreateInviteLink_SingleUse(t *testing.T) {
 	req := structs.CreateInviteLinkRequest{SingleUse: &singleUse}
 
 	expected := &structs.InviteLinkResponse{
-		Token:     uuid.New().String(),
-		RoomId:    roomID.String(),
+		Token:  uuid.New().String(),
+		RoomId: roomID.String(),
 	}
 
 	mockSvc.On("CreateInviteLink", mock.Anything, roomID, userID, req).Return(expected, nil)

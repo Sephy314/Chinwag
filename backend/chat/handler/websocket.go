@@ -102,7 +102,7 @@ func (h *Hub) Broadcast(roomId uuid.UUID, message []byte) {
 // @Description  Upgrade to a WebSocket connection for real-time messaging in a room. Pass the JWT token as a query parameter. After upgrade, the server broadcasts new_message, updated_message, and deleted_message events. Client can send {"type":"ping"} and receive {"type":"pong"}.
 // @Tags         chat
 // @Produce      json
-// @Param        roomId path string true "Room UUID" 
+// @Param        roomId path string true "Room UUID"
 // @Param        token  query string true "JWT access token"
 // @Success      101 {object} any "Switching Protocols to WebSocket"
 // @Failure      400 {object} map[string]string "Invalid UUID or token format"

@@ -48,8 +48,8 @@ func (h *ChatHandler) Health(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId  path  string                          true "Room UUID" 
-// @Param        request body  structs.CreateMessageRequest     true "Message content" 
+// @Param        roomId  path  string                          true "Room UUID"
+// @Param        request body  structs.CreateMessageRequest     true "Message content"
 // @Success      201     {object} response.Response[structs.MessageResponse] "Message created"
 // @Failure      400     {object} response.Response[any]        "Invalid request body or UUID format"
 // @Failure      401     {object} response.Response[any]        "Unauthorized"
@@ -89,8 +89,8 @@ func (h *ChatHandler) CreateMessage(c *echo.Context) error {
 // @Tags         chat-message
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId    path string true "Room UUID" 
-// @Param        messageId path string true "Message UUID" 
+// @Param        roomId    path string true "Room UUID"
+// @Param        messageId path string true "Message UUID"
 // @Success      200 {object} response.Response[structs.MessageResponse] "Message found"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      403 {object} response.Response[any] "Not a member of this room"
@@ -123,9 +123,9 @@ func (h *ChatHandler) GetMessage(c *echo.Context) error {
 // @Tags         chat-message
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId  path    string true  "Room UUID" 
-// @Param        cursor query   string false "Cursor from previous response (base64 encoded JSON)" 
-// @Param        limit  query   int    false "Number of messages per page (default 50, max 200)" 
+// @Param        roomId  path    string true  "Room UUID"
+// @Param        cursor query   string false "Cursor from previous response (base64 encoded JSON)"
+// @Param        limit  query   int    false "Number of messages per page (default 50, max 200)"
 // @Success      200    {object} response.Response[[]structs.MessageResponse] "Paginated messages with cursor meta"
 // @Failure      400    {object} response.Response[any] "Invalid UUID format"
 // @Failure      403    {object} response.Response[any] "Not a member of this room"
@@ -174,9 +174,9 @@ func (h *ChatHandler) ListMessages(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId    path  string                        true "Room UUID" 
-// @Param        messageId path  string                        true "Message UUID" 
-// @Param        request   body  structs.UpdateMessageRequest  true "Fields to update" 
+// @Param        roomId    path  string                        true "Room UUID"
+// @Param        messageId path  string                        true "Message UUID"
+// @Param        request   body  structs.UpdateMessageRequest  true "Fields to update"
 // @Success      200       {object} response.Response[structs.MessageResponse] "Message updated"
 // @Failure      400       {object} response.Response[any] "Invalid request body or UUID format"
 // @Failure      401       {object} response.Response[any] "Unauthorized"
@@ -214,8 +214,8 @@ func (h *ChatHandler) UpdateMessage(c *echo.Context) error {
 // @Tags         chat-message
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId    path string true "Room UUID" 
-// @Param        messageId path string true "Message UUID" 
+// @Param        roomId    path string true "Room UUID"
+// @Param        messageId path string true "Message UUID"
 // @Success      200 {object} response.Response[any] "Message deleted"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      401 {object} response.Response[any] "Unauthorized"

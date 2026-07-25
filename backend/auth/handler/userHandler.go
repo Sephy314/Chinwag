@@ -40,7 +40,7 @@ func (h *UserHandler) Health(c *echo.Context) error {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body structs.CreateUserReq true "User registration info" 
+// @Param        request body structs.CreateUserReq true "User registration info"
 // @Success      200 {object} response.Response[structs.UserResponse] "Successfully created user"
 // @Failure      400 {object} response.Response[any] "Invalid request body"
 // @Failure      409 {object} response.Response[any] "User already exists"
@@ -127,7 +127,7 @@ func (h *UserHandler) DeleteUser(c *echo.Context) error {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id path string true "User ID"
-// @Param        request body structs.UpdateUserReq true "Fields to update" 
+// @Param        request body structs.UpdateUserReq true "Fields to update"
 // @Success      200 {object} response.Response[structs.UserResponse] "Successfully updated user"
 // @Failure      400 {object} response.Response[any] "Invalid request body"
 // @Failure      404 {object} response.Response[any] "User not found"
@@ -154,7 +154,7 @@ func (h *UserHandler) UpdateUser(c *echo.Context) error {
 // @Tags         auth
 // @Accept       json
 // @Produce      json
-// @Param        request body structs.LoginReq true "Login credentials" 
+// @Param        request body structs.LoginReq true "Login credentials"
 // @Success      200 {object} response.Response[any] "Returns {\"token\": \"<jwt_access_token>\"}. Refresh token is set as an HttpOnly cookie named \"refresh\"."
 // @Failure      400 {object} response.Response[any] "Invalid credentials"
 // @Router       /auth/login [post]

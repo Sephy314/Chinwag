@@ -53,7 +53,7 @@ func (h *RoomHandlerImpl) Health(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        request body structs.CreateRoomRequest true "Room creation info" 
+// @Param        request body structs.CreateRoomRequest true "Room creation info"
 // @Success      201 {object} response.Response[domain.Room] "Created room with fields: id (UUID), name, description, max_members, owner_id, created_at, updated_at"
 // @Failure      400 {object} response.Response[any] "Invalid request body or validation error"
 // @Failure      500 {object} response.Response[any] "Internal server error"
@@ -91,7 +91,7 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 // @Description  Retrieve chat room information by its UUID.
 // @Tags         room
 // @Produce      json
-// @Param        id path string true "Room UUID" 
+// @Param        id path string true "Room UUID"
 // @Success      200 {object} response.Response[domain.Room] "Room found"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      404 {object} response.Response[any] "Room not found"
@@ -159,8 +159,8 @@ func (h *RoomHandlerImpl) ListUserRooms(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        id path string true "Room UUID" 
-// @Param        request body structs.UpdateRoomRequest true "Fields to update" 
+// @Param        id path string true "Room UUID"
+// @Param        request body structs.UpdateRoomRequest true "Fields to update"
 // @Success      200 {object} response.Response[domain.Room] "Successfully updated room"
 // @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
 // @Failure      404 {object} response.Response[any] "Room not found"
@@ -190,7 +190,7 @@ func (h *RoomHandlerImpl) UpdateRoom(c *echo.Context) error {
 // @Tags         room
 // @Produce      json
 // @Security     BearerAuth
-// @Param        id path string true "Room UUID" 
+// @Param        id path string true "Room UUID"
 // @Success      200 {object} response.Response[any]
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      500 {object} response.Response[any] "Internal server error"

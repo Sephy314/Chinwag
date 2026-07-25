@@ -194,11 +194,11 @@ func TestHub_BroadcastAllRoomsIsolated(t *testing.T) {
 	roomB := uuid.New()
 
 	clientA := &Client{
-		hub:    h, conn: nil, send: make(chan []byte, 256),
+		hub: h, conn: nil, send: make(chan []byte, 256),
 		roomID: roomA, userID: uuid.New(),
 	}
 	clientB := &Client{
-		hub:    h, conn: nil, send: make(chan []byte, 256),
+		hub: h, conn: nil, send: make(chan []byte, 256),
 		roomID: roomB, userID: uuid.New(),
 	}
 
@@ -226,8 +226,6 @@ func TestHub_BroadcastAllRoomsIsolated(t *testing.T) {
 		t.Fatal("clientB did not receive")
 	}
 }
-
-
 
 func TestNewHub_InitialState(t *testing.T) {
 	h := NewHub()

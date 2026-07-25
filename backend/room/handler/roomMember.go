@@ -39,8 +39,8 @@ func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService serv
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId path string true "Room UUID" 
-// @Param        request body structs.AddRoomMemberRequest true "Member to add" 
+// @Param        roomId path string true "Room UUID"
+// @Param        request body structs.AddRoomMemberRequest true "Member to add"
 // @Success      201 {object} response.Response[any]
 // @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
 // @Failure      403 {object} response.Response[any] "Admin permission is required"
@@ -86,8 +86,8 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 // @Tags         room-member
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId path string true "Room UUID" 
-// @Param        userId path string true "User UUID to remove" 
+// @Param        roomId path string true "Room UUID"
+// @Param        userId path string true "User UUID to remove"
 // @Success      200 {object} response.Response[any]
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      403 {object} response.Response[any] "Admin permission is required"
@@ -131,7 +131,7 @@ func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 // @Tags         room-member
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId path string true "Room UUID" 
+// @Param        roomId path string true "Room UUID"
 // @Success      200 {object} response.Response[[]domain.RoomMember] "Array of room members"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Router       /rooms/{roomId}/members [get]
@@ -155,8 +155,8 @@ func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
 // @Tags         room-member
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId path string true "Room UUID" 
-// @Param        userId path string true "User UUID" 
+// @Param        roomId path string true "Room UUID"
+// @Param        userId path string true "User UUID"
 // @Success      200 {object} response.Response[domain.RoomMember] "Membership info found"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Failure      404 {object} response.Response[any] "Membership not found"
@@ -187,9 +187,9 @@ func (h *RoomMemberHandlerImpl) GetMember(c *echo.Context) error {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        roomId path string true "Room UUID" 
-// @Param        userId path string true "User UUID" 
-// @Param        request body structs.UpdateRoomMemberRequest true "Fields to update" 
+// @Param        roomId path string true "Room UUID"
+// @Param        userId path string true "User UUID"
+// @Param        request body structs.UpdateRoomMemberRequest true "Fields to update"
 // @Success      200 {object} response.Response[domain.RoomMember] "Successfully updated member"
 // @Failure      400 {object} response.Response[any] "Invalid request body or UUID format"
 // @Failure      403 {object} response.Response[any] "Admin permission is required"
