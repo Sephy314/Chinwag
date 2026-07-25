@@ -84,6 +84,8 @@ func SetUpRouter() (*echo.Echo, error) {
 			msg = http.StatusText(code)
 		}
 
+		log.Printf("Error %d: %s", code, msg)
+
 		_ = c.JSON(code, response.Error(msg))
 	}
 

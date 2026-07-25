@@ -73,7 +73,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		Name:     "refresh",
 		Value:    refreshToken,
 		Path:     "/auth",
-		Secure:   true,
+		Secure:   false,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(time.Hour * 24 * 7),

@@ -69,10 +69,11 @@ func (r *RoomMemberRepo) AddMember(ctx context.Context, req domain.RoomMember) e
 		ctx,
 		`INSERT INTO room_member (user_id, room_id, role) 
 		 SELECT $1, $2, $3
-		 WHERE EXISTS (SELECT 1 FROM rooms WHERE id = $2 AND popped_at IS NULL AND deleted_at IS NULL)`,
+		 WHERE EXISTS (SELECT 1 FROM rooms WHERE id = $4 AND popped_at IS NULL AND deleted_at IS NULL)`,
 		req.UserId,
 		req.RoomId,
 		req.Role,
+		req.RoomId.String(),
 	)
 	if err != nil {
 		return err

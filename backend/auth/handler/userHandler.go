@@ -173,8 +173,8 @@ func (h *UserHandler) Login(c *echo.Context) error {
 		Name:     "refresh",
 		Value:    tokens.RefreshToken,
 		Path:     "/auth",
-		Secure:   true,
 		HttpOnly: true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
