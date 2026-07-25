@@ -18,6 +18,8 @@ type RoomHandler interface {
 	Health(c *echo.Context) error
 	CreateRoom(c *echo.Context) error
 	GetRoom(c *echo.Context) error
+	ListRoomsByOwnerId(c *echo.Context) error
+	ListRoomsByMemberId(c *echo.Context) error
 	ListUserRooms(c *echo.Context) error
 	UpdateRoom(c *echo.Context) error
 	DeleteRoom(c *echo.Context) error
@@ -108,6 +110,52 @@ func (h *RoomHandlerImpl) GetRoom(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, response.OK(room))
+}
+
+// ListRoomsByOwnerId godoc
+// @Summary      List rooms by owner
+// @Description  Retrieve all rooms owned by a specific user.
+// @Tags         room
+// @Produce      json
+// @Param        ownerId path string true "Owner UUID"
+// @Success      200 {object} response.Response[[]domain.Room] "Array of rooms"
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Router       /rooms/owner/{ownerId} [get]
+func (h *RoomHandlerImpl) ListRoomsByOwnerId(c *echo.Context) error {
+	ownerId, err := uuid.Parse(c.Param("ownerId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid owner id"))
+	}
+
+	rooms, err := h.service.GetRoomsByOwnerId(c.Request().Context(), ownerId)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, response.OK(rooms))
+}
+
+// ListRoomsByMemberId godoc
+// @Summary      List rooms by member
+// @Description  Retrieve all rooms a user has joined.
+// @Tags         room
+// @Produce      json
+// @Param        memberId path string true "Member UUID"
+// @Success      200 {object} response.Response[[]domain.Room] "Array of rooms"
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Router       /rooms/member/{memberId} [get]
+func (h *RoomHandlerImpl) ListRoomsByMemberId(c *echo.Context) error {
+	memberId, err := uuid.Parse(c.Param("memberId"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid member id"))
+	}
+
+	rooms, err := h.memberService.GetRoomsByUserId(c.Request().Context(), memberId)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, response.OK(rooms))
 }
 
 // ListUserRooms godoc

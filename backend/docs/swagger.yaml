@@ -17,38 +17,38 @@ definitions:
     - MessageTypeNOTICE
   domain.Room:
     properties:
-      createdAt:
+      created_at:
         type: string
-      deletedAt:
+      deleted_at:
         type: string
       description:
         type: string
       id:
         type: string
-      maxMembers:
+      max_members:
         type: integer
       name:
         type: string
-      ownerId:
+      owner_id:
         type: string
-      popAt:
+      pop_at:
         type: string
-      poppedAt:
+      popped_at:
         type: string
-      updatedAt:
+      updated_at:
         type: string
     type: object
   domain.RoomMember:
     properties:
-      joinedAt:
+      joined_at:
         type: string
-      leftAt:
+      left_at:
         type: string
       role:
         $ref: '#/definitions/github_com_Sephy314_chinwag_room_domain.Role'
-      roomId:
+      room_id:
         type: string
-      userId:
+      user_id:
         type: string
     type: object
   github_com_Sephy314_chinwag_room_domain.Role:
@@ -218,6 +218,13 @@ definitions:
       success:
         type: boolean
     type: object
+  structs.AddRoomMemberRequest:
+    properties:
+      role:
+        $ref: '#/definitions/github_com_Sephy314_chinwag_room_domain.Role'
+      user_id:
+        type: string
+    type: object
   structs.CreateInviteLinkRequest:
     properties:
       single_use:
@@ -247,9 +254,9 @@ definitions:
     properties:
       email:
         type: string
-      password:
+      name:
         type: string
-      username:
+      password:
         type: string
     type: object
   structs.InviteLinkResponse:
@@ -480,30 +487,6 @@ paths:
       summary: Delete a user
       tags:
       - auth
-    get:
-      description: Retrieve user information. The id parameter accepts either a UUID
-        (user ID) or an email address. If the parameter matches an email format, it
-        queries by email; otherwise, it queries by ID.
-      parameters:
-      - description: User ID (UUID) or email address
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: User found
-          schema:
-            $ref: '#/definitions/response.Response-structs_UserResponse'
-        "404":
-          description: User not found
-          schema:
-            $ref: '#/definitions/response.Response-any'
-      summary: Get user by ID
-      tags:
-      - auth
     put:
       consumes:
       - application/json
@@ -539,6 +522,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Update a user
+      tags:
+      - auth
+  /auth/user/email/{email}:
+    get:
+      description: Retrieve user information by email address
+      parameters:
+      - description: User email address
+        in: path
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User found
+          schema:
+            $ref: '#/definitions/response.Response-structs_UserResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.Response-any'
+      summary: Get user by email
+      tags:
+      - auth
+  /auth/user/id/{id}:
+    get:
+      description: Retrieve user information by UUID
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User found
+          schema:
+            $ref: '#/definitions/response.Response-structs_UserResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.Response-any'
+      summary: Get user by ID
       tags:
       - auth
   /auth/whoami:
@@ -578,9 +607,10 @@ paths:
       - chat
   /chat/rooms/{roomId}/messages:
     get:
-      description: Retrieve messages in a room with cursor-based pagination. Sorted
-        by created_at DESC. Provide the cursor from the previous response to fetch
-        the next page. Default limit is 50, max 200.
+      description: Retrieve messages in a room with cursor-based pagination. The user
+        must be a member of the room. Sorted by created_at DESC. Provide the cursor
+        from the previous response to fetch the next page. Default limit is 50, max
+        200.
       parameters:
       - description: Room UUID
         in: path
@@ -604,6 +634,10 @@ paths:
             $ref: '#/definitions/response.Response-array_structs_MessageResponse'
         "400":
           description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+        "403":
+          description: Not a member of this room
           schema:
             $ref: '#/definitions/response.Response-any'
       security:
@@ -698,7 +732,8 @@ paths:
       tags:
       - chat-message
     get:
-      description: Retrieve a single chat message by its UUID.
+      description: Retrieve a single chat message by its UUID. The user must be a
+        member of the room.
       parameters:
       - description: Room UUID
         in: path
@@ -719,6 +754,10 @@ paths:
             $ref: '#/definitions/response.Response-structs_MessageResponse'
         "400":
           description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+        "403":
+          description: Not a member of this room
           schema:
             $ref: '#/definitions/response.Response-any'
         "404":
@@ -819,32 +858,6 @@ paths:
       tags:
       - chat
   /rooms:
-    get:
-      description: Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms
-        joined). Pass exactly one query parameter.
-      parameters:
-      - description: Filter by owner UUID
-        in: query
-        name: ownerId
-        type: string
-      - description: Filter by member UUID
-        in: query
-        name: memberId
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Array of rooms
-          schema:
-            $ref: '#/definitions/response.Response-array_domain_Room'
-        "400":
-          description: Invalid UUID format or missing query parameter
-          schema:
-            $ref: '#/definitions/response.Response-any'
-      summary: List rooms
-      tags:
-      - room
     post:
       consumes:
       - application/json
@@ -1054,7 +1067,7 @@ paths:
         name: request
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/structs.AddRoomMemberRequest'
       produces:
       - application/json
       responses:
@@ -1107,6 +1120,10 @@ paths:
             $ref: '#/definitions/response.Response-any'
         "400":
           description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+        "403":
+          description: Admin permission is required
           schema:
             $ref: '#/definitions/response.Response-any'
         "404":
@@ -1245,6 +1262,76 @@ paths:
       summary: Join a room via invite link
       tags:
       - invite-link
+  /rooms/member/{memberId}:
+    get:
+      description: Retrieve all rooms a user has joined.
+      parameters:
+      - description: Member UUID
+        in: path
+        name: memberId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Array of rooms
+          schema:
+            $ref: '#/definitions/response.Response-array_domain_Room'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+      summary: List rooms by member
+      tags:
+      - room
+  /rooms/owner/{ownerId}:
+    get:
+      description: Retrieve all rooms owned by a specific user.
+      parameters:
+      - description: Owner UUID
+        in: path
+        name: ownerId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Array of rooms
+          schema:
+            $ref: '#/definitions/response.Response-array_domain_Room'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+      summary: List rooms by owner
+      tags:
+      - room
+  /users/{id}/rooms:
+    get:
+      description: Retrieve all rooms associated with a user — both rooms they own
+        and rooms they've joined. Duplicates are removed.
+      parameters:
+      - description: User UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Array of rooms
+          schema:
+            $ref: '#/definitions/response.Response-array_domain_Room'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+      summary: List rooms for a user
+      tags:
+      - room
 securityDefinitions:
   BearerAuth:
     in: header

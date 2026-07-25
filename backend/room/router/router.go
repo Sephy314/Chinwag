@@ -43,6 +43,8 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 	{
 		pub.GET("/health", roomHandler.Health)
 		pub.GET("/:id", roomHandler.GetRoom)
+		pub.GET("/owner/:ownerId", roomHandler.ListRoomsByOwnerId)
+		pub.GET("/member/:memberId", roomHandler.ListRoomsByMemberId)
 	}
 
 	e.GET("/users/:id/rooms", roomHandler.ListUserRooms)

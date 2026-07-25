@@ -187,9 +187,44 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/user/{id}": {
+        "/auth/user/email/{email}": {
             "get": {
-                "description": "Retrieve user information. The id parameter accepts either a UUID (user ID) or an email address. If the parameter matches an email format, it queries by email; otherwise, it queries by ID.",
+                "description": "Retrieve user information by email address",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get user by email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User email address",
+                        "name": "email",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-structs_UserResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/user/id/{id}": {
+            "get": {
+                "description": "Retrieve user information by UUID",
                 "produces": [
                     "application/json"
                 ],
@@ -200,7 +235,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "User ID (UUID) or email address",
+                        "description": "User ID (UUID)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -220,7 +255,9 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
+            }
+        },
+        "/auth/user/{id}": {
             "put": {
                 "security": [
                     {
@@ -368,7 +405,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retrieve messages in a room with cursor-based pagination. Sorted by created_at DESC. Provide the cursor from the previous response to fetch the next page. Default limit is 50, max 200.",
+                "description": "Retrieve messages in a room with cursor-based pagination. The user must be a member of the room. Sorted by created_at DESC. Provide the cursor from the previous response to fetch the next page. Default limit is 50, max 200.",
                 "produces": [
                     "application/json"
                 ],
@@ -406,6 +443,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid UUID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Not a member of this room",
                         "schema": {
                             "$ref": "#/definitions/response.Response-any"
                         }
@@ -482,7 +525,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retrieve a single chat message by its UUID.",
+                "description": "Retrieve a single chat message by its UUID. The user must be a member of the room.",
                 "produces": [
                     "application/json"
                 ],
@@ -515,6 +558,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid UUID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Not a member of this room",
                         "schema": {
                             "$ref": "#/definitions/response.Response-any"
                         }
@@ -719,44 +768,6 @@ const docTemplate = `{
             }
         },
         "/rooms": {
-            "get": {
-                "description": "Retrieve rooms filtered by ownerId (rooms owned) or memberId (rooms joined). Pass exactly one query parameter.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "room"
-                ],
-                "summary": "List rooms",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by owner UUID",
-                        "name": "ownerId",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by member UUID",
-                        "name": "memberId",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Array of rooms",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response-array_domain_Room"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid UUID format or missing query parameter",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response-any"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -872,6 +883,76 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "User is already a member",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/rooms/member/{memberId}": {
+            "get": {
+                "description": "Retrieve all rooms a user has joined.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "room"
+                ],
+                "summary": "List rooms by member",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Member UUID",
+                        "name": "memberId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of rooms",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-array_domain_Room"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid UUID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/rooms/owner/{ownerId}": {
+            "get": {
+                "description": "Retrieve all rooms owned by a specific user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "room"
+                ],
+                "summary": "List rooms by owner",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Owner UUID",
+                        "name": "ownerId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of rooms",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-array_domain_Room"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid UUID format",
                         "schema": {
                             "$ref": "#/definitions/response.Response-any"
                         }
@@ -1153,7 +1234,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/structs.AddRoomMemberRequest"
                         }
                     }
                 ],
@@ -1355,8 +1436,49 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.Response-any"
                         }
                     },
+                    "403": {
+                        "description": "Admin permission is required",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    },
                     "404": {
                         "description": "Room, user, or membership not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/rooms": {
+            "get": {
+                "description": "Retrieve all rooms associated with a user — both rooms they own and rooms they've joined. Duplicates are removed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "room"
+                ],
+                "summary": "List rooms for a user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of rooms",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-array_domain_Room"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid UUID format",
                         "schema": {
                             "$ref": "#/definitions/response.Response-any"
                         }
@@ -1387,10 +1509,10 @@ const docTemplate = `{
         "domain.Room": {
             "type": "object",
             "properties": {
-                "createdAt": {
+                "created_at": {
                     "type": "string"
                 },
-                "deletedAt": {
+                "deleted_at": {
                     "type": "string"
                 },
                 "description": {
@@ -1399,22 +1521,22 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "maxMembers": {
+                "max_members": {
                     "type": "integer"
                 },
                 "name": {
                     "type": "string"
                 },
-                "ownerId": {
+                "owner_id": {
                     "type": "string"
                 },
-                "popAt": {
+                "pop_at": {
                     "type": "string"
                 },
-                "poppedAt": {
+                "popped_at": {
                     "type": "string"
                 },
-                "updatedAt": {
+                "updated_at": {
                     "type": "string"
                 }
             }
@@ -1422,19 +1544,19 @@ const docTemplate = `{
         "domain.RoomMember": {
             "type": "object",
             "properties": {
-                "joinedAt": {
+                "joined_at": {
                     "type": "string"
                 },
-                "leftAt": {
+                "left_at": {
                     "type": "string"
                 },
                 "role": {
                     "$ref": "#/definitions/github_com_Sephy314_chinwag_room_domain.Role"
                 },
-                "roomId": {
+                "room_id": {
                     "type": "string"
                 },
-                "userId": {
+                "user_id": {
                     "type": "string"
                 }
             }
@@ -1688,6 +1810,17 @@ const docTemplate = `{
                 }
             }
         },
+        "structs.AddRoomMemberRequest": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "$ref": "#/definitions/github_com_Sephy314_chinwag_room_domain.Role"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "structs.CreateInviteLinkRequest": {
             "type": "object",
             "properties": {
@@ -1733,10 +1866,10 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
-                "password": {
+                "name": {
                     "type": "string"
                 },
-                "username": {
+                "password": {
                     "type": "string"
                 }
             }

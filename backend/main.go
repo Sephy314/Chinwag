@@ -1,7 +1,7 @@
 // @title Chinwag API
 // @version 1.0
 // @description Chinwag Chat Application API
-// @host localhost:10080
+// @host localhost:8000
 // @BasePath /
 // @securityDefinitions.apikey BearerAuth
 // @in header
