@@ -64,10 +64,16 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
 
-	ownerId, err := utils.GetUserIdByEchoContext(c)
+	ownerIdStr, err := utils.GetUserIdByEchoContext(c)
 
 	if err != nil {
 		return echo.ErrUnauthorized
+	}
+
+	ownerId, err := uuid.Parse(*ownerIdStr)
+
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
 	}
 
 	ctx := context.WithValue(c.Request().Context(), "ownerId", ownerId)

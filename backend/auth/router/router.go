@@ -1,11 +1,13 @@
 package router
 
 import (
+	"context"
 	"log"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/handler"
 	"github.com/Sephy314/chinwag/auth/repo"
+	"github.com/Sephy314/chinwag/auth/scheduler"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/conn/bridge"
@@ -15,7 +17,7 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider) *service.UserService {
+func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksService service.JwksServiceInterface) *service.UserService {
 
 	conns, err := conn.NewConnection()
 
@@ -26,19 +28,17 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider) *servic
 	cacheRedis := cache.NewRedisCache(conns.Rds)
 
 	userRepo := repo.NewUserRepository(conns.DB)
-	jwksRepo := repo.NewJwtRepository(conns.DB)
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
 	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Hour*24*14)
 
-	jwksService := service.NewJwksService(jwksRepo)
+	keyRotationScheduler := scheduler.NewKeyRotationScheduler(jwksService, scheduler.NextMidnight())
+	go keyRotationScheduler.Start(context.Background())
+
 	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, roomMember, unitOfWork)
 	jwtService := service.NewJwtService(refreshTokenService, jwksService)
 
 	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService)
-
-	keyProvider.InjectProvider(jwksService)
-	log.Println("Key Provider Injected")
 
 	userHandler := handler.NewUserHandler(userService)
 	jwksHandler := handler.NewJwksHandler(jwksService)

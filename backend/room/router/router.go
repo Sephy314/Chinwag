@@ -54,6 +54,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 			log.Println(err)
 			return echo.ErrUnauthorized
 		},
+
 	}))
 	{
 		priv.POST("", roomHandler.CreateRoom)
