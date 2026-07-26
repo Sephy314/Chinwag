@@ -93,6 +93,15 @@ func SetUpRouter() (*echo.Echo, error) {
 	e.Use(appMiddleware.RequestIDInjector())
 	e.Use(appMiddleware.ResponseIDInjector())
 	e.Use(middleware.RequestLogger())
+	
+	e.Use(middleware.RateLimiterWithConfig(
+		middleware.RateLimiterConfig{
+			Store: middleware.NewRateLimiterMemoryStore(10),
+			IdentifierExtractor: func(c *echo.Context) (string, error) {
+				return c.RealIP(), nil
+			},
+		},
+	))
 
 	e.Use(middleware.Recover())
 

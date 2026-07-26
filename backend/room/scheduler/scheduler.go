@@ -62,8 +62,8 @@ func (s *PopScheduler) Start(ctx context.Context) {
 			rows, err := s.popper.PopRooms(ctx)
 			if err != nil {
 				log.Printf("pop scheduler error: %v", err)
-			} else if rows > 0 {
-				log.Printf("popped %d room(s)", rows)
+			} else {
+				log.Printf("pop scheduler tick: popped %d room(s)", rows)
 			}
 		case <-s.stop:
 			log.Println("pop scheduler stopped")

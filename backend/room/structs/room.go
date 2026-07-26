@@ -39,3 +39,11 @@ type RoomWithRole struct {
 	domain.Room
 	Role *domain.Role `json:"role,omitempty"`
 }
+
+type RoomMemberResponse struct {
+	RoomId   string    `json:"room_id"`
+	UserId   string    `json:"user_id"`
+	UserName string    `json:"user_name"`
+	Role     int       `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
+}

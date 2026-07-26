@@ -1101,6 +1101,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/rooms/{id}/pop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Immediately pop a chat room, making it read-only. The authenticated user must be an admin or owner of the room.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "room"
+                ],
+                "summary": "Pop a chat room",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Room UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid UUID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Admin permission is required",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    },
+                    "410": {
+                        "description": "Room has already been popped",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response-any"
+                        }
+                    }
+                }
+            }
+        },
         "/rooms/{roomId}/invite": {
             "post": {
                 "security": [
@@ -1171,7 +1223,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Retrieve all members of a chat room.",
+                "description": "Retrieve all members of a chat room with user details.",
                 "produces": [
                     "application/json"
                 ],
@@ -1190,9 +1242,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Array of room members",
+                        "description": "Array of room members with user info",
                         "schema": {
-                            "$ref": "#/definitions/response.Response-array_domain_RoomMember"
+                            "$ref": "#/definitions/response.Response-array_structs_RoomMemberResponse"
                         }
                     },
                     "400": {
@@ -1615,7 +1667,7 @@ const docTemplate = `{
                 }
             }
         },
-        "response.Response-array_domain_RoomMember": {
+        "response.Response-array_structs_MessageResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1624,7 +1676,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/domain.RoomMember"
+                        "$ref": "#/definitions/structs.MessageResponse"
                     }
                 },
                 "message": {
@@ -1639,7 +1691,7 @@ const docTemplate = `{
                 }
             }
         },
-        "response.Response-array_structs_MessageResponse": {
+        "response.Response-array_structs_RoomMemberResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -1648,7 +1700,7 @@ const docTemplate = `{
                 "data": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/structs.MessageResponse"
+                        "$ref": "#/definitions/structs.RoomMemberResponse"
                     }
                 },
                 "message": {
@@ -1932,6 +1984,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "structs.RoomMemberResponse": {
+            "type": "object",
+            "properties": {
+                "joined_at": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "integer"
+                },
+                "room_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "user_name": {
                     "type": "string"
                 }
             }

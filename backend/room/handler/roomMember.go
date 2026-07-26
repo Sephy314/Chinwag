@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/room/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
@@ -23,12 +24,14 @@ type RoomMemberHandler interface {
 type RoomMemberHandlerImpl struct {
 	service     service.RoomMemberServiceInterface
 	roomService service.RoomServiceInterface
+	user        bridge.UserProvider
 }
 
-func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService service.RoomServiceInterface) *RoomMemberHandlerImpl {
+func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService service.RoomServiceInterface, user bridge.UserProvider) *RoomMemberHandlerImpl {
 	return &RoomMemberHandlerImpl{
 		service:     s,
 		roomService: roomService,
+		user:        user,
 	}
 }
 
@@ -127,12 +130,12 @@ func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 
 // ListMembers godoc
 // @Summary      List room members
-// @Description  Retrieve all members of a chat room.
+// @Description  Retrieve all members of a chat room with user details.
 // @Tags         room-member
 // @Produce      json
 // @Security     BearerAuth
 // @Param        roomId path string true "Room UUID"
-// @Success      200 {object} response.Response[[]domain.RoomMember] "Array of room members"
+// @Success      200 {object} response.Response[[]structs.RoomMemberResponse] "Array of room members with user info"
 // @Failure      400 {object} response.Response[any] "Invalid UUID format"
 // @Router       /rooms/{roomId}/members [get]
 func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
@@ -146,7 +149,21 @@ func (h *RoomMemberHandlerImpl) ListMembers(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, response.OK(members))
+	result := make([]structs.RoomMemberResponse, len(members))
+	for i, m := range members {
+		r := structs.RoomMemberResponse{
+			RoomId:   m.RoomId.String(),
+			UserId:   m.UserId.String(),
+			Role:     int(m.Role),
+			JoinedAt: m.JoinedAt,
+		}
+		if user, err := h.user.GetUser(c.Request().Context(), m.UserId.String()); err == nil {
+			r.UserName = user.Name
+		}
+		result[i] = r
+	}
+
+	return c.JSON(http.StatusOK, response.OK(result))
 }
 
 // GetMember godoc

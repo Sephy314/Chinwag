@@ -33,7 +33,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 	roomMemberService := service.NewRoomMemberService(roomMemberRepo, roomRepo, user, unitOfWork)
 	inviteLinkService := service.NewInviteLinkService(cacheRedis, roomMemberService, user, roomRepo)
 	roomHandler := handler.NewRoomHandler(roomService, roomMemberService)
-	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService)
+	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService, user)
 	inviteLinkHandler := handler.NewInviteLinkHandler(inviteLinkService)
 
 	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute)

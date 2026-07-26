@@ -88,13 +88,13 @@ definitions:
       success:
         type: boolean
     type: object
-  response.Response-array_domain_RoomMember:
+  response.Response-array_structs_MessageResponse:
     properties:
       code:
         type: string
       data:
         items:
-          $ref: '#/definitions/domain.RoomMember'
+          $ref: '#/definitions/structs.MessageResponse'
         type: array
       message:
         type: string
@@ -104,13 +104,13 @@ definitions:
       success:
         type: boolean
     type: object
-  response.Response-array_structs_MessageResponse:
+  response.Response-array_structs_RoomMemberResponse:
     properties:
       code:
         type: string
       data:
         items:
-          $ref: '#/definitions/structs.MessageResponse'
+          $ref: '#/definitions/structs.RoomMemberResponse'
         type: array
       message:
         type: string
@@ -297,6 +297,19 @@ definitions:
       room_id:
         type: string
       updated_at:
+        type: string
+    type: object
+  structs.RoomMemberResponse:
+    properties:
+      joined_at:
+        type: string
+      role:
+        type: integer
+      room_id:
+        type: string
+      user_id:
+        type: string
+      user_name:
         type: string
     type: object
   structs.UpdateMessageRequest:
@@ -984,6 +997,40 @@ paths:
       summary: Update a chat room
       tags:
       - room
+  /rooms/{id}/pop:
+    post:
+      description: Immediately pop a chat room, making it read-only. The authenticated
+        user must be an admin or owner of the room.
+      parameters:
+      - description: Room UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response-any'
+        "400":
+          description: Invalid UUID format
+          schema:
+            $ref: '#/definitions/response.Response-any'
+        "403":
+          description: Admin permission is required
+          schema:
+            $ref: '#/definitions/response.Response-any'
+        "410":
+          description: Room has already been popped
+          schema:
+            $ref: '#/definitions/response.Response-any'
+      security:
+      - BearerAuth: []
+      summary: Pop a chat room
+      tags:
+      - room
   /rooms/{roomId}/invite:
     post:
       consumes:
@@ -1027,7 +1074,7 @@ paths:
       - invite-link
   /rooms/{roomId}/members:
     get:
-      description: Retrieve all members of a chat room.
+      description: Retrieve all members of a chat room with user details.
       parameters:
       - description: Room UUID
         in: path
@@ -1038,9 +1085,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: Array of room members
+          description: Array of room members with user info
           schema:
-            $ref: '#/definitions/response.Response-array_domain_RoomMember'
+            $ref: '#/definitions/response.Response-array_structs_RoomMemberResponse'
         "400":
           description: Invalid UUID format
           schema:

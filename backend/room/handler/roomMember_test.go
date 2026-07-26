@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/room/domain"
 	"github.com/Sephy314/chinwag/room/handler"
 	"github.com/Sephy314/chinwag/room/structs"
@@ -88,10 +89,22 @@ func (m *MockRoomMemberService) UpdateRoomMember(ctx context.Context, userId, ro
 	return args.Get(0).(*domain.RoomMember), args.Error(1)
 }
 
+type MockUserProvider struct {
+	mock.Mock
+}
+
+func (m *MockUserProvider) GetUser(ctx context.Context, id string) (*bridge.UserInfo, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*bridge.UserInfo), args.Error(1)
+}
+
 func TestRoomMemberHandler_AddMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()
@@ -139,7 +152,7 @@ func TestRoomMemberHandler_AddMember_Success(t *testing.T) {
 func TestRoomMemberHandler_AddMember_InvalidRoomId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -154,7 +167,7 @@ func TestRoomMemberHandler_AddMember_InvalidRoomId(t *testing.T) {
 func TestRoomMemberHandler_RemoveMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()
@@ -197,7 +210,7 @@ func TestRoomMemberHandler_RemoveMember_Success(t *testing.T) {
 func TestRoomMemberHandler_RemoveMember_InvalidRoomId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -214,7 +227,7 @@ func TestRoomMemberHandler_RemoveMember_InvalidRoomId(t *testing.T) {
 func TestRoomMemberHandler_RemoveMember_InvalidUserId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -231,15 +244,20 @@ func TestRoomMemberHandler_RemoveMember_InvalidUserId(t *testing.T) {
 func TestRoomMemberHandler_ListMembers_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	mockUser := new(MockUserProvider)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, mockUser)
 
 	roomID := uuid.New()
+	user1 := uuid.New()
+	user2 := uuid.New()
 	members := []domain.RoomMember{
-		{UserId: uuid.New(), RoomId: roomID, Role: domain.MEMBER},
-		{UserId: uuid.New(), RoomId: roomID, Role: domain.ADMIN},
+		{UserId: user1, RoomId: roomID, Role: domain.MEMBER},
+		{UserId: user2, RoomId: roomID, Role: domain.ADMIN},
 	}
 
 	mockSvc.On("GetUserByRoomId", mock.Anything, roomID).Return(members, nil)
+	mockUser.On("GetUser", mock.Anything, user1.String()).Return(&bridge.UserInfo{Id: user1.String(), Name: "alice"}, nil)
+	mockUser.On("GetUser", mock.Anything, user2.String()).Return(&bridge.UserInfo{Id: user2.String(), Name: "bob"}, nil)
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -249,10 +267,12 @@ func TestRoomMemberHandler_ListMembers_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp response.Response[[]domain.RoomMember]
+	var resp response.Response[[]structs.RoomMemberResponse]
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Len(t, resp.Data, 2)
+	assert.Equal(t, "alice", resp.Data[0].UserName)
+	assert.Equal(t, "bob", resp.Data[1].UserName)
 
 	mockSvc.AssertExpectations(t)
 }
@@ -260,7 +280,7 @@ func TestRoomMemberHandler_ListMembers_Success(t *testing.T) {
 func TestRoomMemberHandler_ListMembers_InvalidRoomId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -275,7 +295,7 @@ func TestRoomMemberHandler_ListMembers_InvalidRoomId(t *testing.T) {
 func TestRoomMemberHandler_GetMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()
@@ -309,7 +329,7 @@ func TestRoomMemberHandler_GetMember_Success(t *testing.T) {
 func TestRoomMemberHandler_GetMember_InvalidRoomId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -325,7 +345,7 @@ func TestRoomMemberHandler_GetMember_InvalidRoomId(t *testing.T) {
 func TestRoomMemberHandler_GetMember_InvalidUserId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -341,7 +361,7 @@ func TestRoomMemberHandler_GetMember_InvalidUserId(t *testing.T) {
 func TestRoomMemberHandler_RemoveMember_NotFound(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()
@@ -378,7 +398,7 @@ func TestRoomMemberHandler_RemoveMember_NotFound(t *testing.T) {
 func TestRoomMemberHandler_UpdateMember_Success(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()
@@ -430,7 +450,7 @@ func TestRoomMemberHandler_UpdateMember_Success(t *testing.T) {
 func TestRoomMemberHandler_UpdateMember_InvalidRoomId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -450,7 +470,7 @@ func TestRoomMemberHandler_UpdateMember_InvalidRoomId(t *testing.T) {
 func TestRoomMemberHandler_UpdateMember_InvalidUserId(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -470,7 +490,7 @@ func TestRoomMemberHandler_UpdateMember_InvalidUserId(t *testing.T) {
 func TestRoomMemberHandler_UpdateMember_Forbidden(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()
@@ -506,7 +526,7 @@ func TestRoomMemberHandler_UpdateMember_Forbidden(t *testing.T) {
 func TestRoomMemberHandler_UpdateMember_NotFound(t *testing.T) {
 	mockSvc := new(MockRoomMemberService)
 	mockRoomSvc := new(MockRoomService)
-	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc)
+	h := handler.NewRoomMemberHandler(mockSvc, mockRoomSvc, new(MockUserProvider))
 
 	userID := uuid.New()
 	roomID := uuid.New()

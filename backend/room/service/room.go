@@ -44,6 +44,12 @@ func (r *RoomService) CreateRoom(ctx context.Context, request structs.CreateRoom
 
 	popAt := now.Add(defaultPopDuration)
 	if request.PopAt != nil {
+		if request.PopAt.Before(now) {
+			return nil, &errs.AppError{
+				Status:  http.StatusBadRequest,
+				Message: "pop_at must be in the future",
+			}
+		}
 		popAt = *request.PopAt
 	}
 
