@@ -20,6 +20,7 @@ interface AuthContextType {
   login: (data: LoginRequest) => Promise<void>
   register: (data: RegisterRequest) => Promise<void>
   logout: () => void
+  checkSession: () => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -83,6 +84,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/login")
   }, [router])
 
+  const checkSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
+      if (res.success && res.data?.user) {
+        setUser(res.data.user)
+        setIsLoading(false)
+        return true
+      }
+    } catch {
+      // not authenticated
+    }
+    setUser(null)
+    setIsLoading(false)
+    return false
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -92,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        checkSession,
       }}
     >
       {children}

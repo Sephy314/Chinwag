@@ -27,6 +27,11 @@ func (m *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
 	return args.Error(0)
 }
 
+func (m *UserRepo) CreateOAuthUser(ctx context.Context, user domain.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
 func (m *UserRepo) GetUser(ctx context.Context, id string) (*domain.User, error) {
 	args := m.Called(ctx, id)
 

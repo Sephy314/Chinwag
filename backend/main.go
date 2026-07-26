@@ -12,9 +12,12 @@ import (
 	"log"
 
 	"github.com/Sephy314/chinwag/router"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	e, err := router.SetUpRouter()
 
 	if err != nil {

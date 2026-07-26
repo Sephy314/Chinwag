@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/handler"
+	"github.com/Sephy314/chinwag/auth/oauth"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/auth/scheduler"
 	"github.com/Sephy314/chinwag/auth/service"
@@ -57,6 +58,15 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 
 		authPub.POST("/refresh", refreshTokenHandler.Refresh)
 
+		googleCfg := oauth.LoadGoogleConfig()
+		if googleCfg.IsValid() {
+			frontendURL := "http://localhost:3000"
+			googleOAuthHandler := oauth.NewGoogleOAuthHandler(googleCfg, userService, jwksService, refreshTokenService, frontendURL)
+			authPub.GET("/google", googleOAuthHandler.HandleRedirect)
+			authPub.GET("/google/callback", googleOAuthHandler.HandleCallback)
+		} else {
+			log.Println("Google OAuth not configured (missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URL)")
+		}
 	}
 
 	authPriv := e.Group("/auth")

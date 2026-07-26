@@ -4,6 +4,8 @@ export const API_PATHS = {
     login: "/auth/login",
     register: "/auth/user",
     user: (id: string) => `/auth/user/${id}`,
+    google: "/auth/google",
+    googleCallback: "/auth/google/callback",
   },
   rooms: {
     list: (userId: string) => `/users/${userId}/rooms`,

@@ -10,6 +10,7 @@ import (
 
 type UserRepository interface {
 	CreateUser(ctx context.Context, user domain.User) error
+	CreateOAuthUser(ctx context.Context, user domain.User) error
 	GetUser(ctx context.Context, id string) (*domain.User, error)
 	UpdateUser(ctx context.Context, user domain.User) error
 	DeleteUser(ctx context.Context, id string) error
@@ -48,6 +49,32 @@ func (r *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
 		user.Name,
 		user.Email,
 		user.Password,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *UserRepo) CreateOAuthUser(ctx context.Context, user domain.User) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO users (id, name, email, password, provider, provider_id)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (email) DO UPDATE SET
+		   name = EXCLUDED.name,
+		   provider = EXCLUDED.provider,
+		   provider_id = EXCLUDED.provider_id,
+		   deleted_at = NULL,
+		   updated_at = NOW()`,
+		user.Id,
+		user.Name,
+		user.Email,
+		user.Password,
+		user.Provider,
+		user.ProviderID,
 	)
 
 	if err != nil {

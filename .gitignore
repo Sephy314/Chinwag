@@ -3,3 +3,4 @@
 ./frontend/
 .idea
 ./backend/Makefile
+.env

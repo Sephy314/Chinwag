@@ -148,6 +148,16 @@ func (s *UserService) SetRoomMemberProvider(provider bridge.RoomMemberProvider) 
 	s.RoomMember = provider
 }
 
+func (s *UserService) CreateOAuthUser(ctx context.Context, user domain.User) error {
+	if s.uow == nil {
+		return s.Repo.CreateOAuthUser(ctx, user)
+	}
+
+	return s.uow.Do(ctx, func(txCtx context.Context, tx repo.Transaction) error {
+		return tx.UserRepo().CreateOAuthUser(txCtx, user)
+	})
+}
+
 func (s *UserService) Login(ctx context.Context, email string, pw string) (*structs.TokenSet, error) {
 	user, err := s.Repo.GetUserByEmail(ctx, email)
 	if err != nil {

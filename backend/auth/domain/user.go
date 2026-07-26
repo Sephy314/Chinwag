@@ -7,14 +7,16 @@ import (
 )
 
 type User struct {
-	Id        string     `db:"id"`
-	Name      string     `db:"name"`
-	Email     string     `db:"email"`
-	Password  string     `db:"password"`
-	Role      Role       `db:"role"`
-	CreatedAt time.Time  `db:"created_at"`
-	UpdatedAt time.Time  `db:"updated_at"`
-	DeletedAt *time.Time `db:"deleted_at"`
+	Id         string     `db:"id"`
+	Name       string     `db:"name"`
+	Email      string     `db:"email"`
+	Password   string     `db:"password"`
+	Role       Role       `db:"role"`
+	Provider   string     `db:"provider"`
+	ProviderID *string    `db:"provider_id"`
+	CreatedAt  time.Time  `db:"created_at"`
+	UpdatedAt  time.Time  `db:"updated_at"`
+	DeletedAt  *time.Time `db:"deleted_at"`
 }
 
 func (u User) ToProjection() structs.UserResponse {

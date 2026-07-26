@@ -31,6 +31,9 @@ func ResponseIDInjector() echo.MiddlewareFunc {
 			if len(path) >= 8 && path[:8] == "/swagger" {
 				return next(c)
 			}
+			if len(path) >= 12 && path[:12] == "/auth/google" {
+				return next(c)
+			}
 
 			rid, _ := echo.ContextGet[string](c, response.RequestIDKey)
 			if rid == "" {
