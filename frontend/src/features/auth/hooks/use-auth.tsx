@@ -78,7 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [login],
   )
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await apiPost(API_PATHS.auth.logout, undefined, false)
+    } catch {
+      // ignore errors
+    }
     setUser(null)
     setAccessToken(null)
     router.push("/login")

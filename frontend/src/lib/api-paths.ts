@@ -6,6 +6,7 @@ export const API_PATHS = {
     user: (id: string) => `/auth/user/${id}`,
     google: "/auth/google",
     googleCallback: "/auth/google/callback",
+    logout: "/auth/logout",
   },
   rooms: {
     list: (userId: string) => `/users/${userId}/rooms`,

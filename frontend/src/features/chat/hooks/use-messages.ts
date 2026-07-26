@@ -55,9 +55,15 @@ export function useMessages(roomId: string) {
           case "new_message": {
             const msg = event.data as Message
             if (msg && msg.id) {
+              const data = pages[0].data.filter(
+                (m) =>
+                  !(m.id.startsWith("optimistic-") &&
+                    m.author_id === msg.author_id &&
+                    m.content === msg.content),
+              )
               pages[0] = {
                 ...pages[0],
-                data: [msg, ...pages[0].data],
+                data: [msg, ...data],
               }
             }
             break

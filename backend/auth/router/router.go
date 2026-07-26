@@ -53,6 +53,7 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 		authPub.POST("/user", userHandler.CreateUser)
 
 		authPub.POST("/login", userHandler.Login)
+		authPub.POST("/logout", userHandler.Logout)
 
 		authPub.GET("/.well-known/jwks.json", jwksHandler.ServeJWKS)
 

@@ -184,6 +184,27 @@ func (h *UserHandler) Login(c *echo.Context) error {
 	}))
 }
 
+// Logout godoc
+// @Summary      Logout
+// @Description  Clear the refresh token cookie
+// @Tags         auth
+// @Produce      json
+// @Success      200 {object} response.Response[any]
+// @Router       /auth/logout [post]
+func (h *UserHandler) Logout(c *echo.Context) error {
+	c.SetCookie(&http.Cookie{
+		Name:     "refresh",
+		Value:    "",
+		Path:     "/auth",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+
+	return c.JSON(http.StatusOK, response.OK[any](nil))
+}
+
 // WhoAmI godoc
 // @Summary      Get current user info
 // @Description  Retrieve the currently authenticated user's information. Requires a valid JWT access token in the Authorization header (Bearer token). The token's subject claim is used to look up the user.
