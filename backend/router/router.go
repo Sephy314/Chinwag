@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	authRepo "github.com/Sephy314/chinwag/auth/repo"
 	authRouter "github.com/Sephy314/chinwag/auth/router"
@@ -13,10 +14,8 @@ import (
 	"github.com/Sephy314/chinwag/conn/bridge"
 	appMiddleware "github.com/Sephy314/chinwag/middleware"
 	roomRouter "github.com/Sephy314/chinwag/room/router"
-	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
 	"github.com/Sephy314/chinwag/shared/logger"
-	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -57,46 +56,17 @@ func SetUpRouter(log logger.Logger) (*echo.Echo, error) {
 		return nil, errors.New("no echo object")
 	}
 
-	e.HTTPErrorHandler = func(c *echo.Context, err error) {
-		if r, rErr := echo.UnwrapResponse(c.Response()); rErr == nil && r.Committed {
-			return
-		}
-
-		code := http.StatusInternalServerError
-		var msg string
-
-		var sc echo.HTTPStatusCoder
-		if errors.As(err, &sc) {
-			if tmp := sc.StatusCode(); tmp != 0 {
-				code = tmp
-			}
-		}
-
-		if he, ok := errors.AsType[*echo.HTTPError](err); ok {
-			msg = he.Message
-			if msg == "" {
-				msg = http.StatusText(code)
-			}
-		} else if appErr, ok := errors.AsType[*errs.AppError](err); ok {
-			code = appErr.Status
-			msg = appErr.Message
-		} else {
-			msg = http.StatusText(code)
-		}
-
-		log.Error("http error", "status", code, "message", msg)
-
-		_ = c.JSON(code, response.Error(msg))
-	}
+	e.HTTPErrorHandler = appMiddleware.GlobalErrorHandler(log)
 
 	e.Use(middleware.RequestID())
 	e.Use(appMiddleware.RequestIDInjector())
 	e.Use(appMiddleware.ResponseIDInjector())
 	e.Use(middleware.RequestLogger())
 	
+	rateLimiterStore := appMiddleware.NewRedisRateLimiterStore(conns.Rds, 10, 10, time.Minute)
 	e.Use(middleware.RateLimiterWithConfig(
 		middleware.RateLimiterConfig{
-			Store: middleware.NewRateLimiterMemoryStore(10),
+			Store: rateLimiterStore,
 			IdentifierExtractor: func(c *echo.Context) (string, error) {
 				return c.RealIP(), nil
 			},
