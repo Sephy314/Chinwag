@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/Sephy314/chinwag/conn"
@@ -13,12 +12,13 @@ import (
 	"github.com/Sephy314/chinwag/room/scheduler"
 	"github.com/Sephy314/chinwag/room/service"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/google/uuid"
 	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
 )
 
-func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberProvider {
+func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider, log logger.Logger) bridge.RoomMemberProvider {
 	conns, err := conn.NewConnection()
 	if err != nil {
 		panic(err)
@@ -36,7 +36,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService, user)
 	inviteLinkHandler := handler.NewInviteLinkHandler(inviteLinkService)
 
-	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute)
+	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute, log)
 	go popScheduler.Start(context.Background())
 
 	pub := e.Group("/rooms")
@@ -53,7 +53,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 	priv.Use(echojwt.WithConfig(echojwt.Config{
 		KeyFunc: keyProvider.KeyFunc,
 		ErrorHandler: func(c *echo.Context, err error) error {
-			log.Println(err)
+			log.Error("jwt error", "error", err)
 			return echo.ErrUnauthorized
 		},
 	}))
@@ -74,7 +74,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 		priv.POST("/invite/:token/join", inviteLinkHandler.JoinByInviteLink)
 	}
 
-	log.Println("room routes registered")
+	log.Info("room routes registered")
 
 	return newRoomMemberAdapter(roomMemberService)
 }

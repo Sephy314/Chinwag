@@ -2,9 +2,9 @@ package scheduler
 
 import (
 	"context"
-	"log"
 	"time"
 
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -40,13 +40,15 @@ type PopScheduler struct {
 	popper   Popper
 	interval time.Duration
 	stop     chan struct{}
+	log      logger.Logger
 }
 
-func NewPopScheduler(p Popper, interval time.Duration) *PopScheduler {
+func NewPopScheduler(p Popper, interval time.Duration, log logger.Logger) *PopScheduler {
 	return &PopScheduler{
 		popper:   p,
 		interval: interval,
 		stop:     make(chan struct{}),
+		log:      log,
 	}
 }
 
@@ -54,22 +56,22 @@ func (s *PopScheduler) Start(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	log.Println("pop scheduler started")
+	s.log.Info("pop scheduler started")
 
 	for {
 		select {
 		case <-ticker.C:
 			rows, err := s.popper.PopRooms(ctx)
 			if err != nil {
-				log.Printf("pop scheduler error: %v", err)
+				s.log.Error("pop scheduler error", "error", err)
 			} else {
-				log.Printf("pop scheduler tick: popped %d room(s)", rows)
+				s.log.Info("pop scheduler tick", "popped", rows)
 			}
 		case <-s.stop:
-			log.Println("pop scheduler stopped")
+			s.log.Info("pop scheduler stopped")
 			return
 		case <-ctx.Done():
-			log.Println("pop scheduler stopped: context cancelled")
+			s.log.Info("pop scheduler stopped: context cancelled")
 			return
 		}
 	}

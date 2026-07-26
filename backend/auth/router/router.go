@@ -2,7 +2,6 @@ package router
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/handler"
@@ -14,11 +13,12 @@ import (
 	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/conn/cache"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
+	"github.com/Sephy314/chinwag/shared/logger"
 	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
 )
 
-func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksService service.JwksServiceInterface) *service.UserService {
+func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksService service.JwksServiceInterface, log logger.Logger) *service.UserService {
 
 	conns, err := conn.NewConnection()
 
@@ -33,15 +33,15 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 
 	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Hour*24*14)
 
-	keyRotationScheduler := scheduler.NewKeyRotationScheduler(jwksService, scheduler.NextMidnight())
+	keyRotationScheduler := scheduler.NewKeyRotationScheduler(jwksService, scheduler.NextMidnight(), log)
 	go keyRotationScheduler.Start(context.Background())
 
-	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, roomMember, unitOfWork)
+	userService := service.NewUserService(cacheRedis, userRepo, jwksService, refreshTokenService, roomMember, log, unitOfWork)
 	jwtService := service.NewJwtService(refreshTokenService, jwksService)
 
 	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService)
 
-	userHandler := handler.NewUserHandler(userService)
+	userHandler := handler.NewUserHandler(userService, log)
 	jwksHandler := handler.NewJwksHandler(jwksService)
 
 	authPub := e.Group("/auth")
@@ -62,11 +62,11 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 		googleCfg := oauth.LoadGoogleConfig()
 		if googleCfg.IsValid() {
 			frontendURL := "http://localhost:3000"
-			googleOAuthHandler := oauth.NewGoogleOAuthHandler(googleCfg, userService, jwksService, refreshTokenService, frontendURL)
+			googleOAuthHandler := oauth.NewGoogleOAuthHandler(googleCfg, userService, jwksService, refreshTokenService, frontendURL, log)
 			authPub.GET("/google", googleOAuthHandler.HandleRedirect)
 			authPub.GET("/google/callback", googleOAuthHandler.HandleCallback)
 		} else {
-			log.Println("Google OAuth not configured (missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URL)")
+			log.Warn("google oauth not configured (missing GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, or GOOGLE_REDIRECT_URL)")
 		}
 	}
 
@@ -75,7 +75,7 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 	authPriv.Use(echojwt.WithConfig(echojwt.Config{
 		KeyFunc: keyProvider.KeyFunc,
 		ErrorHandler: func(c *echo.Context, err error) error {
-			log.Println(err)
+			log.Error("jwt error", "error", err)
 			return echo.ErrUnauthorized
 		},
 	}))
@@ -86,7 +86,7 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 		authPriv.DELETE("/user/:id", userHandler.DeleteUser)
 	}
 
-	log.Println("auth routes registered")
+	log.Info("auth routes registered")
 
 	return userService
 }

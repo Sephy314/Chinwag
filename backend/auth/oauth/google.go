@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
@@ -45,6 +45,7 @@ type GoogleOAuthHandler struct {
 	JwkService     service.JwksServiceInterface
 	RefreshService service.RefreshTokenServiceInterface
 	FrontendURL    string
+	log            logger.Logger
 }
 
 func NewGoogleOAuthHandler(
@@ -53,6 +54,7 @@ func NewGoogleOAuthHandler(
 	jwkSvc service.JwksServiceInterface,
 	refreshSvc service.RefreshTokenServiceInterface,
 	frontendURL string,
+	log logger.Logger,
 ) *GoogleOAuthHandler {
 	return &GoogleOAuthHandler{
 		Config:         cfg,
@@ -60,11 +62,14 @@ func NewGoogleOAuthHandler(
 		JwkService:     jwkSvc,
 		RefreshService: refreshSvc,
 		FrontendURL:    frontendURL,
+		log:            log,
 	}
 }
 
 func (h *GoogleOAuthHandler) HandleRedirect(c *echo.Context) error {
 	state := uuid.Must(uuid.NewV7()).String()
+
+	h.log.Info("oauth redirect initiated", "state", state)
 
 	params := url.Values{
 		"client_id":     {h.Config.ClientID},
@@ -84,30 +89,36 @@ func (h *GoogleOAuthHandler) HandleCallback(c *echo.Context) error {
 	state := c.QueryParam("state")
 	errParam := c.QueryParam("error")
 
+	h.log.Info("oauth callback received", "state", state)
+
 	if errParam != "" {
+		h.log.Warn("oauth: user denied access", "error", errParam)
 		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_denied")
 	}
 
 	if code == "" || state == "" {
+		h.log.Warn("oauth: missing code or state", "code_empty", code == "", "state_empty", state == "")
 		return c.JSON(http.StatusBadRequest, response.Error("missing code or state"))
 	}
 
 	tokenResp, err := h.exchangeCode(code)
 	if err != nil {
-		log.Printf("oauth: token exchange failed: %v", err)
+		h.log.Error("oauth: token exchange failed", "error", err)
 		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_exchange_failed")
 	}
 
 	userInfo, err := h.fetchUserInfo(tokenResp.AccessToken)
 	if err != nil {
-		log.Printf("oauth: fetch user info failed: %v", err)
+		h.log.Error("oauth: fetch user info failed", "error", err)
 		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_userinfo_failed")
 	}
+
+	h.log.Info("oauth: user info fetched", "email", userInfo.Email)
 
 	ctx := c.Request().Context()
 	tokens, err := h.findOrCreateUser(ctx, userInfo)
 	if err != nil {
-		log.Printf("oauth: find or create user failed: %v", err)
+		h.log.Error("oauth: find or create user failed", "email", userInfo.Email, "error", err)
 		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_user_failed")
 	}
 
@@ -121,6 +132,7 @@ func (h *GoogleOAuthHandler) HandleCallback(c *echo.Context) error {
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
 
+	h.log.Info("oauth: login successful", "email", userInfo.Email)
 	redirectURL := fmt.Sprintf("%s/oauth/callback?token=%s", h.FrontendURL, tokens.AccessToken)
 	return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }

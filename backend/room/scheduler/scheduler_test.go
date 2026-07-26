@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,7 +24,7 @@ func (m *mockPopper) PopRooms(_ context.Context) (int64, error) {
 
 func TestPopScheduler_CallsPopRooms(t *testing.T) {
 	mp := &mockPopper{returnRows: 3}
-	s := NewPopScheduler(mp, 10*time.Millisecond)
+	s := NewPopScheduler(mp, 10*time.Millisecond, logger.New())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -35,7 +36,7 @@ func TestPopScheduler_CallsPopRooms(t *testing.T) {
 
 func TestPopScheduler_ErrorDoesNotPanic(t *testing.T) {
 	mp := &mockPopper{returnErr: errors.New("db down")}
-	s := NewPopScheduler(mp, 10*time.Millisecond)
+	s := NewPopScheduler(mp, 10*time.Millisecond, logger.New())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
 	defer cancel()
@@ -48,7 +49,7 @@ func TestPopScheduler_ErrorDoesNotPanic(t *testing.T) {
 
 func TestPopScheduler_Stop(t *testing.T) {
 	mp := &mockPopper{returnRows: 0}
-	s := NewPopScheduler(mp, 10*time.Millisecond)
+	s := NewPopScheduler(mp, 10*time.Millisecond, logger.New())
 
 	ctx := context.Background()
 	done := make(chan struct{})
@@ -70,7 +71,7 @@ func TestPopScheduler_Stop(t *testing.T) {
 
 func TestPopScheduler_ContextCancel(t *testing.T) {
 	mp := &mockPopper{returnRows: 0}
-	s := NewPopScheduler(mp, 10*time.Millisecond)
+	s := NewPopScheduler(mp, 10*time.Millisecond, logger.New())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

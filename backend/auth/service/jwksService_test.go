@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -113,7 +114,7 @@ func TestJwksService_LoadJWKS(t *testing.T) {
 		nil,
 	)
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	err := svc.LoadJWKS(context.Background())
 
@@ -140,7 +141,7 @@ func TestJwksService_LoadJWKS_FirstLoadRotate(t *testing.T) {
 		mock.Anything,
 	).Return(time.Now(), nil)
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	err := svc.LoadJWKS(context.Background())
 
@@ -167,7 +168,7 @@ func TestJwksService_GetJwkSet(t *testing.T) {
 		nil,
 	)
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	set, err := svc.GetJwkSet(context.Background())
 
@@ -205,7 +206,7 @@ func TestJwksService_GetActiveKey(t *testing.T) {
 		nil,
 	)
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	key, err := svc.GetActiveKey(context.Background())
 
@@ -251,7 +252,7 @@ func TestJwksService_Rotate(t *testing.T) {
 		nil,
 	)
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	err := svc.Rotate(context.Background())
 
@@ -278,7 +279,7 @@ func TestJwksService_LoadJWKS_NoReload(t *testing.T) {
 		nil,
 	)
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	err := svc.LoadJWKS(context.Background())
 
@@ -334,7 +335,7 @@ func TestJwksService_LoadJWKS_ActiveKeyExpired(t *testing.T) {
 		nil,
 	).Once()
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	require.NotNil(t, svc)
 	repo.AssertCalled(t, "ExpireActiveKey", mock.Anything)
@@ -395,7 +396,7 @@ func TestJwksService_Rotate_ActiveKeyExpired(t *testing.T) {
 		nil,
 	).Once()
 
-	svc := NewJwksService(repo)
+	svc := NewJwksService(repo, logger.New())
 
 	require.NotNil(t, svc)
 	repo.AssertCalled(t, "ExpireActiveKey", mock.Anything)

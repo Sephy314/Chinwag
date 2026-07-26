@@ -14,6 +14,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/oauth"
 	"github.com/Sephy314/chinwag/auth/service"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/labstack/echo/v5/echotest"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -48,7 +49,7 @@ func setupHandler(t *testing.T) (*oauth.GoogleOAuthHandler, *mocked.UserRepo, *m
 		RedirectURL:  "http://localhost:8000/auth/google/callback",
 	}
 
-	h := oauth.NewGoogleOAuthHandler(cfg, svc, jwkSvc, refreshSvc, "http://localhost:3000")
+	h := oauth.NewGoogleOAuthHandler(cfg, svc, jwkSvc, refreshSvc, "http://localhost:3000", logger.New())
 	return h, userRepo, jwkSvc, refreshSvc
 }
 

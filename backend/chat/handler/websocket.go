@@ -2,11 +2,11 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -40,14 +40,16 @@ type Hub struct {
 	unregister chan *Client
 	broadcast  chan BroadcastMessage
 	mu         sync.RWMutex
+	log        logger.Logger
 }
 
-func NewHub() *Hub {
+func NewHub(log logger.Logger) *Hub {
 	return &Hub{
 		rooms:      make(map[uuid.UUID]map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan BroadcastMessage, 256),
+		log:        log,
 	}
 }
 
@@ -131,7 +133,7 @@ func (h *Hub) ServeWS(c *echo.Context) error {
 
 	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
-		log.Println("ws upgrade error:", err)
+		h.log.Error("ws upgrade error", "error", err)
 		return err
 	}
 

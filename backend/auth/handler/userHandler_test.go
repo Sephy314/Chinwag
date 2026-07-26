@@ -13,6 +13,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/echotest"
@@ -30,8 +31,8 @@ func TestUserHandler_Login_UserNotFound(t *testing.T) {
 		On("GetUserByEmail", mock.Anything, "notfound@example.com").
 		Return((*domain.User)(nil), sql.ErrNoRows)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		Headers: map[string][]string{
@@ -70,8 +71,8 @@ func TestUserHandler_Login_WrongPassword(t *testing.T) {
 
 	mockedRepo.On("GetUserByEmail", mock.Anything, user.Email).Return(user, nil)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		Headers: map[string][]string{
@@ -101,8 +102,8 @@ func TestUserHandler_GetUser_WithEmail_Success(t *testing.T) {
 		On("GetUserByEmail", mock.Anything, "john@example.com").
 		Return(user, nil)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -133,8 +134,8 @@ func TestUserHandler_GetUser_WithEmail_NotFound(t *testing.T) {
 		On("GetUserByEmail", mock.Anything, "notfound@example.com").
 		Return((*domain.User)(nil), sql.ErrNoRows)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -163,8 +164,8 @@ func TestUserHandler_GetUser_WithID_Success(t *testing.T) {
 		On("GetUser", mock.Anything, "uid-456").
 		Return(user, nil)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -195,8 +196,8 @@ func TestUserHandler_GetUser_WithID_NotFound(t *testing.T) {
 		On("GetUser", mock.Anything, "uid-nonexistent").
 		Return((*domain.User)(nil), sql.ErrNoRows)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -224,8 +225,8 @@ func TestUserHandler_UpdateUser_Success(t *testing.T) {
 	mockedRepo.On("GetUser", mock.Anything, "uid-1").Return(existing, nil)
 	mockedRepo.On("UpdateUser", mock.Anything, mock.AnythingOfType("domain.User")).Return(nil)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -258,8 +259,8 @@ func TestUserHandler_UpdateUser_NotFound(t *testing.T) {
 	mockedRepo.On("GetUser", mock.Anything, "uid-nonexistent").
 		Return((*domain.User)(nil), sql.ErrNoRows)
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -282,8 +283,8 @@ func TestUserHandler_UpdateUser_InvalidBody(t *testing.T) {
 	mockedJwk := &mocked.JwkService{}
 	mockedRefresh := &mocked.RefreshTokenService{}
 
-	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil)
-	h := handler.NewUserHandler(svc)
+	svc := service.NewUserService(mockedCache, mockedRepo, mockedJwk, mockedRefresh, nil, logger.New())
+	h := handler.NewUserHandler(svc, logger.New())
 
 	rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{

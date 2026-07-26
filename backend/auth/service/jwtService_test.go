@@ -8,6 +8,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/service"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ func TestJwksService_Rotate(t *testing.T) {
 		On("Load", mock.Anything).
 		Return([]domain.SigningKeyEntity{}, nil)
 
-	svc := service.NewJwksService(mockRepo)
+	svc := service.NewJwksService(mockRepo, logger.New())
 
 	err := svc.Rotate(ctx)
 
@@ -61,7 +62,7 @@ func TestJwksService_LoadJWKS_NoReload(t *testing.T) {
 		On("Load", ctx).
 		Return([]domain.SigningKeyEntity{}, nil)
 
-	svc := service.NewJwksService(mockRepo)
+	svc := service.NewJwksService(mockRepo, logger.New())
 
 	err := svc.LoadJWKS(ctx)
 

@@ -15,6 +15,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/conn/cache"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func NewTestUserService() (*service.UserService, *mocked.UserRepo) {
 
 	repos := &mocked.UserRepo{}
 
-	svc := service.NewUserService(&mockedCache, repos, &mockedJwkService, &mockedRefreshService, nil)
+	svc := service.NewUserService(&mockedCache, repos, &mockedJwkService, &mockedRefreshService, nil, logger.New())
 
 	return svc, repos
 }
@@ -65,9 +66,7 @@ func TestUserService_GetUser(t *testing.T) {
 
 	mockRepo := new(mocked.UserRepo)
 
-	svc := &service.UserService{
-		Repo: mockRepo,
-	}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	expected := &domain.User{
 		Id:    "123",
@@ -92,9 +91,7 @@ func TestUserService_DeleteUser(t *testing.T) {
 
 	mockRepo := new(mocked.UserRepo)
 
-	svc := &service.UserService{
-		Repo: mockRepo,
-	}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	mockRepo.
 		On("DeleteUser", ctx, "123").
@@ -112,9 +109,7 @@ func TestUserService_GetUser_Error(t *testing.T) {
 
 	mockRepo := new(mocked.UserRepo)
 
-	svc := &service.UserService{
-		Repo: mockRepo,
-	}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	expectedErr := errors.New("db error")
 
@@ -163,11 +158,7 @@ func newSigningKey(t *testing.T) *domain.SigningKey {
 }
 
 func newService(repo *mocked.UserRepo, jwk *mocked.JwkService, refresh *mocked.RefreshTokenService) *service.UserService {
-	return &service.UserService{
-		Repo:           repo,
-		JwkService:     jwk,
-		RefreshService: refresh,
-	}
+	return service.NewUserService(nil, repo, jwk, refresh, nil, logger.New())
 }
 
 func TestUserService_Login(t *testing.T) {
@@ -285,7 +276,7 @@ func TestUserService_UpdateUser_Success(t *testing.T) {
 	ctx := context.Background()
 
 	mockRepo := new(mocked.UserRepo)
-	svc := &service.UserService{Repo: mockRepo}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	existing := &domain.User{
 		Id:    "uid-1",
@@ -311,7 +302,7 @@ func TestUserService_UpdateUser_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	mockRepo := new(mocked.UserRepo)
-	svc := &service.UserService{Repo: mockRepo}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	newName := "newName"
 	req := structs.UpdateUserReq{Name: &newName}
@@ -329,7 +320,7 @@ func TestUserService_UpdateUser_PasswordHashed(t *testing.T) {
 	ctx := context.Background()
 
 	mockRepo := new(mocked.UserRepo)
-	svc := &service.UserService{Repo: mockRepo}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	existing := &domain.User{
 		Id:       "uid-1",
@@ -360,7 +351,7 @@ func TestUserService_UpdateUser_DBError(t *testing.T) {
 	ctx := context.Background()
 
 	mockRepo := new(mocked.UserRepo)
-	svc := &service.UserService{Repo: mockRepo}
+	svc := service.NewUserService(nil, mockRepo, nil, nil, nil, logger.New())
 
 	existing := &domain.User{
 		Id:    "uid-1",

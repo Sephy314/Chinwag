@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +23,7 @@ func (m *mockRotator) Rotate(_ context.Context) error {
 
 func TestKeyRotationScheduler_CallsRotate(t *testing.T) {
 	mr := &mockRotator{}
-	s := NewKeyRotationScheduler(mr, 10*time.Millisecond)
+	s := NewKeyRotationScheduler(mr, 10*time.Millisecond, logger.New())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -34,7 +35,7 @@ func TestKeyRotationScheduler_CallsRotate(t *testing.T) {
 
 func TestKeyRotationScheduler_ErrorDoesNotPanic(t *testing.T) {
 	mr := &mockRotator{returnErr: errors.New("rotate failed")}
-	s := NewKeyRotationScheduler(mr, 10*time.Millisecond)
+	s := NewKeyRotationScheduler(mr, 10*time.Millisecond, logger.New())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
 	defer cancel()
@@ -47,7 +48,7 @@ func TestKeyRotationScheduler_ErrorDoesNotPanic(t *testing.T) {
 
 func TestKeyRotationScheduler_Stop(t *testing.T) {
 	mr := &mockRotator{}
-	s := NewKeyRotationScheduler(mr, 10*time.Millisecond)
+	s := NewKeyRotationScheduler(mr, 10*time.Millisecond, logger.New())
 
 	ctx := context.Background()
 	done := make(chan struct{})
@@ -69,7 +70,7 @@ func TestKeyRotationScheduler_Stop(t *testing.T) {
 
 func TestKeyRotationScheduler_ContextCancel(t *testing.T) {
 	mr := &mockRotator{}
-	s := NewKeyRotationScheduler(mr, 10*time.Millisecond)
+	s := NewKeyRotationScheduler(mr, 10*time.Millisecond, logger.New())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

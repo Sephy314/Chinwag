@@ -12,6 +12,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/handler"
 	"github.com/Sephy314/chinwag/auth/mocked"
 	"github.com/Sephy314/chinwag/auth/service"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -35,7 +36,7 @@ func TestJwksHandler_ServeJWKS_Success(t *testing.T) {
 		On("Count", mock.Anything).
 		Return(new(int64(1)), nil)
 
-	mockService := service.NewJwksService(&mockedRepo)
+	mockService := service.NewJwksService(&mockedRepo, logger.New())
 
 	hdl := handler.NewJwksHandler(mockService)
 

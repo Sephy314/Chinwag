@@ -2,8 +2,9 @@ package scheduler
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/Sephy314/chinwag/shared/logger"
 )
 
 type KeyRotator interface {
@@ -14,13 +15,15 @@ type KeyRotationScheduler struct {
 	rotator  KeyRotator
 	interval time.Duration
 	stop     chan struct{}
+	log      logger.Logger
 }
 
-func NewKeyRotationScheduler(r KeyRotator, interval time.Duration) *KeyRotationScheduler {
+func NewKeyRotationScheduler(r KeyRotator, interval time.Duration, log logger.Logger) *KeyRotationScheduler {
 	return &KeyRotationScheduler{
 		rotator:  r,
 		interval: interval,
 		stop:     make(chan struct{}),
+		log:      log,
 	}
 }
 
@@ -28,22 +31,22 @@ func (s *KeyRotationScheduler) Start(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	log.Println("key rotation scheduler started")
+	s.log.Info("key rotation scheduler started")
 
 	for {
 		select {
 		case <-ticker.C:
 			err := s.rotator.Rotate(ctx)
 			if err != nil {
-				log.Printf("key rotation scheduler error: %v", err)
+				s.log.Error("key rotation scheduler error", "error", err)
 			} else {
-				log.Println("key rotation completed")
+				s.log.Info("key rotation completed")
 			}
 		case <-s.stop:
-			log.Println("key rotation scheduler stopped")
+			s.log.Info("key rotation scheduler stopped")
 			return
 		case <-ctx.Done():
-			log.Println("key rotation scheduler stopped: context cancelled")
+			s.log.Info("key rotation scheduler stopped: context cancelled")
 			return
 		}
 	}

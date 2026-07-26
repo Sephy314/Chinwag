@@ -7,6 +7,7 @@ import (
 	"github.com/Sephy314/chinwag/auth/service"
 	"github.com/Sephy314/chinwag/auth/structs"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v5"
@@ -14,11 +15,13 @@ import (
 
 type UserHandler struct {
 	Service *service.UserService
+	log     logger.Logger
 }
 
-func NewUserHandler(s *service.UserService) *UserHandler {
+func NewUserHandler(s *service.UserService, log logger.Logger) *UserHandler {
 	hdl := UserHandler{
 		Service: s,
+		log:     log,
 	}
 	return &hdl
 }
@@ -161,11 +164,13 @@ func (h *UserHandler) UpdateUser(c *echo.Context) error {
 func (h *UserHandler) Login(c *echo.Context) error {
 	var req structs.LoginReq
 	if err := c.Bind(&req); err != nil {
+		h.log.Warn("login: invalid request body", "error", err)
 		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
 
 	tokens, err := h.Service.Login(c.Request().Context(), req.Email, req.Password)
 	if err != nil {
+		h.log.Warn("login: authentication failed", "email", req.Email, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
@@ -179,6 +184,7 @@ func (h *UserHandler) Login(c *echo.Context) error {
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
 
+	h.log.Info("login: success", "email", req.Email)
 	return c.JSON(http.StatusOK, response.OK(map[string]string{
 		"token": tokens.AccessToken,
 	}))

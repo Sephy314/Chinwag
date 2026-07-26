@@ -3,7 +3,6 @@ package router
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 
 	authRepo "github.com/Sephy314/chinwag/auth/repo"
@@ -16,6 +15,7 @@ import (
 	roomRouter "github.com/Sephy314/chinwag/room/router"
 	"github.com/Sephy314/chinwag/shared/errs"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/response"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -40,16 +40,16 @@ func (a *userServiceAdapter) GetUser(ctx context.Context, id string) (*bridge.Us
 	}, nil
 }
 
-func SetUpRouter() (*echo.Echo, error) {
+func SetUpRouter(log logger.Logger) (*echo.Echo, error) {
 	conns, err := conn.NewConnection()
 	if err != nil {
 		return nil, err
 	}
 
 	jwksRepo := authRepo.NewJwtRepository(conns.DB)
-	jwksService := authService.NewJwksService(jwksRepo)
+	jwksService := authService.NewJwksService(jwksRepo, log)
 	keyProvider.InjectProvider(jwksService)
-	log.Println("Key Provider Injected")
+	log.Info("key provider injected")
 
 	e := echo.New()
 
@@ -84,7 +84,7 @@ func SetUpRouter() (*echo.Echo, error) {
 			msg = http.StatusText(code)
 		}
 
-		log.Printf("Error %d: %s", code, msg)
+		log.Error("http error", "status", code, "message", msg)
 
 		_ = c.JSON(code, response.Error(msg))
 	}
@@ -132,11 +132,11 @@ func SetUpRouter() (*echo.Echo, error) {
 		return nil, nil
 	})
 
-	roomMemberProv := roomRouter.SetUpRoomRouter(e, userAdapter)
+	roomMemberProv := roomRouter.SetUpRoomRouter(e, userAdapter, log)
 
-	chatRouter.SetUpChatRouter(e, userAdapter, roomMemberProv)
+	chatRouter.SetUpChatRouter(e, userAdapter, roomMemberProv, log)
 
-	userService := authRouter.SetUpAuthRouter(e, roomMemberProv, jwksService)
+	userService := authRouter.SetUpAuthRouter(e, roomMemberProv, jwksService, log)
 	userAdapter.SetUserService(&userServiceAdapter{svc: userService})
 
 	return e, nil

@@ -9,6 +9,7 @@ import (
 	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/conn/cache"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/patch"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ type UserService struct {
 	RefreshService RefreshTokenServiceInterface
 	RoomMember     bridge.RoomMemberProvider
 	uow            repo.UnitOfWork
+	log            logger.Logger
 }
 
 func NewUserService(
@@ -30,6 +32,7 @@ func NewUserService(
 	jwkService JwksServiceInterface,
 	refreshService RefreshTokenServiceInterface,
 	roomMember bridge.RoomMemberProvider,
+	log logger.Logger,
 	uow ...repo.UnitOfWork,
 ) *UserService {
 	var unitOfWork repo.UnitOfWork
@@ -44,6 +47,7 @@ func NewUserService(
 		RefreshService: refreshService,
 		RoomMember:     roomMember,
 		uow:            unitOfWork,
+		log:            log,
 	}
 }
 
@@ -159,8 +163,11 @@ func (s *UserService) CreateOAuthUser(ctx context.Context, user domain.User) err
 }
 
 func (s *UserService) Login(ctx context.Context, email string, pw string) (*structs.TokenSet, error) {
+	s.log.Info("login attempt", "email", email)
+
 	user, err := s.Repo.GetUserByEmail(ctx, email)
 	if err != nil {
+		s.log.Warn("login failed: user not found", "email", email)
 		return nil, errs.ErrInvalidCreds
 	}
 
@@ -168,17 +175,20 @@ func (s *UserService) Login(ctx context.Context, email string, pw string) (*stru
 		[]byte(user.Password),
 		[]byte(pw),
 	); err != nil {
+		s.log.Warn("login failed: wrong password", "email", email)
 		return nil, errs.ErrInvalidCreds
 	}
 
 	key, err := s.JwkService.GetActiveKey(ctx)
 
 	if err != nil {
+		s.log.Error("login failed: could not get active key", "email", email, "error", err)
 		return nil, err
 	}
 
 	accessToken, err := utils.NewToken(user.Id, user.Role, key.PrivateKey, key.Kid)
 	if err != nil {
+		s.log.Error("login failed: could not generate token", "email", email, "error", err)
 		return nil, err
 	}
 
@@ -190,8 +200,11 @@ func (s *UserService) Login(ctx context.Context, email string, pw string) (*stru
 	})
 
 	if err != nil {
+		s.log.Error("login failed: could not insert refresh token", "email", email, "error", err)
 		return nil, err
 	}
+
+	s.log.Info("login successful", "email", email, "userId", user.Id)
 
 	keyPair := structs.TokenSet{
 		AccessToken:  *accessToken,

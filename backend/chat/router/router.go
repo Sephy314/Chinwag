@@ -1,21 +1,19 @@
 package router
 
 import (
-	"log"
-
 	"github.com/Sephy314/chinwag/chat/handler"
 	"github.com/Sephy314/chinwag/chat/repo"
 	"github.com/Sephy314/chinwag/chat/service"
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/conn/bridge"
+	"github.com/Sephy314/chinwag/shared/keyProvider"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/google/uuid"
 	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
-
-	"github.com/Sephy314/chinwag/shared/keyProvider"
 )
 
-func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomMemberProvider) {
+func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomMemberProvider, log logger.Logger) {
 	conns, err := conn.NewConnection()
 	if err != nil {
 		panic(err)
@@ -24,7 +22,7 @@ func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomM
 	chatRepoImpl := repo.NewChatRepo(conns.DB)
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
-	hub := handler.NewHub()
+	hub := handler.NewHub(log)
 	go hub.Run()
 
 	broadcastFn := func(roomId uuid.UUID, event []byte) {
@@ -44,7 +42,7 @@ func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomM
 	priv.Use(echojwt.WithConfig(echojwt.Config{
 		KeyFunc: keyProvider.KeyFunc,
 		ErrorHandler: func(c *echo.Context, err error) error {
-			log.Println(err)
+			log.Error("jwt error", "error", err)
 			return echo.ErrUnauthorized
 		},
 	}))
@@ -56,5 +54,5 @@ func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomM
 		priv.DELETE("/rooms/:roomId/messages/:messageId", chatH.DeleteMessage)
 	}
 
-	log.Println("chat routes registered")
+	log.Info("chat routes registered")
 }

@@ -5,12 +5,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"log"
 	"time"
 
 	"github.com/Sephy314/chinwag/auth/domain"
 	"github.com/Sephy314/chinwag/auth/repo"
 	"github.com/Sephy314/chinwag/shared/errs"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/Sephy314/chinwag/shared/utils"
 	"github.com/google/uuid"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -27,17 +27,19 @@ type JwksService struct {
 	jwkSet  jwk.Set
 	repo    repo.JwksRepository
 	version time.Time
+	log     logger.Logger
 }
 
-func NewJwksService(repo repo.JwksRepository) *JwksService {
+func NewJwksService(repo repo.JwksRepository, log logger.Logger) *JwksService {
 	s := &JwksService{
 		jwkSet: jwk.NewSet(),
 		repo:   repo,
+		log:    log,
 	}
 
 	err := s.LoadJWKS(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to load JWKS", "error", err)
 	}
 
 	return s

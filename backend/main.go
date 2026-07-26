@@ -9,22 +9,22 @@
 package main
 
 import (
-	"log"
-
 	"github.com/Sephy314/chinwag/router"
+	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/joho/godotenv"
 )
 
 func main() {
 	_ = godotenv.Load()
 
-	e, err := router.SetUpRouter()
+	log := logger.New()
 
+	e, err := router.SetUpRouter(log)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("failed to setup router", "error", err)
 	}
 	err = e.Start("0.0.0.0:8000")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("server failed to start", "error", err)
 	}
 }
