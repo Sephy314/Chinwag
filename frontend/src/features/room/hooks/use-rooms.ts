@@ -13,8 +13,10 @@ import {
   createInviteLink,
   joinRoomViaInvite,
   popRoom,
+  updateRoomMember,
+  removeRoomMember,
 } from "@/features/room/api/room-api"
-import type { CreateRoomRequest, UpdateRoomRequest, CreateInviteLinkRequest } from "@/types"
+import type { CreateRoomRequest, UpdateRoomRequest, CreateInviteLinkRequest, UpdateRoomMemberRequest } from "@/types"
 import { Role } from "@/types"
 
 export function useRooms() {
@@ -139,6 +141,31 @@ export function usePopRoom(roomId: string) {
     mutationFn: () => popRoom(roomId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["room", roomId] })
+      queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
+    },
+  })
+}
+
+export function useUpdateRoomMember(roomId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ userId, data }: { userId: string; data: UpdateRoomMemberRequest }) =>
+      updateRoomMember(roomId, userId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roomMembers", roomId] })
+    },
+  })
+}
+
+export function useRemoveRoomMember(roomId: string) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+
+  return useMutation({
+    mutationFn: (userId: string) => removeRoomMember(roomId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roomMembers", roomId] })
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
     },
   })

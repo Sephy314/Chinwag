@@ -1,7 +1,7 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client"
 import { API_PATHS } from "@/lib/api-paths"
 import type { Room, RoomMember, InviteLink } from "@/types"
-import type { CreateRoomRequest, UpdateRoomRequest, CreateInviteLinkRequest } from "@/types"
+import type { CreateRoomRequest, UpdateRoomRequest, CreateInviteLinkRequest, UpdateRoomMemberRequest } from "@/types"
 
 export async function fetchRooms(userId: string) {
   return apiGet<Room[]>(API_PATHS.rooms.list(userId))
@@ -37,6 +37,10 @@ export async function addRoomMember(roomId: string, userId: string, role?: numbe
 
 export async function removeRoomMember(roomId: string, userId: string) {
   return apiDelete<void>(API_PATHS.rooms.member(roomId, userId))
+}
+
+export async function updateRoomMember(roomId: string, userId: string, data: UpdateRoomMemberRequest) {
+  return apiPut<void>(API_PATHS.rooms.member(roomId, userId), data)
 }
 
 export async function createInviteLink(roomId: string, data?: CreateInviteLinkRequest) {

@@ -1,8 +1,8 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { useParams } from "next/navigation"
-import { Hash, Link2, Shield, Flame, Users } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { Hash, Link2, Shield, Flame, Users, Settings } from "lucide-react"
 import { useRoom, useIsAdmin, usePopRoom } from "@/features/room/hooks/use-rooms"
 import { useMessages } from "@/features/chat/hooks/use-messages"
 import { MessageList } from "@/features/chat/components/message-list"
@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ChatPage() {
   const params = useParams<{ roomId: string }>()
+  const router = useRouter()
   const roomId = params.roomId
 
   const { data: roomData, isLoading: roomLoading } = useRoom(roomId)
@@ -130,6 +131,14 @@ export default function ChatPage() {
             </Button>
           </div>
         )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => router.push(`/chat/${roomId}/settings`)}
+          title="Room Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
       </div>
 
       <MessageList
