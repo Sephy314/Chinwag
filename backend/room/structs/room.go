@@ -34,3 +34,8 @@ type RoomUser struct {
 	RoomId uuid.UUID    `json:"roomId"`
 	Role   *domain.Role `json:"role,omitempty"`
 }
+
+type RoomWithRole struct {
+	domain.Room
+	Role *domain.Role `json:"role,omitempty"`
+}

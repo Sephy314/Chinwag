@@ -27,7 +27,7 @@ func NewRoomMemberRepo(db sqlx.ExtContext) *RoomMemberRepo {
 	return &RoomMemberRepo{db: db}
 }
 
-func (r *RoomMemberRepo) GetMembersByRoomId(ctx context.Context, userId uuid.UUID) ([]domain.RoomMember, error) {
+func (r *RoomMemberRepo) GetMembersByRoomId(ctx context.Context, roomId uuid.UUID) ([]domain.RoomMember, error) {
 	var members []domain.RoomMember
 	err := sqlx.SelectContext(
 		ctx,
@@ -38,13 +38,13 @@ func (r *RoomMemberRepo) GetMembersByRoomId(ctx context.Context, userId uuid.UUI
     			FROM room_member r
     			WHERE r.room_id = $1
     				AND r.left_at IS NULL`,
-		userId,
+		roomId,
 	)
 
 	return members, err
 }
 
-func (r *RoomMemberRepo) GetMemberByRoomIdAndMemberId(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) (domain.RoomMember, error) {
+func (r *RoomMemberRepo) GetMemberByRoomIdAndMemberId(ctx context.Context, roomId uuid.UUID, userId uuid.UUID) (domain.RoomMember, error) {
 	var member domain.RoomMember
 	err := sqlx.GetContext(
 		ctx,

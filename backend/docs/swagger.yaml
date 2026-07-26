@@ -336,7 +336,7 @@ definitions:
       name:
         type: string
     type: object
-host: localhost:10080
+host: localhost:8000
 info:
   contact: {}
   description: Chinwag Chat Application API

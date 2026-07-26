@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/shared/response"
@@ -118,4 +120,11 @@ func (w *bufferedJSONWriter) Write(b []byte) (int, error) {
 		w.wroteHeader = true
 	}
 	return w.ResponseWriter.Write(b)
+}
+
+func (w *bufferedJSONWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, errors.New("upstream ResponseWriter does not implement http.Hijacker")
 }

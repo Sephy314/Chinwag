@@ -264,9 +264,10 @@ func TestCreateInviteLink_PoppedRoom(t *testing.T) {
 	result, err := svc.CreateInviteLink(ctx, roomId, adminId, structs.CreateInviteLinkRequest{})
 
 	assert.Error(t, err)
-	assert.Nil(t, result)
 	assert.Equal(t, errs.ErrRoomPopped, err)
+	assert.Nil(t, result)
 
+	cache.AssertExpectations(t)
 	roomRepo.AssertExpectations(t)
 }
 
@@ -375,9 +376,10 @@ func TestJoinByInviteLink_Success(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.NoError(t, err)
+	assert.Equal(t, roomId, returnedRoomId)
 
 	cache.AssertExpectations(t)
 	roomRepo.AssertExpectations(t)
@@ -422,10 +424,11 @@ func TestJoinByInviteLink_AlreadyMember(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.Error(t, err)
 	assert.Equal(t, errs.ErrAlreadyMember, err)
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	cache.AssertExpectations(t)
 	roomMemberSvc.AssertExpectations(t)
@@ -461,10 +464,11 @@ func TestJoinByInviteLink_NonExistentUser(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.Error(t, err)
 	assert.Equal(t, errs.ErrUserDeleted, err)
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	cache.AssertExpectations(t)
 	userProvider.AssertExpectations(t)
@@ -500,10 +504,11 @@ func TestJoinByInviteLink_PoppedRoom(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.Error(t, err)
 	assert.Equal(t, errs.ErrRoomPopped, err)
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	cache.AssertExpectations(t)
 	roomRepo.AssertExpectations(t)
@@ -534,9 +539,10 @@ func TestJoinByInviteLink_DeletedRoom(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.Error(t, err)
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	cache.AssertExpectations(t)
 	roomRepo.AssertExpectations(t)
@@ -556,10 +562,11 @@ func TestJoinByInviteLink_ExpiredToken(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.Error(t, err)
 	assert.Equal(t, errs.ErrInviteNotFound, err)
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	cache.AssertExpectations(t)
 }
@@ -605,9 +612,10 @@ func TestJoinByInviteLink_SingleUseDeletesToken(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.NoError(t, err)
+	assert.Equal(t, roomId, returnedRoomId)
 
 	cache.AssertCalled(t, "Delete", ctx, inviteKeyPrefix+token)
 }
@@ -651,9 +659,10 @@ func TestJoinByInviteLink_MultiUseKeepsToken(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.NoError(t, err)
+	assert.Equal(t, roomId, returnedRoomId)
 
 	cache.AssertNotCalled(t, "Delete", ctx, inviteKeyPrefix+token)
 }
@@ -688,10 +697,11 @@ func TestJoinByInviteLink_UserServiceFailure(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	assert.Error(t, err)
 	assert.Equal(t, errs.ErrUserDeleted, err)
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	cache.AssertExpectations(t)
 	userProvider.AssertExpectations(t)
@@ -736,7 +746,7 @@ func TestJoinByInviteLink_InviteUserServiceDown(t *testing.T) {
 
 	svc := setupInviteLinkService(roomRepo, roomMemberSvc, userProvider, cache)
 
-	err := svc.JoinByInviteLink(ctx, token, userId)
+	returnedRoomId, err := svc.JoinByInviteLink(ctx, token, userId)
 
 	if err == nil {
 		t.Fatal("err should not be nil")
@@ -744,6 +754,7 @@ func TestJoinByInviteLink_InviteUserServiceDown(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "database connection lost")
+	assert.Equal(t, uuid.Nil, returnedRoomId)
 
 	roomMemberSvc.AssertExpectations(t)
 }

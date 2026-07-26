@@ -35,9 +35,9 @@ func (m *MockInviteLinkService) CreateInviteLink(ctx context.Context, roomId uui
 	return result, args.Error(1)
 }
 
-func (m *MockInviteLinkService) JoinByInviteLink(ctx context.Context, token string, userId uuid.UUID) error {
+func (m *MockInviteLinkService) JoinByInviteLink(ctx context.Context, token string, userId uuid.UUID) (uuid.UUID, error) {
 	args := m.Called(ctx, token, userId)
-	return args.Error(0)
+	return args.Get(0).(uuid.UUID), args.Error(1)
 }
 
 func TestCreateInviteLink_Success(t *testing.T) {
@@ -321,8 +321,9 @@ func TestJoinByInviteLink_Success(t *testing.T) {
 
 	token := uuid.New().String()
 	userID := uuid.New()
+	roomID := uuid.New()
 
-	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(nil)
+	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(roomID, nil)
 
 	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -343,10 +344,11 @@ func TestJoinByInviteLink_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp response.Response[any]
+	var resp response.Response[map[string]string]
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.Equal(t, true, resp.Success)
+	assert.Equal(t, roomID.String(), resp.Data["room_id"])
 
 	mockSvc.AssertExpectations(t)
 }
@@ -388,7 +390,7 @@ func TestJoinByInviteLink_ExpiredToken(t *testing.T) {
 	token := uuid.New().String()
 	userID := uuid.New()
 
-	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(errs.ErrInviteNotFound)
+	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(uuid.Nil, errs.ErrInviteNotFound)
 
 	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -425,7 +427,7 @@ func TestJoinByInviteLink_AlreadyMember(t *testing.T) {
 	token := uuid.New().String()
 	userID := uuid.New()
 
-	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(errs.ErrAlreadyMember)
+	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(uuid.Nil, errs.ErrAlreadyMember)
 
 	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -462,7 +464,7 @@ func TestJoinByInviteLink_PoppedRoom(t *testing.T) {
 	token := uuid.New().String()
 	userID := uuid.New()
 
-	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(errs.ErrRoomPopped)
+	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(uuid.Nil, errs.ErrRoomPopped)
 
 	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -499,7 +501,7 @@ func TestJoinByInviteLink_UserDeleted(t *testing.T) {
 	token := uuid.New().String()
 	userID := uuid.New()
 
-	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(errs.ErrUserDeleted)
+	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(uuid.Nil, errs.ErrUserDeleted)
 
 	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{
@@ -536,7 +538,7 @@ func TestJoinByInviteLink_InternalError(t *testing.T) {
 	token := uuid.New().String()
 	userID := uuid.New()
 
-	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(errors.New("database connection lost"))
+	mockSvc.On("JoinByInviteLink", mock.Anything, token, userID).Return(uuid.Nil, errors.New("database connection lost"))
 
 	c, rec := echotest.ContextConfig{
 		PathValues: []echo.PathValue{

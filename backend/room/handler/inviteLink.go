@@ -98,11 +98,12 @@ func (h *InviteLinkHandlerImpl) JoinByInviteLink(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
 	}
 
-	if err := h.inviteLinkSvc.JoinByInviteLink(c.Request().Context(), token, uid); err != nil {
+	roomId, err := h.inviteLinkSvc.JoinByInviteLink(c.Request().Context(), token, uid)
+	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, response.OK[any](nil))
+	return c.JSON(http.StatusOK, response.OK(map[string]string{"room_id": roomId.String()}))
 }
 
 var _ InviteLinkHandler = (*InviteLinkHandlerImpl)(nil)

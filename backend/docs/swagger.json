@@ -6,7 +6,7 @@
         "contact": {},
         "version": "1.0"
     },
-    "host": "localhost:10080",
+    "host": "localhost:8000",
     "basePath": "/",
     "paths": {
         "/auth/.well-known/jwks.json": {

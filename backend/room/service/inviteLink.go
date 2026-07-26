@@ -24,7 +24,7 @@ type inviteLinkData struct {
 
 type InviteLinkServiceInterface interface {
 	CreateInviteLink(ctx context.Context, roomId uuid.UUID, createdBy uuid.UUID, req structs.CreateInviteLinkRequest) (*structs.InviteLinkResponse, error)
-	JoinByInviteLink(ctx context.Context, token string, userId uuid.UUID) error
+	JoinByInviteLink(ctx context.Context, token string, userId uuid.UUID) (uuid.UUID, error)
 }
 
 type InviteLinkService struct {
@@ -99,40 +99,40 @@ func (s *InviteLinkService) CreateInviteLink(ctx context.Context, roomId uuid.UU
 	}, nil
 }
 
-func (s *InviteLinkService) JoinByInviteLink(ctx context.Context, token string, userId uuid.UUID) error {
+func (s *InviteLinkService) JoinByInviteLink(ctx context.Context, token string, userId uuid.UUID) (uuid.UUID, error) {
 	key := inviteKeyPrefix + token
 	jsonData, err := s.cache.Get(ctx, key)
 	if err != nil {
-		return errs.ErrInviteNotFound
+		return uuid.Nil, errs.ErrInviteNotFound
 	}
 
 	var data inviteLinkData
 	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
-		return errs.ErrInviteNotFound
+		return uuid.Nil, errs.ErrInviteNotFound
 	}
 
 	roomId, err := uuid.Parse(data.RoomId)
 	if err != nil {
-		return errs.ErrInviteNotFound
+		return uuid.Nil, errs.ErrInviteNotFound
 	}
 
 	room, err := s.roomRepo.GetRoomById(ctx, roomId)
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
 
 	if room.PoppedAt != nil {
-		return errs.ErrRoomPopped
+		return uuid.Nil, errs.ErrRoomPopped
 	}
 
 	user, err := s.userProvider.GetUser(ctx, userId.String())
 	if err != nil || user == nil {
-		return errs.ErrUserDeleted
+		return uuid.Nil, errs.ErrUserDeleted
 	}
 
 	existing, err := s.roomMemberSvc.GetUserByRoomIdAndUserId(ctx, userId, roomId)
 	if err == nil && existing != nil {
-		return errs.ErrAlreadyMember
+		return uuid.Nil, errs.ErrAlreadyMember
 	}
 
 	member := structs.RoomUser{
@@ -141,14 +141,14 @@ func (s *InviteLinkService) JoinByInviteLink(ctx context.Context, token string, 
 	}
 
 	if err := s.roomMemberSvc.InviteUser(ctx, member); err != nil {
-		return err
+		return uuid.Nil, err
 	}
 
 	if data.SingleUse {
 		_ = s.cache.Delete(ctx, key)
 	}
 
-	return nil
+	return roomId, nil
 }
 
 //
