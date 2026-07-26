@@ -41,6 +41,7 @@ type RoomMemberInfo struct {
 type RoomMemberProvider interface {
 	GetRoomsByUserId(ctx context.Context, userId string) ([]RoomInfo, error)
 	GetMembersByRoomId(ctx context.Context, roomId string) ([]RoomMemberInfo, error)
+	GetRoomById(ctx context.Context, roomId string) (*RoomInfo, error)
 }
 
 type UserServiceGetter interface {
@@ -70,15 +71,18 @@ func (a *UserAdapter) GetUser(ctx context.Context, id string) (*UserInfo, error)
 type RoomMemberAdapter struct {
 	getRoomsByUserId   func(ctx context.Context, userId string) ([]RoomInfo, error)
 	getMembersByRoomId func(ctx context.Context, roomId string) ([]RoomMemberInfo, error)
+	getRoomById        func(ctx context.Context, roomId string) (*RoomInfo, error)
 }
 
 func NewRoomMemberAdapter(
 	getRoomsByUserId func(ctx context.Context, userId string) ([]RoomInfo, error),
 	getMembersByRoomId func(ctx context.Context, roomId string) ([]RoomMemberInfo, error),
+	getRoomById func(ctx context.Context, roomId string) (*RoomInfo, error),
 ) *RoomMemberAdapter {
 	return &RoomMemberAdapter{
 		getRoomsByUserId:   getRoomsByUserId,
 		getMembersByRoomId: getMembersByRoomId,
+		getRoomById:        getRoomById,
 	}
 }
 
@@ -88,4 +92,8 @@ func (a *RoomMemberAdapter) GetRoomsByUserId(ctx context.Context, userId string)
 
 func (a *RoomMemberAdapter) GetMembersByRoomId(ctx context.Context, roomId string) ([]RoomMemberInfo, error) {
 	return a.getMembersByRoomId(ctx, roomId)
+}
+
+func (a *RoomMemberAdapter) GetRoomById(ctx context.Context, roomId string) (*RoomInfo, error) {
+	return a.getRoomById(ctx, roomId)
 }

@@ -61,6 +61,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider) bridge.RoomMemberPr
 		priv.POST("", roomHandler.CreateRoom)
 		priv.PUT("/:id", roomHandler.UpdateRoom)
 		priv.DELETE("/:id", roomHandler.DeleteRoom)
+		priv.POST("/:id/pop", roomHandler.PopRoom)
 
 		priv.POST("/:roomId/members", roomMemberHandler.AddMember)
 		priv.PUT("/:roomId/members/:userId", roomMemberHandler.UpdateMember)
@@ -125,6 +126,27 @@ func newRoomMemberAdapter(s *service.RoomMemberService) bridge.RoomMemberProvide
 				}
 			}
 			return result, nil
+		},
+		func(ctx context.Context, roomId string) (*bridge.RoomInfo, error) {
+			rid, err := uuid.Parse(roomId)
+			if err != nil {
+				return nil, err
+			}
+			room, err := s.GetRoomById(ctx, rid)
+			if err != nil {
+				return nil, err
+			}
+			return &bridge.RoomInfo{
+				Id:          room.Id.String(),
+				Name:        room.Name,
+				Description: room.Description,
+				MaxMembers:  room.MaxMembers,
+				OwnerId:     room.OwnerId.String(),
+				PopAt:       room.PopAt,
+				PoppedAt:    room.PoppedAt,
+				CreatedAt:   room.CreatedAt,
+				UpdatedAt:   room.UpdatedAt,
+			}, nil
 		},
 	)
 }

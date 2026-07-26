@@ -50,6 +50,11 @@ func (m *MockRoomRepoForMember) DeleteRoomById(ctx context.Context, roomId uuid.
 	return args.Error(0)
 }
 
+func (m *MockRoomRepoForMember) PopRoom(ctx context.Context, roomId uuid.UUID) error {
+	args := m.Called(ctx, roomId)
+	return args.Error(0)
+}
+
 func newNotPoppedRoomRepo(roomId uuid.UUID) *MockRoomRepoForMember {
 	mockRoomRepo := new(MockRoomRepoForMember)
 	mockRoomRepo.On("GetRoomById", mock.Anything, roomId).Return(domain.Room{

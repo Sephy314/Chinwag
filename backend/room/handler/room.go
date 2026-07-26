@@ -23,6 +23,7 @@ type RoomHandler interface {
 	ListUserRooms(c *echo.Context) error
 	UpdateRoom(c *echo.Context) error
 	DeleteRoom(c *echo.Context) error
+	PopRoom(c *echo.Context) error
 }
 
 type RoomHandlerImpl struct {
@@ -250,6 +251,49 @@ func (h *RoomHandlerImpl) DeleteRoom(c *echo.Context) error {
 	}
 
 	if err := h.service.DeleteRoom(c.Request().Context(), roomId); err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
+	return c.JSON(http.StatusOK, response.OK[any](nil))
+}
+
+// PopRoom godoc
+// @Summary      Pop a chat room
+// @Description  Immediately pop a chat room, making it read-only. The authenticated user must be an admin or owner of the room.
+// @Tags         room
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "Room UUID"
+// @Success      200 {object} response.Response[any]
+// @Failure      400 {object} response.Response[any] "Invalid UUID format"
+// @Failure      403 {object} response.Response[any] "Admin permission is required"
+// @Failure      410 {object} response.Response[any] "Room has already been popped"
+// @Router       /rooms/{id}/pop [post]
+func (h *RoomHandlerImpl) PopRoom(c *echo.Context) error {
+	roomId, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid room id"))
+	}
+
+	userIdStr, err := utils.GetUserIdByEchoContext(c)
+	if err != nil {
+		return echo.ErrUnauthorized
+	}
+
+	userId, err := uuid.Parse(*userIdStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error("invalid user id"))
+	}
+
+	ok, err := h.memberService.HasManagerPermission(c.Request().Context(), userId, roomId)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+	if !ok {
+		return c.JSON(http.StatusForbidden, response.Error("Admin permission is required"))
+	}
+
+	if err := h.service.PopRoom(c.Request().Context(), roomId); err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
 

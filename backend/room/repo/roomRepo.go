@@ -15,6 +15,7 @@ type RoomRepoInterface interface {
 	GetRoomsByOwnerId(context.Context, uuid.UUID) ([]domain.Room, error)
 	UpdateRoom(context.Context, domain.Room) error
 	DeleteRoomById(context.Context, uuid.UUID) error
+	PopRoom(context.Context, uuid.UUID) error
 }
 
 type RoomRepo struct {
@@ -107,6 +108,30 @@ func (r *RoomRepo) DeleteRoomById(ctx context.Context, req uuid.UUID) error {
 		ctx,
 		`UPDATE rooms SET deleted_at = now() WHERE id = $1 AND popped_at IS NULL`,
 		req,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *RoomRepo) PopRoom(ctx context.Context, roomId uuid.UUID) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE rooms SET popped_at = NOW(), updated_at = NOW()
+		 WHERE id = $1 AND popped_at IS NULL AND deleted_at IS NULL`,
+		roomId,
 	)
 
 	if err != nil {

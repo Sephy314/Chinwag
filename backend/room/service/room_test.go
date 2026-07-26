@@ -46,6 +46,11 @@ func (m *MockRoomRepo) UpdateRoom(ctx context.Context, room domain.Room) error {
 	return args.Error(0)
 }
 
+func (m *MockRoomRepo) PopRoom(ctx context.Context, roomId uuid.UUID) error {
+	args := m.Called(ctx, roomId)
+	return args.Error(0)
+}
+
 func TestCreateRoom_Success(t *testing.T) {
 	mockRepo := new(MockRoomRepo)
 	ownerId := uuid.New()

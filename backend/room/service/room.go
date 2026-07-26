@@ -21,6 +21,7 @@ type RoomServiceInterface interface {
 	GetRoomsByOwnerId(ctx context.Context, ownerId uuid.UUID) ([]domain.Room, error)
 	UpdateRoom(ctx context.Context, roomId uuid.UUID, req structs.UpdateRoomRequest) (*domain.Room, error)
 	DeleteRoom(ctx context.Context, roomId uuid.UUID) error
+	PopRoom(ctx context.Context, roomId uuid.UUID) error
 }
 
 type RoomService struct {
@@ -164,4 +165,17 @@ func NewRoomService(roomRepo repo.RoomRepoInterface, uow ...repo.UnitOfWork) *Ro
 		repo: roomRepo,
 		uow:  unitOfWork,
 	}
+}
+
+func (r *RoomService) PopRoom(ctx context.Context, roomId uuid.UUID) error {
+	room, err := r.repo.GetRoomById(ctx, roomId)
+	if err != nil {
+		return err
+	}
+
+	if room.PoppedAt != nil {
+		return errs.ErrRoomPopped
+	}
+
+	return r.repo.PopRoom(ctx, roomId)
 }

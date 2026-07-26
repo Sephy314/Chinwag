@@ -44,6 +44,17 @@ func NewChatService(chatRepo repo.ChatRepoInterface, uow repo.UnitOfWork, user b
 func (s *ChatService) CreateMessage(ctx context.Context, roomId uuid.UUID, req structs.CreateMessageRequest) (*structs.MessageResponse, error) {
 	authorId := ctx.Value("authorId").(uuid.UUID)
 
+	room, err := s.member.GetRoomById(ctx, roomId.String())
+	if err != nil {
+		return nil, err
+	}
+	if room.PoppedAt != nil {
+		return nil, &errs.AppError{
+			Status:  http.StatusForbidden,
+			Message: "This room has been popped and is now read-only",
+		}
+	}
+
 	members, err := s.member.GetMembersByRoomId(ctx, roomId.String())
 	if err != nil {
 		return nil, err
@@ -184,6 +195,17 @@ func (s *ChatService) UpdateMessage(ctx context.Context, messageId uuid.UUID, us
 		return nil, err
 	}
 
+	room, err := s.member.GetRoomById(ctx, msg.RoomId.String())
+	if err != nil {
+		return nil, err
+	}
+	if room.PoppedAt != nil {
+		return nil, &errs.AppError{
+			Status:  http.StatusForbidden,
+			Message: "This room has been popped and is now read-only",
+		}
+	}
+
 	if msg.AuthorId != userId {
 		return nil, errNotAuthor
 	}
@@ -229,6 +251,17 @@ func (s *ChatService) DeleteMessage(ctx context.Context, messageId uuid.UUID, us
 	msg, err := s.repo.GetMessageById(ctx, messageId)
 	if err != nil {
 		return err
+	}
+
+	room, err := s.member.GetRoomById(ctx, msg.RoomId.String())
+	if err != nil {
+		return err
+	}
+	if room.PoppedAt != nil {
+		return &errs.AppError{
+			Status:  http.StatusForbidden,
+			Message: "This room has been popped and is now read-only",
+		}
 	}
 
 	if msg.AuthorId != userId {

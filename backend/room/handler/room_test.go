@@ -71,6 +71,11 @@ func (m *MockRoomService) UpdateRoom(ctx context.Context, roomId uuid.UUID, req 
 	return room, args.Error(1)
 }
 
+func (m *MockRoomService) PopRoom(ctx context.Context, roomId uuid.UUID) error {
+	args := m.Called(ctx, roomId)
+	return args.Error(0)
+}
+
 func TestRoomHandler_CreateRoom_Success(t *testing.T) {
 	mockSvc := new(MockRoomService)
 	mockMemberSvc := new(MockRoomMemberService)

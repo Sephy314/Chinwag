@@ -26,6 +26,7 @@ type RoomMemberServiceInterface interface {
 	KickUser(ctx context.Context, member structs.RoomUser) error
 	GetUserByRoomId(ctx context.Context, roomId uuid.UUID) ([]domain.RoomMember, error)
 	GetRoomsByUserId(ctx context.Context, userId uuid.UUID) ([]domain.Room, error)
+	GetRoomById(ctx context.Context, roomId uuid.UUID) (domain.Room, error)
 	GetUserByRoomIdAndUserId(ctx context.Context, userId, roomId uuid.UUID) (*domain.RoomMember, error)
 	UpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error)
 	SetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error
@@ -42,6 +43,10 @@ type RoomMemberService struct {
 
 func (s *RoomMemberService) GetRoomsByUserId(ctx context.Context, userId uuid.UUID) ([]domain.Room, error) {
 	return s.repo.GetRoomsByUserId(ctx, userId)
+}
+
+func (s *RoomMemberService) GetRoomById(ctx context.Context, roomId uuid.UUID) (domain.Room, error) {
+	return s.roomRepo.GetRoomById(ctx, roomId)
 }
 
 func (s *RoomMemberService) UpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error) {

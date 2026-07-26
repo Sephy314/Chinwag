@@ -77,6 +77,14 @@ func (m *MockMemberProvider) GetMembersByRoomId(ctx context.Context, roomId stri
 	return args.Get(0).([]bridge.RoomMemberInfo), args.Error(1)
 }
 
+func (m *MockMemberProvider) GetRoomById(ctx context.Context, roomId string) (*bridge.RoomInfo, error) {
+	args := m.Called(ctx, roomId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*bridge.RoomInfo), args.Error(1)
+}
+
 func TestCreateMessage_Success(t *testing.T) {
 	mockRepo := new(MockChatRepo)
 	mockUser := new(MockUserProvider)
@@ -93,6 +101,10 @@ func TestCreateMessage_Success(t *testing.T) {
 
 	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
 		{UserId: authorId.String(), RoomId: roomId.String()},
+	}, nil)
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
 	}, nil)
 
 	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
@@ -133,6 +145,10 @@ func TestCreateMessage_NotMember(t *testing.T) {
 
 	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{}, nil)
 
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+
 	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
 	result, err := svc.CreateMessage(ctx, roomId, req)
 
@@ -157,7 +173,7 @@ func TestCreateMessage_MemberProviderError(t *testing.T) {
 		Content:     "Hello",
 	}
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return(nil, errors.New("member service error"))
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(nil, errors.New("member service error"))
 
 	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
 	result, err := svc.CreateMessage(ctx, roomId, req)
@@ -182,6 +198,10 @@ func TestCreateMessage_UserProviderError(t *testing.T) {
 		MessageType: domain.MessageTypeTEXT,
 		Content:     "Hello",
 	}
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
 
 	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
 		{UserId: authorId.String(), RoomId: roomId.String()},
@@ -212,6 +232,10 @@ func TestCreateMessage_RepoError(t *testing.T) {
 		MessageType: domain.MessageTypeTEXT,
 		Content:     "Hello",
 	}
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
 
 	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
 		{UserId: authorId.String(), RoomId: roomId.String()},
@@ -328,6 +352,10 @@ func TestUpdateMessage_Success(t *testing.T) {
 	})).Return(nil)
 	mockRepo.On("GetMessageById", ctx, messageId).Return(updated, nil).Once()
 
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+
 	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
@@ -362,6 +390,10 @@ func TestUpdateMessage_NotAuthor(t *testing.T) {
 	}
 
 	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
 
 	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
 	result, err := svc.UpdateMessage(ctx, messageId, otherUserId, structs.UpdateMessageRequest{})
@@ -412,6 +444,10 @@ func TestDeleteMessage_Success(t *testing.T) {
 	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
 	mockRepo.On("DeleteMessage", ctx, messageId).Return(nil)
 
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+
 	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
 	err := svc.DeleteMessage(ctx, messageId, authorId)
 
@@ -438,6 +474,10 @@ func TestDeleteMessage_NotAuthor(t *testing.T) {
 	}
 
 	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id: roomId.String(),
+	}, nil)
 
 	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
 	err := svc.DeleteMessage(ctx, messageId, otherUserId)
@@ -581,7 +621,7 @@ func TestCreateMessage_NonExistentRoom(t *testing.T) {
 		Content:     "Hello",
 	}
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return(nil, errs.ErrNotFound)
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(nil, errs.ErrNotFound)
 
 	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
 	result, err := svc.CreateMessage(ctx, roomId, req)
@@ -589,6 +629,37 @@ func TestCreateMessage_NonExistentRoom(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Equal(t, errs.ErrNotFound, err)
+	mockRepo.AssertNotCalled(t, "CreateMessage", mock.Anything, mock.Anything)
+	mockMember.AssertExpectations(t)
+}
+
+func TestCreateMessage_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	roomId := uuid.New()
+	now := time.Now()
+	ctx := context.WithValue(context.Background(), "authorId", authorId)
+
+	req := structs.CreateMessageRequest{
+		MessageType: domain.MessageTypeTEXT,
+		Content:     "Hello",
+	}
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+		Id:       roomId.String(),
+		PoppedAt: &now,
+	}, nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, err := svc.CreateMessage(ctx, roomId, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, http.StatusForbidden, err.(*errs.AppError).Status)
+	assert.Equal(t, "This room has been popped and is now read-only", err.(*errs.AppError).Message)
 	mockRepo.AssertNotCalled(t, "CreateMessage", mock.Anything, mock.Anything)
 	mockMember.AssertExpectations(t)
 }

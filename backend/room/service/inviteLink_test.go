@@ -82,6 +82,11 @@ func (m *MockRoomMemberService) GetRoomsByUserId(ctx context.Context, userId uui
 	return args.Get(0).([]domain.Room), args.Error(1)
 }
 
+func (m *MockRoomMemberService) GetRoomById(ctx context.Context, roomId uuid.UUID) (domain.Room, error) {
+	args := m.Called(ctx, roomId)
+	return args.Get(0).(domain.Room), args.Error(1)
+}
+
 func (m *MockRoomMemberService) GetUserByRoomIdAndUserId(ctx context.Context, userId, roomId uuid.UUID) (*domain.RoomMember, error) {
 	args := m.Called(ctx, userId, roomId)
 	if args.Get(0) == nil {
