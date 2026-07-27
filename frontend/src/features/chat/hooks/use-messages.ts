@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   useInfiniteQuery,
   useMutation,
@@ -28,7 +28,7 @@ export function useMessages(roomId: string) {
   const wsRef = useRef<WsClient | null>(null)
   const [onlineCount, setOnlineCount] = useState(0)
 
-  const queryKey = ["messages", roomId]
+  const queryKey = useMemo(() => ["messages", roomId] as const, [roomId])
 
   const messagesQuery = useInfiniteQuery({
     queryKey,
