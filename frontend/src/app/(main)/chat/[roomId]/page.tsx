@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { Hash, Link2, Shield, Flame, Users, Settings, AlertTriangle, ArrowLeft } from "lucide-react"
+import { Hash, Link2, Shield, Flame, Users, Settings } from "lucide-react"
 import { useRoom, useIsAdmin, usePopRoom } from "@/features/room/hooks/use-rooms"
 import { useMessages } from "@/features/chat/hooks/use-messages"
 import { MessageList } from "@/features/chat/components/message-list"
@@ -17,13 +17,12 @@ export default function ChatPage() {
   const router = useRouter()
   const roomId = params.roomId
 
-  const { data: roomData, isLoading: roomLoading, error: roomError } = useRoom(roomId)
+  const { data: roomData, isLoading: roomLoading } = useRoom(roomId)
   const { isAdmin } = useIsAdmin(roomId)
   const popRoom = usePopRoom(roomId)
   const {
     messages,
     isLoading: msgsLoading,
-    error: msgsError,
     createMessage,
     editMessage,
     deleteMessage,
@@ -40,33 +39,21 @@ export default function ChatPage() {
 
   const handleSend = useCallback(
     async (content: string) => {
-      try {
-        await createMessage(content)
-      } catch {
-        // toast handled by useMessages
-      }
+      await createMessage(content)
     },
     [createMessage],
   )
 
   const handleEdit = useCallback(
     async (messageId: string, content: string) => {
-      try {
-        await editMessage({ messageId, data: { content } })
-      } catch {
-        // toast handled by useMessages
-      }
+      await editMessage({ messageId, data: { content } })
     },
     [editMessage],
   )
 
   const handleDelete = useCallback(
     async (messageId: string) => {
-      try {
-        await deleteMessage(messageId)
-      } catch {
-        // toast handled by useMessages
-      }
+      await deleteMessage(messageId)
     },
     [deleteMessage],
   )
@@ -89,22 +76,6 @@ export default function ChatPage() {
             </div>
           ))}
         </div>
-      </div>
-    )
-  }
-
-  if (roomError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center px-4">
-        <AlertTriangle className="h-12 w-12 text-red-400 mb-4" />
-        <h2 className="text-lg font-semibold text-gray-100 mb-2">Failed to load room</h2>
-        <p className="text-sm text-gray-500 mb-6 max-w-md">
-          {roomError instanceof Error ? roomError.message : "This room may not exist or you may not have access."}
-        </p>
-        <Button variant="outline" onClick={() => router.push("/home")} className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Home
-        </Button>
       </div>
     )
   }
@@ -173,7 +144,6 @@ export default function ChatPage() {
       <MessageList
         messages={messages}
         isLoading={msgsLoading}
-        error={msgsError}
         hasNextPage={!!hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         fetchNextPage={fetchNextPage}

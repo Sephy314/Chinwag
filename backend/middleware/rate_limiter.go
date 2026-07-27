@@ -36,23 +36,34 @@ func (s *RedisSlidingWindowStore) Allow(identifier string) (bool, error) {
 	now := time.Now()
 	windowStart := now.Add(-s.window)
 
-	pipe := s.client.Pipeline()
-	pipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(windowStart.UnixNano(), 10))
-	pipe.ZCard(ctx, key)
-	pipe.ZAdd(ctx, key, redis.Z{
-		Score:  float64(now.UnixNano()),
-		Member: now.UnixNano(),
-	})
-	pipe.Expire(ctx, key, s.window+time.Second)
-
-	results, err := pipe.Exec(ctx)
+	// Step 1: Prune expired entries and count current window entries.
+	countPipe := s.client.Pipeline()
+	countPipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(windowStart.UnixNano(), 10))
+	countResults, err := countPipe.Exec(ctx)
 	if err != nil {
 		return false, err
 	}
 
-	count := results[1].(*redis.IntCmd).Val()
+	countCmd := s.client.ZCard(ctx, key)
+	count, err := countCmd.Result()
+	if err != nil {
+		return false, err
+	}
+	_ = countResults // expiry cleanup was executed
+
 	if count >= int64(s.limit) {
 		return false, nil
+	}
+
+	// Step 2: Only add the request if we are below the limit.
+	addPipe := s.client.Pipeline()
+	addPipe.ZAdd(ctx, key, redis.Z{
+		Score:  float64(now.UnixNano()),
+		Member: now.UnixNano(),
+	})
+	addPipe.Expire(ctx, key, s.window+time.Second)
+	if _, err := addPipe.Exec(ctx); err != nil {
+		return false, err
 	}
 
 	return true, nil
