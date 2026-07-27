@@ -1,9 +1,8 @@
 # Backend
-- Embed Migration 
-
+- Distributing
+- Add Nats(Asynchronous Transfer)
 - Deploying
 - Use k8s
-- Add Nats(Asynchronous Transfer)
 
 # Frontend
-- Error when rate limited
+- UI/UX
