@@ -13,6 +13,8 @@ import {
   X,
   Hash,
   Loader2,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/features/auth/hooks/use-auth"
@@ -24,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function Sidebar() {
   const { user, logout } = useAuth()
-  const { rooms, isLoading } = useRooms()
+  const { rooms, isLoading, error, refetch } = useRooms()
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -88,6 +90,20 @@ export function Sidebar() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center px-2">
+              <AlertTriangle className="h-5 w-5 text-red-400 mb-2" />
+              <p className="text-xs text-gray-400 mb-2">Failed to load rooms</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => refetch()}
+                className="gap-1.5 text-xs"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </Button>
             </div>
           ) : rooms.length === 0 ? (
             <div className="px-2 py-8 text-center">

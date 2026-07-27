@@ -6,6 +6,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query"
+import { toast } from "sonner"
 import {
   fetchMessages,
   createMessage,
@@ -21,12 +22,14 @@ import type {
 import { MessageType } from "@/types"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import { WsClient } from "@/services/websocket-client"
+import { getErrorMessage } from "@/lib/api-client"
 
 export function useMessages(roomId: string) {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const wsRef = useRef<WsClient | null>(null)
   const [onlineCount, setOnlineCount] = useState(0)
+  const [wsConnected, setWsConnected] = useState(false)
 
   const queryKey = useMemo(() => ["messages", roomId] as const, [roomId])
 
@@ -104,6 +107,15 @@ export function useMessages(roomId: string) {
     wsRef.current = new WsClient({
       roomId,
       onMessage: handleWsMessage,
+      onStatusChange: (status) => {
+        setWsConnected(status === "connected")
+        if (status === "disconnected" && wsRef.current) {
+          toast.error("Connection lost. Reconnecting...", { id: "ws-reconnect" })
+        }
+        if (status === "connected") {
+          toast.dismiss("ws-reconnect")
+        }
+      },
     })
     wsRef.current.connect()
 
@@ -151,6 +163,7 @@ export function useMessages(roomId: string) {
       if (context?.previous) {
         queryClient.setQueryData(queryKey, context.previous)
       }
+      toast.error("Failed to send message")
     },
   })
 
@@ -162,10 +175,16 @@ export function useMessages(roomId: string) {
       messageId: string
       data: UpdateMessageRequest
     }) => updateMessage(roomId, messageId, data),
+    onError: (err) => {
+      toast.error(`Failed to edit message: ${getErrorMessage(err)}`)
+    },
   })
 
   const deleteMsg = useMutation({
     mutationFn: (messageId: string) => deleteMessage(roomId, messageId),
+    onError: (err) => {
+      toast.error(`Failed to delete message: ${getErrorMessage(err)}`)
+    },
   })
 
   const fetchNextPage = messagesQuery.fetchNextPage
@@ -183,5 +202,6 @@ export function useMessages(roomId: string) {
     hasNextPage,
     isFetchingNextPage,
     onlineCount,
+    wsConnected,
   }
 }

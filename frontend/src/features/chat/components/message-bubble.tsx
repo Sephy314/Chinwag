@@ -2,9 +2,11 @@
 
 import { useState } from "react"
 import { MoreHorizontal, Pencil, Trash2, Check, X } from "lucide-react"
+import { toast } from "sonner"
 import type { Message } from "@/types"
 import { MessageType } from "@/types"
 import { cn } from "@/lib/utils"
+import { getErrorMessage } from "@/lib/api-client"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +40,8 @@ export function MessageBubble({ message, isOwn, onEdit, onDelete }: MessageBubbl
     try {
       await onEdit(message.id, editContent)
       setIsEditing(false)
+    } catch (err) {
+      toast.error(`Failed to edit: ${getErrorMessage(err)}`)
     } finally {
       setIsSaving(false)
     }
@@ -49,7 +53,11 @@ export function MessageBubble({ message, isOwn, onEdit, onDelete }: MessageBubbl
   }
 
   const handleDelete = async () => {
-    await onDelete(message.id)
+    try {
+      await onDelete(message.id)
+    } catch (err) {
+      toast.error(`Failed to delete: ${getErrorMessage(err)}`)
+    }
   }
 
   const time = new Date(message.created_at).toLocaleTimeString([], {

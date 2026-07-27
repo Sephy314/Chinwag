@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { Loader2, ChevronDown } from "lucide-react"
+import { Loader2, ChevronDown, AlertTriangle } from "lucide-react"
 import type { Message } from "@/types"
 import { MessageBubble } from "./message-bubble"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { useAuth } from "@/features/auth/hooks/use-auth"
 interface MessageListProps {
   messages: Message[]
   isLoading: boolean
+  error: Error | null
   hasNextPage: boolean
   isFetchingNextPage: boolean
   fetchNextPage: () => void
@@ -20,6 +21,7 @@ interface MessageListProps {
 export function MessageList({
   messages,
   isLoading,
+  error,
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
@@ -62,6 +64,18 @@ export function MessageList({
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-center px-4">
+        <div>
+          <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-400">Failed to load messages</p>
+          <p className="text-xs text-gray-600 mt-1">{error.message}</p>
+        </div>
       </div>
     )
   }

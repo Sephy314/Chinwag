@@ -50,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Role } from "@/types"
+import { getErrorMessage } from "@/lib/api-client"
 
 const roomSettingsSchema = z.object({
   name: z.string().min(1, "Room name is required").max(100),
@@ -110,8 +111,8 @@ export default function RoomSettingsPage() {
         max_members: data.max_members ? Number(data.max_members) : undefined,
       })
       setSuccess("Room settings updated")
-    } catch {
-      setError("Failed to update room settings")
+    } catch (err) {
+      setError(getErrorMessage(err))
     }
   }
 
@@ -119,8 +120,8 @@ export default function RoomSettingsPage() {
     try {
       await deleteRoom.mutateAsync()
       router.push("/home")
-    } catch {
-      setError("Failed to delete room")
+    } catch (err) {
+      setError(getErrorMessage(err))
       setDeleteOpen(false)
     }
   }
@@ -129,8 +130,8 @@ export default function RoomSettingsPage() {
     const newRole = currentRole === Role.ADMIN ? Role.MEMBER : Role.ADMIN
     try {
       await updateMember.mutateAsync({ userId, data: { role: newRole } })
-    } catch {
-      setError("Failed to update member role")
+    } catch (err) {
+      setError(getErrorMessage(err))
     }
   }
 
@@ -139,8 +140,8 @@ export default function RoomSettingsPage() {
     try {
       await removeMember.mutateAsync(kickTarget.userId)
       setKickTarget(null)
-    } catch {
-      setError("Failed to remove member")
+    } catch (err) {
+      setError(getErrorMessage(err))
       setKickTarget(null)
     }
   }

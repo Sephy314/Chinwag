@@ -1,6 +1,6 @@
 "use client"
 
-import { Users } from "lucide-react"
+import { Users, AlertTriangle } from "lucide-react"
 import { useRoomMembers } from "@/features/room/hooks/use-rooms"
 import { Role } from "@/types"
 import {
@@ -20,7 +20,7 @@ interface MembersDialogProps {
 }
 
 export function MembersDialog({ open, onOpenChange, roomId }: MembersDialogProps) {
-  const { members, isLoading } = useRoomMembers(roomId)
+  const { members, isLoading, error } = useRoomMembers(roomId)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -39,6 +39,12 @@ export function MembersDialog({ open, onOpenChange, roomId }: MembersDialogProps
                   <Skeleton className="h-4 w-24" />
                 </div>
               ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <AlertTriangle className="h-6 w-6 text-red-400 mb-2" />
+              <p className="text-sm text-gray-400">Failed to load members</p>
+              <p className="text-xs text-gray-600 mt-1">{error.message}</p>
             </div>
           ) : members.length === 0 ? (
             <p className="text-sm text-gray-500 py-4 text-center">No members found</p>
@@ -66,7 +72,7 @@ export function MembersDialog({ open, onOpenChange, roomId }: MembersDialogProps
           )}
         </div>
 
-        {!isLoading && members.length > 0 && (
+        {!isLoading && !error && members.length > 0 && (
           <p className="text-xs text-gray-500 text-center pt-2">
             {members.length} {members.length === 1 ? "member" : "members"}
           </p>

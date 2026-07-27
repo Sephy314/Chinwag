@@ -1,6 +1,7 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import {
   fetchRooms,
@@ -18,11 +19,12 @@ import {
 } from "@/features/room/api/room-api"
 import type { CreateRoomRequest, UpdateRoomRequest, CreateInviteLinkRequest, UpdateRoomMemberRequest } from "@/types"
 import { Role } from "@/types"
+import { getErrorMessage } from "@/lib/api-client"
 
 export function useRooms() {
   const { user } = useAuth()
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["rooms", user?.id],
     queryFn: () => fetchRooms(user!.id),
     enabled: !!user?.id,
@@ -32,6 +34,7 @@ export function useRooms() {
     rooms: data?.data ?? [],
     isLoading,
     error,
+    refetch,
   }
 }
 
@@ -52,6 +55,9 @@ export function useCreateRoom() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
     },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
+    },
   })
 }
 
@@ -65,6 +71,9 @@ export function useUpdateRoom(id: string) {
       queryClient.invalidateQueries({ queryKey: ["room", id] })
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
     },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
+    },
   })
 }
 
@@ -77,12 +86,18 @@ export function useDeleteRoom(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
     },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
+    },
   })
 }
 
 export function useCreateInviteLink(roomId: string) {
   return useMutation({
     mutationFn: (data?: CreateInviteLinkRequest) => createInviteLink(roomId, data),
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
+    },
   })
 }
 
@@ -130,6 +145,9 @@ export function useJoinRoomViaInvite() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
     },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
+    },
   })
 }
 
@@ -143,6 +161,9 @@ export function usePopRoom(roomId: string) {
       queryClient.invalidateQueries({ queryKey: ["room", roomId] })
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
     },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
+    },
   })
 }
 
@@ -154,6 +175,9 @@ export function useUpdateRoomMember(roomId: string) {
       updateRoomMember(roomId, userId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["roomMembers", roomId] })
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
     },
   })
 }
@@ -167,6 +191,9 @@ export function useRemoveRoomMember(roomId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["roomMembers", roomId] })
       queryClient.invalidateQueries({ queryKey: ["rooms", user?.id] })
+    },
+    onError: (err) => {
+      toast.error(getErrorMessage(err))
     },
   })
 }

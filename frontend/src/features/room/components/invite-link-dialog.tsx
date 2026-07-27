@@ -26,10 +26,14 @@ export function InviteLinkDialog({ open, onOpenChange, roomId }: InviteLinkDialo
 
   const handleGenerate = async () => {
     setCopied(false)
-    const res = await createInviteLink.mutateAsync({ single_use: false, ttl_hours: 24 })
-    if (res.data?.token) {
-      const url = `${window.location.origin}/invite/${res.data.token}`
-      setInviteUrl(url)
+    try {
+      const res = await createInviteLink.mutateAsync({ single_use: false, ttl_hours: 24 })
+      if (res.data?.token) {
+        const url = `${window.location.origin}/invite/${res.data.token}`
+        setInviteUrl(url)
+      }
+    } catch {
+      // toast handled by useCreateInviteLink
     }
   }
 

@@ -2,8 +2,10 @@
 
 import { useState, useRef, type KeyboardEvent } from "react"
 import { Send, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { getErrorMessage } from "@/lib/api-client"
 
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>
@@ -26,6 +28,8 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto"
       }
+    } catch (err) {
+      toast.error(`Failed to send: ${getErrorMessage(err)}`)
     } finally {
       setIsSending(false)
       textareaRef.current?.focus()

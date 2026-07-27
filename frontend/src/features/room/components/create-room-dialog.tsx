@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useCreateRoom } from "@/features/room/hooks/use-rooms"
+import { getErrorMessage } from "@/lib/api-client"
 import { Loader2 } from "lucide-react"
 
 const createRoomSchema = z.object({
@@ -70,8 +72,8 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
       }
       reset()
       onOpenChange(false)
-    } catch {
-      // error handled by form
+    } catch (err) {
+      toast.error(`Failed to create room: ${getErrorMessage(err)}`)
     }
   }
 

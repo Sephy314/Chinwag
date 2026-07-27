@@ -6,6 +6,4 @@
 - Add Nats(Asynchronous Transfer)
 
 # Frontend
-- Fix Ws connecting 
-- Error Handling
 - Error when rate limited
