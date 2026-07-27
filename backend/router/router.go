@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	authRepo "github.com/Sephy314/chinwag/auth/repo"
 	authRouter "github.com/Sephy314/chinwag/auth/router"
@@ -61,16 +62,10 @@ func SetUpRouter(log logger.Logger) (*echo.Echo, error) {
 	e.Use(appMiddleware.RequestIDInjector())
 	e.Use(appMiddleware.ResponseIDInjector())
 	e.Use(middleware.RequestLogger())
-	//
-	//rateLimiterStore := appMiddleware.NewRedisRateLimiterStore(conns.Rds, 50, 10, time.Minute)
-	//e.Use(middleware.RateLimiterWithConfig(
-	//	middleware.RateLimiterConfig{
-	//		Store: rateLimiterStore,
-	//		IdentifierExtractor: func(c *echo.Context) (string, error) {
-	//			return c.RealIP(), nil
-	//		},
-	//	},
-	//))
+
+	// Global rate limiter: 100 requests per minute per IP
+	globalStore := appMiddleware.NewRedisSlidingWindowStore(conns.Rds, 100, time.Minute)
+	e.Use(appMiddleware.NewRateLimitMiddleware(globalStore, appMiddleware.IPExtractor))
 
 	e.Use(middleware.Recover())
 

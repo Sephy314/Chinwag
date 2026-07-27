@@ -1,11 +1,14 @@
 package router
 
 import (
+	"time"
+
 	"github.com/Sephy314/chinwag/chat/handler"
 	"github.com/Sephy314/chinwag/chat/repo"
 	"github.com/Sephy314/chinwag/chat/service"
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/conn/bridge"
+	appMiddleware "github.com/Sephy314/chinwag/middleware"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
 	"github.com/Sephy314/chinwag/shared/logger"
 	"github.com/google/uuid"
@@ -47,7 +50,11 @@ func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomM
 		},
 	}))
 	{
-		priv.POST("/rooms/:roomId/messages", chatH.CreateMessage)
+		// Rate limit message creation: 30 requests per minute per user
+		msgRateLimitStore := appMiddleware.NewRedisSlidingWindowStore(conns.Rds, 30, time.Minute)
+		msgRateLimit := appMiddleware.NewRateLimitMiddleware(msgRateLimitStore, appMiddleware.JWTUserExtractor)
+
+		priv.POST("/rooms/:roomId/messages", chatH.CreateMessage, msgRateLimit)
 		priv.GET("/rooms/:roomId/messages", chatH.ListMessages)
 		priv.GET("/rooms/:roomId/messages/:messageId", chatH.GetMessage)
 		priv.PUT("/rooms/:roomId/messages/:messageId", chatH.UpdateMessage)

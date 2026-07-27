@@ -12,6 +12,7 @@ import (
 	"github.com/Sephy314/chinwag/conn"
 	"github.com/Sephy314/chinwag/conn/bridge"
 	"github.com/Sephy314/chinwag/conn/cache"
+	appMiddleware "github.com/Sephy314/chinwag/middleware"
 	"github.com/Sephy314/chinwag/shared/keyProvider"
 	"github.com/Sephy314/chinwag/shared/logger"
 	echojwt "github.com/labstack/echo-jwt/v5"
@@ -46,18 +47,22 @@ func SetUpAuthRouter(e *echo.Echo, roomMember bridge.RoomMemberProvider, jwksSer
 
 	authPub := e.Group("/auth")
 	{
+		// Stricter rate limit for auth endpoints: 20 requests per minute per IP
+		authRateLimitStore := appMiddleware.NewRedisSlidingWindowStore(conns.Rds, 20, time.Minute)
+		authRateLimit := appMiddleware.NewRateLimitMiddleware(authRateLimitStore, appMiddleware.IPExtractor)
+
 		authPub.GET("/health", userHandler.Health)
 
 		authPub.GET("/user/id/:id", userHandler.GetUserByID)
 		authPub.GET("/user/email/:email", userHandler.GetUserByEmail)
-		authPub.POST("/user", userHandler.CreateUser)
+		authPub.POST("/user", userHandler.CreateUser, authRateLimit)
 
-		authPub.POST("/login", userHandler.Login)
+		authPub.POST("/login", userHandler.Login, authRateLimit)
 		authPub.POST("/logout", userHandler.Logout)
 
 		authPub.GET("/.well-known/jwks.json", jwksHandler.ServeJWKS)
 
-		authPub.POST("/refresh", refreshTokenHandler.Refresh)
+		authPub.POST("/refresh", refreshTokenHandler.Refresh, authRateLimit)
 
 		googleCfg := oauth.LoadGoogleConfig()
 		if googleCfg.IsValid() {

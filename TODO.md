@@ -1,6 +1,6 @@
 # Backend
-- Fix Rate limiting
-- Distributing
+- Embed Migration 
+
 - Deploying
 - Use k8s
 - Add Nats(Asynchronous Transfer)
