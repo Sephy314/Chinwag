@@ -1,0 +1,107 @@
+package router
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"time"
+
+	authRepo "github.com/Sephy314/chinwag/backend/monolith/auth/repo"
+	authRouter "github.com/Sephy314/chinwag/backend/monolith/auth/router"
+	authService "github.com/Sephy314/chinwag/backend/monolith/auth/service"
+	chatRouter "github.com/Sephy314/chinwag/backend/monolith/chat/router"
+	"github.com/Sephy314/chinwag/backend/monolith/conn"
+	"github.com/Sephy314/chinwag/backend/monolith/conn/bridge"
+	appMiddleware "github.com/Sephy314/chinwag/backend/monolith/middleware"
+	roomRouter "github.com/Sephy314/chinwag/backend/monolith/room/router"
+	"github.com/Sephy314/chinwag/backend/monolith/shared/keyProvider"
+	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
+)
+
+type userServiceAdapter struct {
+	svc *authService.UserService
+}
+
+func (a *userServiceAdapter) GetUser(ctx context.Context, id string) (*bridge.UserInfo, error) {
+	user, err := a.svc.GetUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &bridge.UserInfo{
+		Id:        user.Id,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      string(user.Role),
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}, nil
+}
+
+func SetUpRouter(log logger.Logger) (*echo.Echo, error) {
+	conns, err := conn.NewConnection()
+	if err != nil {
+		return nil, err
+	}
+
+	jwksRepo := authRepo.NewJwtRepository(conns.DB)
+	jwksService := authService.NewJwksService(jwksRepo, log)
+	keyProvider.InjectProvider(jwksService)
+	log.Info("key provider injected")
+
+	e := echo.New()
+
+	if e == nil {
+		return nil, errors.New("no echo object")
+	}
+
+	e.HTTPErrorHandler = appMiddleware.GlobalErrorHandler(log)
+
+	e.Use(middleware.RequestID())
+	e.Use(appMiddleware.RequestIDInjector())
+	e.Use(appMiddleware.ResponseIDInjector())
+	e.Use(middleware.RequestLogger())
+
+	// Global rate limiter: 100 requests per minute per IP
+	globalStore := appMiddleware.NewRedisSlidingWindowStore(conns.Rds, 100, time.Minute)
+	e.Use(appMiddleware.NewRateLimitMiddleware(globalStore, appMiddleware.IPExtractor))
+
+	e.Use(middleware.Recover())
+
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{
+			"http://localhost:3000",
+		},
+		AllowHeaders: []string{
+			echo.HeaderOrigin,
+			echo.HeaderContentType,
+			echo.HeaderAccept,
+			echo.HeaderAuthorization,
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+
+		AllowCredentials: true,
+	}))
+
+	SetUpSwaggerRoutes(e)
+
+	userAdapter := bridge.NewUserAdapter(func(ctx context.Context, id string) (*bridge.UserInfo, error) {
+		return nil, nil
+	})
+
+	roomMemberProv := roomRouter.SetUpRoomRouter(e, userAdapter, log)
+
+	chatRouter.SetUpChatRouter(e, userAdapter, roomMemberProv, log)
+
+	userService := authRouter.SetUpAuthRouter(e, roomMemberProv, jwksService, log)
+	userAdapter.SetUserService(&userServiceAdapter{svc: userService})
+
+	return e, nil
+}

@@ -4,3 +4,4 @@
 .idea
 ./backend/Makefile
 .env
+gateway/gateway
