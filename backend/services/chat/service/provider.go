@@ -39,7 +39,6 @@ type RoomMemberInfo struct {
 }
 
 type RoomMemberProvider interface {
-	GetRoomsByUserId(ctx context.Context, userId string) ([]RoomInfo, error)
 	GetMembersByRoomId(ctx context.Context, roomId string) ([]RoomMemberInfo, error)
 	GetRoomById(ctx context.Context, roomId string) (*RoomInfo, error)
 }

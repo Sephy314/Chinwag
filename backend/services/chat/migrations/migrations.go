@@ -1,4 +1,4 @@
-package roommigrations
+package chatmigrations
 
 import (
 	"database/sql"
@@ -40,9 +40,9 @@ func RunAll(dbUrl string, log *slog.Logger) error {
 	goose.SetLogger(&slogGoose{l: log})
 
 	if err := Run(db); err != nil {
-		return fmt.Errorf("room migrations failed: %w", err)
+		return fmt.Errorf("chat migrations failed: %w", err)
 	}
 
-	log.Info("room database migrations completed")
+	log.Info("chat database migrations completed")
 	return nil
 }

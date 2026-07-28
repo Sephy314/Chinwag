@@ -1,6 +1,6 @@
 package structs
 
-import "github.com/Sephy314/chinwag/backend/monolith/chat/domain"
+import "github.com/Sephy314/chinwag/backend/services/chat/domain"
 
 type CreateMessageRequest struct {
 	MessageType domain.MessageType `json:"message_type"`

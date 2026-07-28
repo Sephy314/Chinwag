@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/monolith/chat/domain"
-	"github.com/Sephy314/chinwag/backend/monolith/chat/structs"
-	"github.com/Sephy314/chinwag/backend/monolith/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/domain"
+	"github.com/Sephy314/chinwag/backend/services/chat/structs"
+	"github.com/Sephy314/chinwag/backend/services/chat/shared/errs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -61,11 +61,6 @@ func (m *MockUserProvider) GetUser(ctx context.Context, id string) (*UserInfo, e
 
 type MockMemberProvider struct {
 	mock.Mock
-}
-
-func (m *MockMemberProvider) GetRoomsByUserId(ctx context.Context, userId string) ([]RoomInfo, error) {
-	args := m.Called(ctx, userId)
-	return args.Get(0).([]RoomInfo), args.Error(1)
 }
 
 func (m *MockMemberProvider) GetMembersByRoomId(ctx context.Context, roomId string) ([]RoomMemberInfo, error) {

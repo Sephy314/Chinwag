@@ -68,6 +68,8 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		pub.GET("/rooms/member/:memberId", r.RoomHandler.ListRoomsByMemberId)
 		pub.GET("/rooms/:id", r.RoomHandler.GetRoom)
 		pub.GET("/users/:id/rooms", r.RoomHandler.ListUserRooms)
+		pub.GET("/rooms/:roomId/members", r.RoomMemberHandler.ListMembers)
+		pub.GET("/rooms/:roomId/members/:userId", r.RoomMemberHandler.GetMember)
 	}
 
 	priv := e.Group("")
@@ -81,9 +83,6 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		priv.POST("/rooms/:roomId/members", r.RoomMemberHandler.AddMember)
 		priv.PUT("/rooms/:roomId/members/:userId", r.RoomMemberHandler.UpdateMember)
 		priv.DELETE("/rooms/:roomId/members/:userId", r.RoomMemberHandler.RemoveMember)
-
-		priv.GET("/rooms/:roomId/members", r.RoomMemberHandler.ListMembers)
-		priv.GET("/rooms/:roomId/members/:userId", r.RoomMemberHandler.GetMember)
 
 		priv.POST("/rooms/:roomId/invite", r.InviteLinkHandler.CreateInviteLink)
 		priv.POST("/rooms/invite/:token/join", r.InviteLinkHandler.JoinByInviteLink)

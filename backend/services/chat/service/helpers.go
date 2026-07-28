@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/Sephy314/chinwag/backend/monolith/chat/domain"
-	"github.com/Sephy314/chinwag/backend/monolith/chat/structs"
-	"github.com/Sephy314/chinwag/backend/monolith/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/domain"
+	"github.com/Sephy314/chinwag/backend/services/chat/structs"
+	"github.com/Sephy314/chinwag/backend/services/chat/shared/errs"
 )
 
 var errNotAuthor = &errs.AppError{

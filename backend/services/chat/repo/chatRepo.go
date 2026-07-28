@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/monolith/chat/domain"
-	"github.com/Sephy314/chinwag/backend/monolith/chat/structs"
-	"github.com/Sephy314/chinwag/backend/monolith/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/domain"
+	"github.com/Sephy314/chinwag/backend/services/chat/structs"
+	"github.com/Sephy314/chinwag/backend/services/chat/shared/errs"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )

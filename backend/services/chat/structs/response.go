@@ -3,7 +3,7 @@ package structs
 import (
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/monolith/chat/domain"
+	"github.com/Sephy314/chinwag/backend/services/chat/domain"
 )
 
 type MessageResponse struct {

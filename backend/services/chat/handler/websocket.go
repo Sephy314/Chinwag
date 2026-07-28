@@ -2,11 +2,11 @@ package handler
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -40,11 +40,11 @@ type Hub struct {
 	unregister chan *Client
 	broadcast  chan BroadcastMessage
 	mu         sync.RWMutex
-	log        logger.Logger
+	log        *slog.Logger
 	jwksClient *sharedauth.JWKSClient
 }
 
-func NewHub(log logger.Logger, jwksClient *sharedauth.JWKSClient) *Hub {
+func NewHub(log *slog.Logger, jwksClient *sharedauth.JWKSClient) *Hub {
 	return &Hub{
 		rooms:      make(map[uuid.UUID]map[*Client]bool),
 		register:   make(chan *Client),
@@ -101,17 +101,6 @@ func (h *Hub) Broadcast(roomId uuid.UUID, message []byte) {
 	h.broadcast <- BroadcastMessage{RoomID: roomId, Message: message}
 }
 
-// ServeWS godoc
-// @Summary      WebSocket connection
-// @Description  Upgrade to a WebSocket connection for real-time messaging in a room. Pass the JWT token as a query parameter. After upgrade, the server broadcasts new_message, updated_message, and deleted_message events. Client can send {"type":"ping"} and receive {"type":"pong"}.
-// @Tags         chat
-// @Produce      json
-// @Param        roomId path string true "Room UUID"
-// @Param        token  query string true "JWT access token"
-// @Success      101 {object} any "Switching Protocols to WebSocket"
-// @Failure      400 {object} map[string]string "Invalid UUID or token format"
-// @Failure      401 {object} map[string]string "Missing or invalid token"
-// @Router       /chat/rooms/{roomId}/ws [get]
 func (h *Hub) ServeWS(c *echo.Context) error {
 	token := c.QueryParam("token")
 	if token == "" {
