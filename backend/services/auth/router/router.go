@@ -63,41 +63,47 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		AllowCredentials: true,
 	}))
 
-	e.GET("/health", func(c *echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
+	jwksClient := sharedauth.NewJWKSClient("http://localhost:"+cfg.Port+"/.well-known/jwks.json", time.Minute*10)
+
+	pub := e.Group("")
+	{
+		pub.GET("/health", func(c *echo.Context) error {
+			return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+		})
+
+		pub.GET("/.well-known/jwks.json", r.JwksHandler.ServeJWKS)
+		pub.POST("/login", r.UserHandler.Login)
+		pub.POST("/refresh", r.RefreshHandler.Refresh)
+		pub.POST("/logout", r.UserHandler.Logout)
+		pub.POST("/user", r.UserHandler.CreateUser)
+
+		if cfg.GoogleOAuthEnabled {
+			googleOAuthHandler := oauth.NewGoogleOAuthHandler(
+				cfg.GoogleConfig,
+				r.UserHandler.Service,
+				r.JwksService,
+				r.UserHandler.Service.RefreshService,
+				cfg.FrontendURL,
+				r.log,
+			)
+			pub.GET("/google", googleOAuthHandler.HandleRedirect)
+			pub.GET("/google/callback", googleOAuthHandler.HandleCallback)
+		} else {
+			r.log.Warn("google oauth not configured")
+		}
+	}
+
+	priv := e.Group("")
+	priv.Use(sharedauth.NewMiddleware(jwksClient))
+	{
+		priv.GET("/whoami", r.UserHandler.WhoAmI)
+		priv.GET("/user/:id", r.UserHandler.GetUserByID)
+		priv.GET("/user/email/:email", r.UserHandler.GetUserByEmail)
+		priv.PUT("/user/:id", r.UserHandler.UpdateUser)
+		priv.DELETE("/user/:id", r.UserHandler.DeleteUser)
+	}
 
 	SetUpSwaggerRoutes(e)
-
-	e.GET("/.well-known/jwks.json", r.JwksHandler.ServeJWKS)
-	e.POST("/login", r.UserHandler.Login)
-	e.POST("/refresh", r.RefreshHandler.Refresh)
-	e.POST("/logout", r.UserHandler.Logout)
-	e.POST("/user", r.UserHandler.CreateUser)
-
-	jwksClient := sharedauth.NewJWKSClient("http://localhost:"+cfg.Port+"/.well-known/jwks.json", time.Minute*10)
-	auth := sharedauth.NewMiddleware(jwksClient)
-
-	e.GET("/whoami", r.UserHandler.WhoAmI, auth)
-	e.GET("/user/:id", r.UserHandler.GetUserByID, auth)
-	e.GET("/user/email/:email", r.UserHandler.GetUserByEmail, auth)
-	e.PUT("/user/:id", r.UserHandler.UpdateUser, auth)
-	e.DELETE("/user/:id", r.UserHandler.DeleteUser, auth)
-
-	if cfg.GoogleOAuthEnabled {
-		googleOAuthHandler := oauth.NewGoogleOAuthHandler(
-			cfg.GoogleConfig,
-			r.UserHandler.Service,
-			r.JwksService,
-			r.UserHandler.Service.RefreshService,
-			cfg.FrontendURL,
-			r.log,
-		)
-		e.GET("/google", googleOAuthHandler.HandleRedirect)
-		e.GET("/google/callback", googleOAuthHandler.HandleCallback)
-	} else {
-		r.log.Warn("google oauth not configured")
-	}
 }
 
 type RouterConfig struct {
