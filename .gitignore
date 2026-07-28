@@ -3,5 +3,6 @@
 ./frontend/
 .idea
 ./backend/Makefile
-.env
+.env*
+!.env.example
 gateway/gateway

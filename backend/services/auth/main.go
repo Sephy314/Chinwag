@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/auth/conn"
@@ -18,7 +20,9 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
+	_, src, _, _ := runtime.Caller(0)
+	envPath := filepath.Join(filepath.Dir(src), ".env")
+	_ = godotenv.Load(envPath)
 
 	log := logger.New()
 	cfg := LoadConfig()

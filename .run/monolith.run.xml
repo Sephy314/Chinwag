@@ -1,7 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="monolith" type="GoApplicationRunConfiguration" factoryName="Go Application">
-    <kind value="PACKAGE" />
-    <package value="github.com/Sephy314/chinwag/backend/monolith" />
-    <method v="2" />
-  </configuration>
-</component>
