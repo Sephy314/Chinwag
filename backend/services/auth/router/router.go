@@ -78,7 +78,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	jwksClient := sharedauth.NewJWKSClient("http://localhost:"+cfg.Port+"/.well-known/jwks.json", time.Minute*10)
 	auth := sharedauth.NewMiddleware(jwksClient)
 
-	e.GET("/user/me", r.UserHandler.WhoAmI, auth)
+	e.GET("/whoami", r.UserHandler.WhoAmI, auth)
 	e.GET("/user/:id", r.UserHandler.GetUserByID, auth)
 	e.GET("/user/email/:email", r.UserHandler.GetUserByEmail, auth)
 	e.PUT("/user/:id", r.UserHandler.UpdateUser, auth)

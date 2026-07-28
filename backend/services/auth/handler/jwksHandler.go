@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
-	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
 	"github.com/labstack/echo/v5"
 )
 
@@ -24,5 +23,5 @@ func (h *JwksHandler) ServeJWKS(c *echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, response.OK(set))
+	return c.JSON(http.StatusOK, set)
 }

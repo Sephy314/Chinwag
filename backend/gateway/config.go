@@ -1,11 +1,15 @@
 package main
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
-	Port     string
-	Services map[string]string
-	Default  string
+	Port        string
+	Services    map[string]string
+	StripPrefix []string
+	Default     string
 }
 
 func LoadConfig() *Config {
@@ -29,9 +33,15 @@ func LoadConfig() *Config {
 
 	defaultURL := os.Getenv("DEFAULT_SERVICE_URL")
 
+	var stripPrefix []string
+	if sp := os.Getenv("STRIP_PREFIX"); sp != "" {
+		stripPrefix = strings.Split(sp, ",")
+	}
+
 	return &Config{
-		Port:     port,
-		Services: services,
-		Default:  defaultURL,
+		Port:        port,
+		Services:    services,
+		StripPrefix: stripPrefix,
+		Default:     defaultURL,
 	}
 }

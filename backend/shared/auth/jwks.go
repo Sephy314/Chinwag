@@ -63,10 +63,6 @@ func (c *JWKSClient) refresh() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if !c.expired() {
-		return nil
-	}
-
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, c.jwksURL, nil)
 	if err != nil {
 		return err
