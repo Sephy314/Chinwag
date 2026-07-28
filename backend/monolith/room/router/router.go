@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/monolith/conn"
@@ -11,10 +12,9 @@ import (
 	"github.com/Sephy314/chinwag/backend/monolith/room/repo"
 	"github.com/Sephy314/chinwag/backend/monolith/room/scheduler"
 	"github.com/Sephy314/chinwag/backend/monolith/room/service"
-	"github.com/Sephy314/chinwag/backend/monolith/shared/keyProvider"
 	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
-	echojwt "github.com/labstack/echo-jwt/v5"
 	"github.com/labstack/echo/v5"
 )
 
@@ -39,6 +39,12 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider, log logger.Logger) 
 	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute, log)
 	go popScheduler.Start(context.Background())
 
+	jwksURL := os.Getenv("AUTH_JWKS_URL")
+	if jwksURL == "" {
+		jwksURL = "http://localhost:8081/.well-known/jwks.json"
+	}
+	jwksClient := sharedauth.NewJWKSClient(jwksURL, 5*time.Minute)
+
 	pub := e.Group("/rooms")
 	{
 		pub.GET("/health", roomHandler.Health)
@@ -50,13 +56,7 @@ func SetUpRoomRouter(e *echo.Echo, user bridge.UserProvider, log logger.Logger) 
 	e.GET("/users/:id/rooms", roomHandler.ListUserRooms)
 
 	priv := e.Group("/rooms")
-	priv.Use(echojwt.WithConfig(echojwt.Config{
-		KeyFunc: keyProvider.KeyFunc,
-		ErrorHandler: func(c *echo.Context, err error) error {
-			log.Error("jwt error", "error", err)
-			return echo.ErrUnauthorized
-		},
-	}))
+	priv.Use(sharedauth.NewMiddleware(jwksClient))
 	{
 		priv.POST("", roomHandler.CreateRoom)
 		priv.PUT("/:id", roomHandler.UpdateRoom)

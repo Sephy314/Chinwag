@@ -12,7 +12,6 @@ import (
 	"database/sql"
 	"os"
 
-	authmigrations "github.com/Sephy314/chinwag/backend/monolith/auth/migrations"
 	chatmigrations "github.com/Sephy314/chinwag/backend/monolith/chat/migrations"
 	roommigrations "github.com/Sephy314/chinwag/backend/monolith/room/migrations"
 	"github.com/Sephy314/chinwag/backend/monolith/router"
@@ -60,7 +59,6 @@ func migrate(log logger.Logger) error {
 	goose.SetLogger(&gooseLogger{l: log})
 
 	for _, fn := range []func(*sql.DB) error{
-		authmigrations.Run,
 		roommigrations.Run,
 		chatmigrations.Run,
 	} {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/Sephy314/chinwag/backend/monolith/shared/keyProvider"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -49,12 +48,4 @@ func IsManager(
 	}
 
 	return checker.HasManagerPermission(c.Request().Context(), uid, roomID)
-}
-
-func GetUserIDFromToken(tokenString string) (string, error) {
-	token, err := jwt.Parse(tokenString, keyProvider.KeyFunc)
-	if err != nil {
-		return "", err
-	}
-	return token.Claims.GetSubject()
 }

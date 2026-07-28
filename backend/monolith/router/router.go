@@ -2,40 +2,83 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"time"
 
-	authRepo "github.com/Sephy314/chinwag/backend/monolith/auth/repo"
-	authRouter "github.com/Sephy314/chinwag/backend/monolith/auth/router"
-	authService "github.com/Sephy314/chinwag/backend/monolith/auth/service"
 	chatRouter "github.com/Sephy314/chinwag/backend/monolith/chat/router"
 	"github.com/Sephy314/chinwag/backend/monolith/conn"
 	"github.com/Sephy314/chinwag/backend/monolith/conn/bridge"
 	appMiddleware "github.com/Sephy314/chinwag/backend/monolith/middleware"
 	roomRouter "github.com/Sephy314/chinwag/backend/monolith/room/router"
-	"github.com/Sephy314/chinwag/backend/monolith/shared/keyProvider"
 	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
 
-type userServiceAdapter struct {
-	svc *authService.UserService
+type authUserAdapter struct {
+	authServiceURL string
+	httpClient     *http.Client
 }
 
-func (a *userServiceAdapter) GetUser(ctx context.Context, id string) (*bridge.UserInfo, error) {
-	user, err := a.svc.GetUser(ctx, id)
-	if err != nil {
-		return nil, err
+func newAuthUserAdapter(authServiceURL string) *authUserAdapter {
+	return &authUserAdapter{
+		authServiceURL: authServiceURL,
+		httpClient:     &http.Client{Timeout: 5 * time.Second},
 	}
+}
+
+type userResponse struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type wrappedResponse[T any] struct {
+	Data T      `json:"data"`
+	Err  string `json:"err,omitempty"`
+}
+
+func (a *authUserAdapter) GetUser(ctx context.Context, id string) (*bridge.UserInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.authServiceURL+"/user/"+id, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call auth service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var wrapped wrappedResponse[userResponse]
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if wrapped.Err != "" {
+		return nil, errors.New(wrapped.Err)
+	}
+
 	return &bridge.UserInfo{
-		Id:        user.Id,
-		Name:      user.Name,
-		Email:     user.Email,
-		Role:      string(user.Role),
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		Id:        wrapped.Data.ID,
+		Name:      wrapped.Data.Name,
+		Email:     wrapped.Data.Email,
+		Role:      wrapped.Data.Role,
+		CreatedAt: wrapped.Data.CreatedAt,
+		UpdatedAt: wrapped.Data.UpdatedAt,
 	}, nil
 }
 
@@ -44,11 +87,6 @@ func SetUpRouter(log logger.Logger) (*echo.Echo, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	jwksRepo := authRepo.NewJwtRepository(conns.DB)
-	jwksService := authService.NewJwksService(jwksRepo, log)
-	keyProvider.InjectProvider(jwksService)
-	log.Info("key provider injected")
 
 	e := echo.New()
 
@@ -92,16 +130,16 @@ func SetUpRouter(log logger.Logger) (*echo.Echo, error) {
 
 	SetUpSwaggerRoutes(e)
 
-	userAdapter := bridge.NewUserAdapter(func(ctx context.Context, id string) (*bridge.UserInfo, error) {
-		return nil, nil
-	})
+	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
+	if authServiceURL == "" {
+		authServiceURL = "http://localhost:8081"
+	}
+
+	userAdapter := newAuthUserAdapter(authServiceURL)
 
 	roomMemberProv := roomRouter.SetUpRoomRouter(e, userAdapter, log)
 
 	chatRouter.SetUpChatRouter(e, userAdapter, roomMemberProv, log)
-
-	userService := authRouter.SetUpAuthRouter(e, roomMemberProv, jwksService, log)
-	userAdapter.SetUserService(&userServiceAdapter{svc: userService})
 
 	return e, nil
 }

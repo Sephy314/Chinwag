@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/echotest"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestServeWS_MissingToken(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	c, rec := echotest.ContextConfig{
@@ -34,7 +35,7 @@ func TestServeWS_MissingToken(t *testing.T) {
 }
 
 func TestServeWS_InvalidToken(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	c, rec := echotest.ContextConfig{
@@ -57,7 +58,7 @@ func TestServeWS_InvalidToken(t *testing.T) {
 }
 
 func TestHub_RegisterAndUnregister(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	roomID := uuid.New()
@@ -93,7 +94,7 @@ func TestHub_RegisterAndUnregister(t *testing.T) {
 }
 
 func TestHub_BroadcastToRoom(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	roomID := uuid.New()
@@ -156,7 +157,7 @@ func TestHub_BroadcastToRoom(t *testing.T) {
 }
 
 func TestHub_StalledClientRemoved(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	roomID := uuid.New()
@@ -188,7 +189,7 @@ func TestHub_StalledClientRemoved(t *testing.T) {
 }
 
 func TestHub_BroadcastAllRoomsIsolated(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	roomA := uuid.New()
@@ -229,7 +230,7 @@ func TestHub_BroadcastAllRoomsIsolated(t *testing.T) {
 }
 
 func TestNewHub_InitialState(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	assert.NotNil(t, h.rooms)
 	assert.NotNil(t, h.register)
 	assert.NotNil(t, h.unregister)
@@ -238,7 +239,7 @@ func TestNewHub_InitialState(t *testing.T) {
 }
 
 func TestHub_BroadcastWithNoClients(t *testing.T) {
-	h := NewHub(logger.New())
+	h := NewHub(logger.New(), sharedauth.NewJWKSClient("http://localhost:8081/.well-known/jwks.json", 5*time.Minute))
 	go h.Run()
 
 	h.Broadcast(uuid.New(), []byte("nobody"))

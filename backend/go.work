@@ -2,5 +2,7 @@ go 1.26.5
 
 use (
 	./gateway
+	./shared/auth
+	./services/auth
 	./monolith
 )

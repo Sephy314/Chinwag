@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
-	"github.com/Sephy314/chinwag/backend/monolith/shared/utils"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v5"
@@ -41,15 +41,17 @@ type Hub struct {
 	broadcast  chan BroadcastMessage
 	mu         sync.RWMutex
 	log        logger.Logger
+	jwksClient *sharedauth.JWKSClient
 }
 
-func NewHub(log logger.Logger) *Hub {
+func NewHub(log logger.Logger, jwksClient *sharedauth.JWKSClient) *Hub {
 	return &Hub{
 		rooms:      make(map[uuid.UUID]map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan BroadcastMessage, 256),
 		log:        log,
+		jwksClient: jwksClient,
 	}
 }
 
@@ -116,10 +118,13 @@ func (h *Hub) ServeWS(c *echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "missing token"})
 	}
 
-	userID, err := utils.GetUserIDFromToken(token)
-	if err != nil {
+	claims := &sharedauth.Claims{}
+	parsedToken, err := h.jwksClient.ParseToken(token, claims)
+	if err != nil || !parsedToken.Valid {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 	}
+
+	userID := claims.Subject
 	uid, err := uuid.Parse(userID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid user id"})
