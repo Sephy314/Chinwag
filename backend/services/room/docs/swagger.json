@@ -1,0 +1,699 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Chinwag Room API",
+    "description": "Chinwag Room Service API for managing chat rooms, members, and invite links",
+    "version": "1.0",
+    "contact": {}
+  },
+  "host": "localhost:8082",
+  "basePath": "/",
+  "securityDefinitions": {
+    "BearerAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "Authorization"
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "Check the health status of the room service",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/health": {
+      "get": {
+        "description": "Check the health status of the room service",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Create a new chat room. The owner is the authenticated user. Returns the created room with generated UUID and timestamps.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Create a chat room",
+        "parameters": [
+          {
+            "description": "Room creation info",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": { "$ref": "#/definitions/structs.CreateRoomRequest" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created room with fields: id (UUID), name, description, max_members, owner_id, created_at, updated_at",
+            "schema": { "$ref": "#/definitions/response.Response-domain_Room" }
+          },
+          "400": {
+            "description": "Invalid request body or validation error",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/owner/{ownerId}": {
+      "get": {
+        "description": "Retrieve all rooms owned by a specific user.",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "List rooms by owner",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Owner UUID",
+            "name": "ownerId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of rooms",
+            "schema": { "$ref": "#/definitions/response.Response-array_domain_Room" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/member/{memberId}": {
+      "get": {
+        "description": "Retrieve all rooms a user has joined.",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "List rooms by member",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Member UUID",
+            "name": "memberId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of rooms",
+            "schema": { "$ref": "#/definitions/response.Response-array_domain_Room" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/users/{id}/rooms": {
+      "get": {
+        "description": "Retrieve all rooms associated with a user — both rooms they own and rooms they've joined. Duplicates are removed.",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "List rooms for a user",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "User UUID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of rooms",
+            "schema": { "$ref": "#/definitions/response.Response-array_domain_Room" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/{id}": {
+      "get": {
+        "description": "Retrieve chat room information by its UUID.",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Get a chat room",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room found",
+            "schema": { "$ref": "#/definitions/response.Response-domain_Room" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Room not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      },
+      "put": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Update room information by UUID. Only provided fields are updated; omitted fields remain unchanged.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Update a chat room",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Fields to update",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": { "$ref": "#/definitions/structs.UpdateRoomRequest" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully updated room",
+            "schema": { "$ref": "#/definitions/response.Response-domain_Room" }
+          },
+          "400": {
+            "description": "Invalid request body or UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Room not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      },
+      "delete": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Soft-delete a chat room by UUID.",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Delete a chat room",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/{id}/pop": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Immediately pop a chat room, making it read-only.",
+        "produces": ["application/json"],
+        "tags": ["room"],
+        "summary": "Pop a chat room",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "403": {
+            "description": "Admin permission is required",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "410": {
+            "description": "Room has already been popped",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/members": {
+      "get": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Retrieve all members of a chat room with user details.",
+        "produces": ["application/json"],
+        "tags": ["room-member"],
+        "summary": "List room members",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "roomId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of room members with user info",
+            "schema": { "$ref": "#/definitions/response.Response-array_structs_RoomMemberResponse" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      },
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Add a user to a chat room. The authenticated user must have the ADMIN role.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["room-member"],
+        "summary": "Add a room member",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "roomId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Member to add",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": { "$ref": "#/definitions/structs.AddRoomMemberRequest" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "403": {
+            "description": "Admin permission is required",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Room or user not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "409": {
+            "description": "User is already a member of the room",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/members/{userId}": {
+      "get": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Retrieve a specific user's membership info in a specific chat room.",
+        "produces": ["application/json"],
+        "tags": ["room-member"],
+        "summary": "Get a room member",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "roomId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "User UUID",
+            "name": "userId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Membership info found",
+            "schema": { "$ref": "#/definitions/response.Response-domain_RoomMember" }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Membership not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      },
+      "put": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Update a member's information in a chat room.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["room-member"],
+        "summary": "Update a room member",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "roomId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "User UUID",
+            "name": "userId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "Fields to update",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": { "$ref": "#/definitions/structs.UpdateRoomMemberRequest" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully updated member",
+            "schema": { "$ref": "#/definitions/response.Response-domain_RoomMember" }
+          },
+          "403": {
+            "description": "Admin permission is required",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Membership not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      },
+      "delete": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Remove a user from a chat room.",
+        "produces": ["application/json"],
+        "tags": ["room-member"],
+        "summary": "Remove a room member",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "roomId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "User UUID to remove",
+            "name": "userId",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "403": {
+            "description": "Admin permission is required",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Room, user, or membership not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/invite": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Create a shareable invite link for a room.",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["invite-link"],
+        "summary": "Create an invite link",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Room UUID",
+            "name": "roomId",
+            "in": "path",
+            "required": true
+          },
+          {
+            "description": "TTL configuration",
+            "name": "request",
+            "in": "body",
+            "schema": { "$ref": "#/definitions/structs.CreateInviteLinkRequest" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": { "$ref": "#/definitions/response.Response-structs_InviteLinkResponse" }
+          },
+          "403": {
+            "description": "Admin permission is required",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Room not found",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    },
+    "/rooms/invite/{token}/join": {
+      "post": {
+        "security": [{ "BearerAuth": [] }],
+        "description": "Join a chat room using an invite link token.",
+        "produces": ["application/json"],
+        "tags": ["invite-link"],
+        "summary": "Join a room via invite link",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Invite link token",
+            "name": "token",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "400": {
+            "description": "Invalid token",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "404": {
+            "description": "Invite link not found or expired",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          },
+          "409": {
+            "description": "User is already a member",
+            "schema": { "$ref": "#/definitions/response.Response-any" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "response.Response-any": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "request_id": { "type": "string" },
+        "data": {},
+        "meta": {}
+      }
+    },
+    "response.Response-domain_Room": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "data": { "$ref": "#/definitions/domain.Room" }
+      }
+    },
+    "response.Response-array_domain_Room": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/domain.Room" }
+        }
+      }
+    },
+    "response.Response-domain_RoomMember": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "data": { "$ref": "#/definitions/domain.RoomMember" }
+      }
+    },
+    "response.Response-array_structs_RoomMemberResponse": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "data": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/structs.RoomMemberResponse" }
+        }
+      }
+    },
+    "response.Response-structs_InviteLinkResponse": {
+      "type": "object",
+      "properties": {
+        "success": { "type": "boolean" },
+        "data": { "$ref": "#/definitions/structs.InviteLinkResponse" }
+      }
+    },
+    "domain.Room": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "max_members": { "type": "integer" },
+        "owner_id": { "type": "string" },
+        "pop_at": { "type": "string", "format": "date-time" },
+        "popped_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "deleted_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "domain.RoomMember": {
+      "type": "object",
+      "properties": {
+        "room_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "role": { "type": "integer" },
+        "joined_at": { "type": "string", "format": "date-time" },
+        "left_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "structs.CreateRoomRequest": {
+      "type": "object",
+      "required": ["name", "max_members"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "max_members": { "type": "integer" },
+        "pop_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "structs.UpdateRoomRequest": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "max_members": { "type": "integer" }
+      }
+    },
+    "structs.AddRoomMemberRequest": {
+      "type": "object",
+      "required": ["user_id"],
+      "properties": {
+        "user_id": { "type": "string" },
+        "role": { "type": "integer" }
+      }
+    },
+    "structs.UpdateRoomMemberRequest": {
+      "type": "object",
+      "properties": {
+        "role": { "type": "integer" }
+      }
+    },
+    "structs.RoomMemberResponse": {
+      "type": "object",
+      "properties": {
+        "room_id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "user_name": { "type": "string" },
+        "role": { "type": "integer" },
+        "joined_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "structs.CreateInviteLinkRequest": {
+      "type": "object",
+      "properties": {
+        "ttl_hours": { "type": "integer" },
+        "single_use": { "type": "boolean" }
+      }
+    },
+    "structs.InviteLinkResponse": {
+      "type": "object",
+      "properties": {
+        "token": { "type": "string" },
+        "room_id": { "type": "string" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

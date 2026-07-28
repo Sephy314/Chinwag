@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-func proxyHandler(targetURL string, stripPrefix bool, prefix string) echo.HandlerFunc {
+func newReverseProxy(targetURL string, stripPrefix bool, prefix string) *httputil.ReverseProxy {
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		panic("invalid target URL: " + targetURL)
@@ -36,21 +36,30 @@ func proxyHandler(targetURL string, stripPrefix bool, prefix string) echo.Handle
 		w.Write([]byte(`{"success":false,"code":502,"message":"bad gateway"}`))
 	}
 
-	return func(c *echo.Context) error {
-		proxy.ServeHTTP(c.Response(), c.Request())
-		return nil
-	}
+	return proxy
 }
 
 func setupRoutes(e *echo.Echo, cfg *Config) {
-	for prefix, targetURL := range cfg.Services {
-		shouldStrip := slices.Contains(cfg.StripPrefix, prefix)
-		handler := proxyHandler(targetURL, shouldStrip, prefix)
-		e.Any(prefix+"/*", handler)
-	}
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			path := c.Request().URL.Path
+			for prefix, targetURL := range cfg.Services {
+				if strings.HasPrefix(path, prefix) {
+					shouldStrip := slices.Contains(cfg.StripPrefix, prefix)
+					proxy := newReverseProxy(targetURL, shouldStrip, prefix)
+					proxy.ServeHTTP(c.Response(), c.Request())
+					return nil
+				}
+			}
+			return next(c)
+		}
+	})
 
 	if cfg.Default != "" {
-		handler := proxyHandler(cfg.Default, false, "")
-		e.Any("/*", handler)
+		e.Any("/*", func(c *echo.Context) error {
+			proxy := newReverseProxy(cfg.Default, false, "")
+			proxy.ServeHTTP(c.Response(), c.Request())
+			return nil
+		})
 	}
 }

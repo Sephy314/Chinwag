@@ -13,7 +13,6 @@ import (
 	"os"
 
 	chatmigrations "github.com/Sephy314/chinwag/backend/monolith/chat/migrations"
-	roommigrations "github.com/Sephy314/chinwag/backend/monolith/room/migrations"
 	"github.com/Sephy314/chinwag/backend/monolith/router"
 	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
 	"github.com/joho/godotenv"
@@ -58,13 +57,8 @@ func migrate(log logger.Logger) error {
 	goose.SetDialect("postgres")
 	goose.SetLogger(&gooseLogger{l: log})
 
-	for _, fn := range []func(*sql.DB) error{
-		roommigrations.Run,
-		chatmigrations.Run,
-	} {
-		if err := fn(db); err != nil {
-			return err
-		}
+	if err := chatmigrations.Run(db); err != nil {
+		return err
 	}
 
 	log.Info("database migrations completed")

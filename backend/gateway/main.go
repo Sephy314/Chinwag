@@ -23,7 +23,7 @@ func main() {
 	e.Use(appMiddleware.RequestID())
 	e.Use(appMiddleware.AccessLogger())
 
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+	e.Pre(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},
 		AllowHeaders: []string{
 			echo.HeaderOrigin,

@@ -4,5 +4,6 @@ use (
 	./gateway
 	./shared/auth
 	./services/auth
+	./services/room
 	./monolith
 )

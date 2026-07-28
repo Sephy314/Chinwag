@@ -1,0 +1,192 @@
+package repo
+
+import (
+	"context"
+
+	"github.com/Sephy314/chinwag/backend/services/room/domain"
+	"github.com/Sephy314/chinwag/backend/services/room/shared/errs"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+)
+
+type RoomMemberRepoInterface interface {
+	GetMembersByRoomId(context.Context, uuid.UUID) ([]domain.RoomMember, error)
+	GetRoomsByUserId(context.Context, uuid.UUID) ([]domain.Room, error)
+	GetMemberByRoomIdAndMemberId(context.Context, uuid.UUID, uuid.UUID) (domain.RoomMember, error)
+	AddMember(context.Context, domain.RoomMember) error
+	UpdateMember(context.Context, domain.RoomMember) error
+	RemoveMember(context.Context, uuid.UUID, uuid.UUID) error
+	SetUserRole(context.Context, uuid.UUID, uuid.UUID, domain.Role) error
+}
+
+type RoomMemberRepo struct {
+	db sqlx.ExtContext
+}
+
+func NewRoomMemberRepo(db sqlx.ExtContext) *RoomMemberRepo {
+	return &RoomMemberRepo{db: db}
+}
+
+func (r *RoomMemberRepo) GetMembersByRoomId(ctx context.Context, roomId uuid.UUID) ([]domain.RoomMember, error) {
+	var members []domain.RoomMember
+	err := sqlx.SelectContext(
+		ctx,
+		r.db,
+		&members,
+		`SELECT  
+    			r.user_id, r.room_id, r.role, r.joined_at
+    			FROM room_member r
+    			WHERE r.room_id = $1
+    				AND r.left_at IS NULL`,
+		roomId,
+	)
+
+	return members, err
+}
+
+func (r *RoomMemberRepo) GetMemberByRoomIdAndMemberId(ctx context.Context, roomId uuid.UUID, userId uuid.UUID) (domain.RoomMember, error) {
+	var member domain.RoomMember
+	err := sqlx.GetContext(
+		ctx,
+		r.db,
+		&member,
+		`SELECT 
+    				 r.user_id, r.room_id, r.role, r.joined_at
+				FROM room_member r
+				WHERE r.room_id = $1
+					  AND r.user_id = $2  
+				      AND r.left_at IS NULL
+				LIMIT 1`,
+		roomId,
+		userId,
+	)
+
+	return member, err
+}
+
+func (r *RoomMemberRepo) AddMember(ctx context.Context, req domain.RoomMember) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO room_member (user_id, room_id, role) 
+		 SELECT $1, $2, $3
+		 WHERE EXISTS (SELECT 1 FROM rooms WHERE id = $4 AND popped_at IS NULL AND deleted_at IS NULL)`,
+		req.UserId,
+		req.RoomId,
+		req.Role,
+		req.RoomId.String(),
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrConflict
+	}
+
+	return nil
+}
+
+func (r *RoomMemberRepo) UpdateMember(ctx context.Context, member domain.RoomMember) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member SET role = $1
+		 WHERE user_id = $2 AND room_id = $3 AND left_at IS NULL
+		   AND EXISTS (SELECT 1 FROM rooms WHERE id = $3 AND popped_at IS NULL AND deleted_at IS NULL)`,
+		member.Role,
+		member.UserId,
+		member.RoomId,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *RoomMemberRepo) RemoveMember(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member SET left_at = now() 
+		 WHERE user_id = $1 AND room_id = $2
+		   AND EXISTS (SELECT 1 FROM rooms WHERE id = $2 AND popped_at IS NULL AND deleted_at IS NULL)`,
+		userId,
+		roomId,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *RoomMemberRepo) SetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member
+			   SET role = $1
+			   WHERE user_id = $2 AND room_id = $3
+			     AND EXISTS (SELECT 1 FROM rooms WHERE id = $3 AND popped_at IS NULL AND deleted_at IS NULL)`,
+		role,
+		userId,
+		roomId,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *RoomMemberRepo) GetRoomsByUserId(ctx context.Context, userId uuid.UUID) ([]domain.Room, error) {
+	var rooms []domain.Room
+
+	err := sqlx.SelectContext(
+		ctx,
+		r.db,
+		&rooms,
+		`SELECT rm.id, rm.name, rm.description, rm.max_members, rm.owner_id, rm.pop_at, rm.popped_at, rm.created_at, rm.updated_at, rm.deleted_at
+				FROM room_member r
+				JOIN rooms rm ON rm.id = r.room_id
+				WHERE r.user_id = $1
+					AND r.left_at IS NULL
+					AND rm.deleted_at IS NULL
+					ORDER BY r.joined_at DESC`,
+		userId,
+	)
+
+	return rooms, err
+}

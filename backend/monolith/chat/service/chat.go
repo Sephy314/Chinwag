@@ -8,7 +8,6 @@ import (
 	"github.com/Sephy314/chinwag/backend/monolith/chat/domain"
 	"github.com/Sephy314/chinwag/backend/monolith/chat/repo"
 	"github.com/Sephy314/chinwag/backend/monolith/chat/structs"
-	"github.com/Sephy314/chinwag/backend/monolith/conn/bridge"
 	"github.com/Sephy314/chinwag/backend/monolith/shared/errs"
 	"github.com/google/uuid"
 )
@@ -26,12 +25,12 @@ type ChatServiceInterface interface {
 type ChatService struct {
 	repo      repo.ChatRepoInterface
 	uow       repo.UnitOfWork
-	user      bridge.UserProvider
-	member    bridge.RoomMemberProvider
+	user      UserProvider
+	member    RoomMemberProvider
 	broadcast BroadcastFunc
 }
 
-func NewChatService(chatRepo repo.ChatRepoInterface, uow repo.UnitOfWork, user bridge.UserProvider, member bridge.RoomMemberProvider, broadcast BroadcastFunc) *ChatService {
+func NewChatService(chatRepo repo.ChatRepoInterface, uow repo.UnitOfWork, user UserProvider, member RoomMemberProvider, broadcast BroadcastFunc) *ChatService {
 	return &ChatService{
 		repo:      chatRepo,
 		uow:       uow,

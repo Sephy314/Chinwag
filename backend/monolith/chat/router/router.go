@@ -8,7 +8,6 @@ import (
 	"github.com/Sephy314/chinwag/backend/monolith/chat/repo"
 	"github.com/Sephy314/chinwag/backend/monolith/chat/service"
 	"github.com/Sephy314/chinwag/backend/monolith/conn"
-	"github.com/Sephy314/chinwag/backend/monolith/conn/bridge"
 	appMiddleware "github.com/Sephy314/chinwag/backend/monolith/middleware"
 	"github.com/Sephy314/chinwag/backend/monolith/shared/logger"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
@@ -16,7 +15,7 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-func SetUpChatRouter(e *echo.Echo, user bridge.UserProvider, member bridge.RoomMemberProvider, log logger.Logger) {
+func SetUpChatRouter(e *echo.Echo, user service.UserProvider, member service.RoomMemberProvider, log logger.Logger) {
 	conns, err := conn.NewConnection()
 	if err != nil {
 		panic(err)

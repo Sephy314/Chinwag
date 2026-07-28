@@ -1,0 +1,151 @@
+package repo
+
+import (
+	"context"
+
+	"github.com/Sephy314/chinwag/backend/services/room/domain"
+	"github.com/Sephy314/chinwag/backend/services/room/shared/errs"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+)
+
+type RoomRepoInterface interface {
+	CreateRoom(context.Context, domain.Room) error
+	GetRoomById(context.Context, uuid.UUID) (domain.Room, error)
+	GetRoomsByOwnerId(context.Context, uuid.UUID) ([]domain.Room, error)
+	UpdateRoom(context.Context, domain.Room) error
+	DeleteRoomById(context.Context, uuid.UUID) error
+	PopRoom(context.Context, uuid.UUID) error
+}
+
+type RoomRepo struct {
+	db sqlx.ExtContext
+}
+
+func NewRoomRepo(db sqlx.ExtContext) *RoomRepo {
+	return &RoomRepo{db: db}
+}
+
+func (r *RoomRepo) CreateRoom(ctx context.Context, req domain.Room) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO rooms (id, name, description, max_members, owner_id, pop_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+		req.Id,
+		req.Name,
+		req.Description,
+		req.MaxMembers,
+		req.OwnerId,
+		req.PopAt,
+	)
+
+	return err
+}
+
+func (r *RoomRepo) GetRoomById(ctx context.Context, req uuid.UUID) (domain.Room, error) {
+	var room domain.Room
+	err := sqlx.GetContext(
+		ctx,
+		r.db,
+		&room,
+		`SELECT 
+    				 r.id, r.name, r.description, r.max_members, r.owner_id, 
+    			  	 r.pop_at, r.popped_at,
+    			  	 r.created_at, r.updated_at, r.deleted_at
+    			FROM rooms r
+    			WHERE id = $1 AND
+    				deleted_at IS NULL`,
+		req,
+	)
+	return room, err
+}
+
+func (r *RoomRepo) GetRoomsByOwnerId(ctx context.Context, req uuid.UUID) ([]domain.Room, error) {
+	var rooms []domain.Room
+	err := sqlx.SelectContext(
+		ctx,
+		r.db,
+		&rooms,
+		`SELECT r.id, r.name, r.description, r.max_members, r.owner_id, 
+       				  r.pop_at, r.popped_at,
+       				  r.created_at, r.updated_at, r.deleted_at
+				FROM rooms r
+				WHERE r.owner_id = $1
+					AND deleted_at IS NULL
+				ORDER BY r.name`,
+		req,
+	)
+	return rooms, err
+}
+
+func (r *RoomRepo) UpdateRoom(ctx context.Context, room domain.Room) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE rooms SET name = $1, description = $2, max_members = $3, updated_at = NOW()
+		 WHERE id = $4 AND deleted_at IS NULL AND popped_at IS NULL`,
+		room.Name,
+		room.Description,
+		room.MaxMembers,
+		room.Id,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *RoomRepo) DeleteRoomById(ctx context.Context, req uuid.UUID) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE rooms SET deleted_at = now() WHERE id = $1 AND popped_at IS NULL`,
+		req,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *RoomRepo) PopRoom(ctx context.Context, roomId uuid.UUID) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE rooms SET popped_at = NOW(), updated_at = NOW()
+		 WHERE id = $1 AND popped_at IS NULL AND deleted_at IS NULL`,
+		roomId,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+
+	return nil
+}

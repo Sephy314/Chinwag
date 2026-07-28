@@ -9,7 +9,6 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/monolith/chat/domain"
 	"github.com/Sephy314/chinwag/backend/monolith/chat/structs"
-	"github.com/Sephy314/chinwag/backend/monolith/conn/bridge"
 	"github.com/Sephy314/chinwag/backend/monolith/shared/errs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -52,37 +51,37 @@ type MockUserProvider struct {
 	mock.Mock
 }
 
-func (m *MockUserProvider) GetUser(ctx context.Context, id string) (*bridge.UserInfo, error) {
+func (m *MockUserProvider) GetUser(ctx context.Context, id string) (*UserInfo, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*bridge.UserInfo), args.Error(1)
+	return args.Get(0).(*UserInfo), args.Error(1)
 }
 
 type MockMemberProvider struct {
 	mock.Mock
 }
 
-func (m *MockMemberProvider) GetRoomsByUserId(ctx context.Context, userId string) ([]bridge.RoomInfo, error) {
+func (m *MockMemberProvider) GetRoomsByUserId(ctx context.Context, userId string) ([]RoomInfo, error) {
 	args := m.Called(ctx, userId)
-	return args.Get(0).([]bridge.RoomInfo), args.Error(1)
+	return args.Get(0).([]RoomInfo), args.Error(1)
 }
 
-func (m *MockMemberProvider) GetMembersByRoomId(ctx context.Context, roomId string) ([]bridge.RoomMemberInfo, error) {
+func (m *MockMemberProvider) GetMembersByRoomId(ctx context.Context, roomId string) ([]RoomMemberInfo, error) {
 	args := m.Called(ctx, roomId)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]bridge.RoomMemberInfo), args.Error(1)
+	return args.Get(0).([]RoomMemberInfo), args.Error(1)
 }
 
-func (m *MockMemberProvider) GetRoomById(ctx context.Context, roomId string) (*bridge.RoomInfo, error) {
+func (m *MockMemberProvider) GetRoomById(ctx context.Context, roomId string) (*RoomInfo, error) {
 	args := m.Called(ctx, roomId)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*bridge.RoomInfo), args.Error(1)
+	return args.Get(0).(*RoomInfo), args.Error(1)
 }
 
 func TestCreateMessage_Success(t *testing.T) {
@@ -99,15 +98,15 @@ func TestCreateMessage_Success(t *testing.T) {
 		Content:     "Hello, world!",
 	}
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
 		{UserId: authorId.String(), RoomId: roomId.String()},
 	}, nil)
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
-	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
 	}, nil)
@@ -143,9 +142,9 @@ func TestCreateMessage_NotMember(t *testing.T) {
 		Content:     "Hello",
 	}
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{}, nil)
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{}, nil)
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
@@ -199,11 +198,11 @@ func TestCreateMessage_UserProviderError(t *testing.T) {
 		Content:     "Hello",
 	}
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
 		{UserId: authorId.String(), RoomId: roomId.String()},
 	}, nil)
 
@@ -233,15 +232,15 @@ func TestCreateMessage_RepoError(t *testing.T) {
 		Content:     "Hello",
 	}
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
 		{UserId: authorId.String(), RoomId: roomId.String()},
 	}, nil)
 
-	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
 	}, nil)
@@ -279,10 +278,10 @@ func TestGetMessage_Success(t *testing.T) {
 	}
 
 	mockRepo.On("GetMessageById", ctx, messageId).Return(msg, nil)
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
 		{UserId: userId.String(), RoomId: roomId.String()},
 	}, nil)
-	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
 	}, nil)
@@ -352,11 +351,11 @@ func TestUpdateMessage_Success(t *testing.T) {
 	})).Return(nil)
 	mockRepo.On("GetMessageById", ctx, messageId).Return(updated, nil).Once()
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
-	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
 	}, nil)
@@ -391,7 +390,7 @@ func TestUpdateMessage_NotAuthor(t *testing.T) {
 
 	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
@@ -444,7 +443,7 @@ func TestDeleteMessage_Success(t *testing.T) {
 	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
 	mockRepo.On("DeleteMessage", ctx, messageId).Return(nil)
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
@@ -475,7 +474,7 @@ func TestDeleteMessage_NotAuthor(t *testing.T) {
 
 	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id: roomId.String(),
 	}, nil)
 
@@ -536,11 +535,11 @@ func TestListMessages_Success(t *testing.T) {
 		},
 	}
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
 		{UserId: userId.String(), RoomId: roomId.String()},
 	}, nil)
 	mockRepo.On("ListMessagesByRoomId", ctx, roomId, "", 50).Return(msgs, (*structs.CursorMeta)(nil), nil)
-	mockUser.On("GetUser", ctx, authorId.String()).Return(&bridge.UserInfo{
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
 		Id:   authorId.String(),
 		Name: "testuser",
 	}, nil)
@@ -572,7 +571,7 @@ func TestListMessages_Empty(t *testing.T) {
 	userId := uuid.New()
 	ctx := context.WithValue(context.Background(), "userId", userId)
 
-	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]bridge.RoomMemberInfo{
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
 		{UserId: userId.String(), RoomId: roomId.String()},
 	}, nil)
 	mockRepo.On("ListMessagesByRoomId", ctx, roomId, "", 50).Return([]domain.ChatMessage{}, (*structs.CursorMeta)(nil), nil)
@@ -648,7 +647,7 @@ func TestCreateMessage_PoppedRoom(t *testing.T) {
 		Content:     "Hello",
 	}
 
-	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&bridge.RoomInfo{
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
 		Id:       roomId.String(),
 		PoppedAt: &now,
 	}, nil)
