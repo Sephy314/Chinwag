@@ -12,21 +12,21 @@ import (
 )
 
 type Router struct {
-	Echo         *echo.Echo
-	ChatHandler  *handler.ChatHandler
-	Hub          *handler.Hub
-	log          *slog.Logger
+	Echo        *echo.Echo
+	ChatHandler *handler.ChatHandler
+	WSHandler   *handler.WebSocketHandler
+	log         *slog.Logger
 }
 
 func NewRouter(
 	chatHandler *handler.ChatHandler,
-	hub *handler.Hub,
+	wsHandler *handler.WebSocketHandler,
 	log *slog.Logger,
 ) *Router {
 	return &Router{
 		Echo:        echo.New(),
 		ChatHandler: chatHandler,
-		Hub:         hub,
+		WSHandler:   wsHandler,
 		log:         log,
 	}
 }
@@ -36,6 +36,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
+	e.Use(middleware.RequestLogger())
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},
@@ -60,7 +61,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	pub := e.Group("")
 	{
 		pub.GET("/chat/health", r.ChatHandler.Health)
-		pub.GET("/chat/rooms/:roomId/ws", r.Hub.ServeWS)
+		pub.GET("/chat/rooms/:roomId/ws", r.WSHandler.ServeWS)
 	}
 
 	priv := e.Group("")

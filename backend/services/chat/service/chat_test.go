@@ -500,6 +500,378 @@ func TestDeleteMessage_NotFound(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+func TestGetMessage_NotMember(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	userId := uuid.New()
+	ctx := context.WithValue(context.Background(), "userId", userId)
+
+	msg := domain.ChatMessage{
+		Id:          messageId,
+		RoomId:      roomId,
+		AuthorId:    authorId,
+		MessageType: domain.MessageTypeTEXT,
+		Content:     "Hello",
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(msg, nil)
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{}, nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, err := svc.GetMessage(ctx, messageId)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, http.StatusForbidden, err.(*errs.AppError).Status)
+	mockRepo.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
+}
+
+func TestGetMessage_MemberProviderError(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	messageId := uuid.New()
+	roomId := uuid.New()
+	ctx := context.WithValue(context.Background(), "userId", uuid.New())
+
+	msg := domain.ChatMessage{
+		Id:     messageId,
+		RoomId: roomId,
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(msg, nil)
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return(nil, errors.New("member service error"))
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, err := svc.GetMessage(ctx, messageId)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "member service error", err.Error())
+	mockMember.AssertExpectations(t)
+}
+
+func TestGetMessage_UserProviderError(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	userId := authorId
+	ctx := context.WithValue(context.Background(), "userId", userId)
+
+	msg := domain.ChatMessage{
+		Id:       messageId,
+		RoomId:   roomId,
+		AuthorId: authorId,
+		Content:  "Hello",
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(msg, nil)
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
+		{UserId: userId.String(), RoomId: roomId.String()},
+	}, nil)
+	mockUser.On("GetUser", ctx, authorId.String()).Return(nil, errors.New("user service error"))
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, err := svc.GetMessage(ctx, messageId)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "user service error", err.Error())
+	mockUser.AssertExpectations(t)
+}
+
+func TestUpdateMessage_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	now := time.Now()
+	ctx := context.Background()
+
+	existing := domain.ChatMessage{
+		Id:       messageId,
+		RoomId:   roomId,
+		AuthorId: authorId,
+		Content:  "Old",
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id:       roomId.String(),
+		PoppedAt: &now,
+	}, nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, err := svc.UpdateMessage(ctx, messageId, authorId, structs.UpdateMessageRequest{Content: strPtr("New")})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, http.StatusForbidden, err.(*errs.AppError).Status)
+	assert.Equal(t, "This room has been popped and is now read-only", err.(*errs.AppError).Message)
+	mockRepo.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
+}
+
+func TestUpdateMessage_RepoError(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	ctx := context.Background()
+
+	existing := domain.ChatMessage{
+		Id:       messageId,
+		RoomId:   roomId,
+		AuthorId: authorId,
+		Content:  "Old",
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+	mockRepo.On("UpdateMessage", ctx, mock.MatchedBy(func(msg domain.ChatMessage) bool {
+		return msg.Content == "New"
+	})).Return(errors.New("db error"))
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, err := svc.UpdateMessage(ctx, messageId, authorId, structs.UpdateMessageRequest{Content: strPtr("New")})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, "db error", err.Error())
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateMessage_WithEventPublisher(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+	mockEvents := new(MockEventPublisher)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	now := time.Now()
+	ctx := context.Background()
+
+	existing := domain.ChatMessage{
+		Id:          messageId,
+		RoomId:      roomId,
+		AuthorId:    authorId,
+		MessageType: domain.MessageTypeTEXT,
+		Content:     "Old content",
+		CreatedAt:   now,
+	}
+
+	newContent := "Updated content"
+	req := structs.UpdateMessageRequest{Content: &newContent}
+
+	updated := existing
+	updated.Content = newContent
+	updated.UpdatedAt = new(now.Add(time.Minute))
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil).Once()
+	mockRepo.On("UpdateMessage", ctx, mock.MatchedBy(func(msg domain.ChatMessage) bool {
+		return msg.Content == "Updated content" && msg.Id == messageId
+	})).Return(nil)
+	mockRepo.On("GetMessageById", ctx, messageId).Return(updated, nil).Once()
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
+		Id:   authorId.String(),
+		Name: "testuser",
+	}, nil)
+
+	mockEvents.On("Publish", roomId, mock.MatchedBy(func(e Event) bool {
+		return e.Type == "updated_message"
+	})).Return(nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, mockEvents)
+	result, err := svc.UpdateMessage(ctx, messageId, authorId, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "Updated content", result.Content)
+	mockEvents.AssertExpectations(t)
+	mockRepo.AssertExpectations(t)
+	mockUser.AssertExpectations(t)
+}
+
+func TestDeleteMessage_PoppedRoom(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	now := time.Now()
+	ctx := context.Background()
+
+	existing := domain.ChatMessage{
+		Id:       messageId,
+		RoomId:   roomId,
+		AuthorId: authorId,
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id:       roomId.String(),
+		PoppedAt: &now,
+	}, nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	err := svc.DeleteMessage(ctx, messageId, authorId)
+
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusForbidden, err.(*errs.AppError).Status)
+	assert.Equal(t, "This room has been popped and is now read-only", err.(*errs.AppError).Message)
+	mockRepo.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
+}
+
+func TestDeleteMessage_RepoError(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	ctx := context.Background()
+
+	existing := domain.ChatMessage{
+		Id:       messageId,
+		RoomId:   roomId,
+		AuthorId: authorId,
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+	mockRepo.On("DeleteMessage", ctx, messageId).Return(errors.New("db error"))
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	err := svc.DeleteMessage(ctx, messageId, authorId)
+
+	assert.Error(t, err)
+	assert.Equal(t, "db error", err.Error())
+	mockRepo.AssertExpectations(t)
+}
+
+func TestDeleteMessage_WithEventPublisher(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+	mockEvents := new(MockEventPublisher)
+
+	authorId := uuid.New()
+	messageId := uuid.New()
+	roomId := uuid.New()
+	ctx := context.Background()
+
+	existing := domain.ChatMessage{
+		Id:       messageId,
+		RoomId:   roomId,
+		AuthorId: authorId,
+		Content:  "To delete",
+	}
+
+	mockRepo.On("GetMessageById", ctx, messageId).Return(existing, nil)
+	mockRepo.On("DeleteMessage", ctx, messageId).Return(nil)
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+
+	mockEvents.On("Publish", roomId, mock.MatchedBy(func(e Event) bool {
+		return e.Type == "deleted_message"
+	})).Return(nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, mockEvents)
+	err := svc.DeleteMessage(ctx, messageId, authorId)
+
+	assert.NoError(t, err)
+	mockEvents.AssertExpectations(t)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestListMessages_NotMember(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	roomId := uuid.New()
+	userId := uuid.New()
+	ctx := context.WithValue(context.Background(), "userId", userId)
+
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{}, nil)
+
+	req := structs.ListMessagesRequest{
+		RoomID: roomId.String(),
+		Cursor: "",
+		Limit:  50,
+	}
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, meta, err := svc.ListMessages(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Nil(t, meta)
+	assert.Equal(t, http.StatusForbidden, err.(*errs.AppError).Status)
+	mockMember.AssertExpectations(t)
+}
+
+func TestListMessages_MemberProviderError(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+
+	roomId := uuid.New()
+	userId := uuid.New()
+	ctx := context.WithValue(context.Background(), "userId", userId)
+
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return(nil, errors.New("member service error"))
+
+	req := structs.ListMessagesRequest{
+		RoomID: roomId.String(),
+		Cursor: "",
+		Limit:  50,
+	}
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, nil)
+	result, meta, err := svc.ListMessages(ctx, req)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Nil(t, meta)
+	assert.Equal(t, "member service error", err.Error())
+	mockMember.AssertExpectations(t)
+}
+
 func TestListMessages_Success(t *testing.T) {
 	mockRepo := new(MockChatRepo)
 	mockUser := new(MockUserProvider)
@@ -599,6 +971,66 @@ func TestListMessages_InvalidRoomID(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Nil(t, meta)
+}
+
+type MockEventPublisher struct {
+	mock.Mock
+}
+
+func (m *MockEventPublisher) Publish(roomId uuid.UUID, event Event) error {
+	args := m.Called(roomId, event)
+	return args.Error(0)
+}
+
+func TestCreateMessage_WithEventPublisher(t *testing.T) {
+	mockRepo := new(MockChatRepo)
+	mockUser := new(MockUserProvider)
+	mockMember := new(MockMemberProvider)
+	mockEvents := new(MockEventPublisher)
+
+	authorId := uuid.New()
+	roomId := uuid.New()
+	ctx := context.WithValue(context.Background(), "authorId", authorId)
+
+	req := structs.CreateMessageRequest{
+		MessageType: domain.MessageTypeTEXT,
+		Content:     "Hello, world!",
+	}
+
+	mockMember.On("GetRoomById", ctx, roomId.String()).Return(&RoomInfo{
+		Id: roomId.String(),
+	}, nil)
+
+	mockMember.On("GetMembersByRoomId", ctx, roomId.String()).Return([]RoomMemberInfo{
+		{UserId: authorId.String(), RoomId: roomId.String()},
+	}, nil)
+
+	mockUser.On("GetUser", ctx, authorId.String()).Return(&UserInfo{
+		Id:   authorId.String(),
+		Name: "testuser",
+	}, nil)
+
+	mockRepo.On("CreateMessage", ctx, mock.MatchedBy(func(msg domain.ChatMessage) bool {
+		return msg.Content == "Hello, world!" && msg.RoomId == roomId && msg.AuthorId == authorId
+	})).Return(nil)
+
+	mockEvents.On("Publish", roomId, mock.MatchedBy(func(e Event) bool {
+		return e.Type == "new_message"
+	})).Return(nil)
+
+	svc := NewChatService(mockRepo, nil, mockUser, mockMember, mockEvents)
+	result, err := svc.CreateMessage(ctx, roomId, req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	mockEvents.AssertExpectations(t)
+	mockRepo.AssertExpectations(t)
+	mockUser.AssertExpectations(t)
+	mockMember.AssertExpectations(t)
+}
+
+func strPtr(s string) *string {
+	return &s
 }
 
 func TestCreateMessage_NonExistentRoom(t *testing.T) {

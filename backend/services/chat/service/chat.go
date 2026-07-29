@@ -12,8 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type BroadcastFunc func(roomId uuid.UUID, event []byte)
-
 type ChatServiceInterface interface {
 	CreateMessage(ctx context.Context, roomId uuid.UUID, req structs.CreateMessageRequest) (*structs.MessageResponse, error)
 	GetMessage(ctx context.Context, messageId uuid.UUID) (*structs.MessageResponse, error)
@@ -23,20 +21,20 @@ type ChatServiceInterface interface {
 }
 
 type ChatService struct {
-	repo      repo.ChatRepoInterface
-	uow       repo.UnitOfWork
-	user      UserProvider
-	member    RoomMemberProvider
-	broadcast BroadcastFunc
+	repo   repo.ChatRepoInterface
+	uow    repo.UnitOfWork
+	user   UserProvider
+	member RoomMemberProvider
+	events EventPublisher
 }
 
-func NewChatService(chatRepo repo.ChatRepoInterface, uow repo.UnitOfWork, user UserProvider, member RoomMemberProvider, broadcast BroadcastFunc) *ChatService {
+func NewChatService(chatRepo repo.ChatRepoInterface, uow repo.UnitOfWork, user UserProvider, member RoomMemberProvider, events EventPublisher) *ChatService {
 	return &ChatService{
-		repo:      chatRepo,
-		uow:       uow,
-		user:      user,
-		member:    member,
-		broadcast: broadcast,
+		repo:   chatRepo,
+		uow:    uow,
+		user:   user,
+		member: member,
+		events: events,
 	}
 }
 
@@ -102,11 +100,8 @@ func (s *ChatService) CreateMessage(ctx context.Context, roomId uuid.UUID, req s
 
 	resp := toResponse(msg, user.Name)
 
-	if s.broadcast != nil {
-		event, _ := encodeEvent("new_message", resp)
-		if event != nil {
-			s.broadcast(roomId, event)
-		}
+	if s.events != nil {
+		s.events.Publish(roomId, Event{Type: "new_message", Data: resp})
 	}
 
 	return resp, nil
@@ -236,11 +231,8 @@ func (s *ChatService) UpdateMessage(ctx context.Context, messageId uuid.UUID, us
 
 	resp := toResponse(updated, user.Name)
 
-	if s.broadcast != nil {
-		event, _ := encodeEvent("updated_message", resp)
-		if event != nil {
-			s.broadcast(msg.RoomId, event)
-		}
+	if s.events != nil {
+		s.events.Publish(msg.RoomId, Event{Type: "updated_message", Data: resp})
 	}
 
 	return resp, nil
@@ -278,7 +270,7 @@ func (s *ChatService) DeleteMessage(ctx context.Context, messageId uuid.UUID, us
 		return err
 	}
 
-	if s.broadcast != nil {
+	if s.events != nil {
 		deletedEvent := struct {
 			Id     string `json:"id"`
 			RoomId string `json:"room_id"`
@@ -286,10 +278,7 @@ func (s *ChatService) DeleteMessage(ctx context.Context, messageId uuid.UUID, us
 			Id:     messageId.String(),
 			RoomId: msg.RoomId.String(),
 		}
-		event, _ := encodeEvent("deleted_message", deletedEvent)
-		if event != nil {
-			s.broadcast(msg.RoomId, event)
-		}
+		s.events.Publish(msg.RoomId, Event{Type: "deleted_message", Data: deletedEvent})
 	}
 
 	return nil

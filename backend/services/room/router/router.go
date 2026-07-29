@@ -39,6 +39,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
+	e.Use(middleware.RequestLogger())
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},

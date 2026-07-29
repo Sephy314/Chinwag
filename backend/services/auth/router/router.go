@@ -39,11 +39,34 @@ func NewRouter(
 	}
 }
 
+func (r *Router) requestLogger() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			start := time.Now()
+			err := next(c)
+			rid := c.Response().Header().Get(echo.HeaderXRequestID)
+			status := 0
+			if resp, rErr := echo.UnwrapResponse(c.Response()); rErr == nil {
+				status = resp.Status
+			}
+			r.log.Info("request",
+				"request_id", rid,
+				"method", c.Request().Method,
+				"path", c.Request().URL.Path,
+				"status", status,
+				"latency", time.Since(start).String(),
+			)
+			return err
+		}
+	}
+}
+
 func (r *Router) Setup(cfg *RouterConfig) {
 	e := r.Echo
 
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
+	e.Use(r.requestLogger())
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},

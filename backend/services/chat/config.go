@@ -11,6 +11,7 @@ type Config struct {
 	RoomServiceURL string
 	JWKSURL        string
 	FrontendURL    string
+	NatsURL        string
 }
 
 func LoadConfig() *Config {
@@ -51,6 +52,11 @@ func LoadConfig() *Config {
 		frontendURL = "http://localhost:3000"
 	}
 
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		natsURL = "nats://localhost:4222"
+	}
+
 	return &Config{
 		Port:           port,
 		DBUrl:          dbUrl,
@@ -60,5 +66,6 @@ func LoadConfig() *Config {
 		RoomServiceURL: roomServiceURL,
 		JWKSURL:        jwksURL,
 		FrontendURL:    frontendURL,
+		NatsURL:        natsURL,
 	}
 }

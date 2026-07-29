@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/domain"
@@ -25,13 +24,4 @@ func toResponse(msg domain.ChatMessage, authorName string) *structs.MessageRespo
 		CreatedAt:   msg.CreatedAt,
 		UpdatedAt:   msg.UpdatedAt,
 	}
-}
-
-type wsEvent struct {
-	Type string      `json:"type"`
-	Data interface{} `json:"data"`
-}
-
-func encodeEvent(eventType string, data interface{}) ([]byte, error) {
-	return json.Marshal(wsEvent{Type: eventType, Data: data})
 }

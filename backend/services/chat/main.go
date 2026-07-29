@@ -17,6 +17,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/chat/repo"
 	"github.com/Sephy314/chinwag/backend/services/chat/router"
 	"github.com/Sephy314/chinwag/backend/services/chat/service"
+	"github.com/Sephy314/chinwag/backend/services/chat/ws"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -211,12 +212,14 @@ func main() {
 		DBUrl:         cfg.DBUrl,
 		RedisAddr:     cfg.RedisAddr,
 		RedisPassword: cfg.RedisPassword,
+		NatsURL:       cfg.NatsURL,
+		Log:           log,
 	})
 	if err != nil {
-		log.Error("failed to connect to database", "error", err)
+		log.Error("failed to create connections", "error", err)
 		os.Exit(1)
 	}
-	defer conns.DB.Close()
+	defer conns.Close()
 
 	userAdapter := newAuthUserAdapter(cfg.AuthServiceURL)
 	roomMemberProv := newRoomMemberAdapter(cfg.RoomServiceURL)
@@ -226,17 +229,30 @@ func main() {
 
 	jwksClient := sharedauth.NewJWKSClient(cfg.JWKSURL, 5*time.Minute)
 
-	hub := handler.NewHub(log, jwksClient)
+	hub := ws.NewHub(log)
 	go hub.Run()
 
-	broadcastFn := func(roomId uuid.UUID, event []byte) {
-		hub.Broadcast(roomId, event)
+	var eventPublisher service.EventPublisher
+	if conns.Nats != nil {
+		ctx := context.Background()
+		consumerName := "chat-worker-" + uuid.New().String()
+		if err := conns.Nats.Consume(ctx, consumerName, hub.Broadcast); err != nil {
+			log.Error("failed to start NATS consumer", "error", err)
+			os.Exit(1)
+		}
+
+		eventPublisher = conns.Nats
+		log.Info("using NATS JetStream event publisher", "consumer", consumerName, "nats_url", cfg.NatsURL)
+	} else {
+		eventPublisher = ws.NewHubEventPublisher(hub)
+		log.Info("using local Hub event publisher (no NATS configured)")
 	}
 
-	chatSvc := service.NewChatService(chatRepoImpl, unitOfWork, userAdapter, roomMemberProv, broadcastFn)
+	chatSvc := service.NewChatService(chatRepoImpl, unitOfWork, userAdapter, roomMemberProv, eventPublisher)
 	chatHandler := handler.NewChatHandler(chatSvc)
+	wsHandler := handler.NewWebSocketHandler(hub, jwksClient, log)
 
-	r := router.NewRouter(chatHandler, hub, log)
+	r := router.NewRouter(chatHandler, wsHandler, log)
 
 	r.Setup(&router.RouterConfig{
 		Port:        cfg.Port,
