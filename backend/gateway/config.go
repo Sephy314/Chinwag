@@ -5,11 +5,17 @@ import (
 	"strings"
 )
 
+type ServiceRoute struct {
+	Prefix    string
+	Methods   []string
+	TargetURL string
+	StripPrefix bool
+}
+
 type Config struct {
-	Port        string
-	Services    map[string]string
-	StripPrefix []string
-	Default     string
+	Port    string
+	Routes  []ServiceRoute
+	Default string
 }
 
 func LoadConfig() *Config {
@@ -18,17 +24,46 @@ func LoadConfig() *Config {
 		port = "8000"
 	}
 
-	services := make(map[string]string)
+	var routes []ServiceRoute
 
 	if authURL := os.Getenv("AUTH_SERVICE_URL"); authURL != "" {
-		services["/auth"] = authURL
+		routes = append(routes, ServiceRoute{Prefix: "/auth", TargetURL: authURL})
 	}
-	if roomURL := os.Getenv("ROOM_SERVICE_URL"); roomURL != "" {
-		services["/rooms"] = roomURL
-		services["/users"] = roomURL
+
+	roomURL := os.Getenv("ROOM_SERVICE_URL")
+	if roomURL != "" {
+		routes = append(routes, ServiceRoute{Prefix: "/rooms", TargetURL: roomURL})
+		routes = append(routes, ServiceRoute{Prefix: "/users", TargetURL: roomURL})
 	}
-	if chatURL := os.Getenv("CHAT_SERVICE_URL"); chatURL != "" {
-		services["/chat"] = chatURL
+
+	chatCommandURL := os.Getenv("CHAT_COMMAND_SERVICE_URL")
+	if chatCommandURL == "" {
+		chatCommandURL = os.Getenv("CHAT_SERVICE_URL")
+	}
+	chatQueryURL := os.Getenv("CHAT_QUERY_SERVICE_URL")
+	if chatQueryURL == "" {
+		chatQueryURL = chatCommandURL
+	}
+
+	if chatCommandURL != "" {
+		routes = append(routes, ServiceRoute{
+			Prefix:    "/chat",
+			Methods:   []string{"POST", "PUT", "DELETE"},
+			TargetURL: chatCommandURL,
+		})
+		routes = append(routes, ServiceRoute{
+			Prefix:    "/chat/rooms/:roomId/ws",
+			Methods:   []string{"GET"},
+			TargetURL: chatCommandURL,
+		})
+	}
+
+	if chatQueryURL != "" {
+		routes = append(routes, ServiceRoute{
+			Prefix:    "/chat",
+			Methods:   []string{"GET"},
+			TargetURL: chatQueryURL,
+		})
 	}
 
 	defaultURL := os.Getenv("DEFAULT_SERVICE_URL")
@@ -37,11 +72,11 @@ func LoadConfig() *Config {
 	if sp := os.Getenv("STRIP_PREFIX"); sp != "" {
 		stripPrefix = strings.Split(sp, ",")
 	}
+	_ = stripPrefix
 
 	return &Config{
-		Port:        port,
-		Services:    services,
-		StripPrefix: stripPrefix,
-		Default:     defaultURL,
+		Port:    port,
+		Routes:  routes,
+		Default: defaultURL,
 	}
 }

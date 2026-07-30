@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/labstack/echo/v5"
@@ -43,14 +42,29 @@ func setupRoutes(e *echo.Echo, cfg *Config) {
 	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			path := c.Request().URL.Path
-			for prefix, targetURL := range cfg.Services {
-				if strings.HasPrefix(path, prefix) {
-					shouldStrip := slices.Contains(cfg.StripPrefix, prefix)
-					proxy := newReverseProxy(targetURL, shouldStrip, prefix)
-					proxy.ServeHTTP(c.Response(), c.Request())
-					return nil
+			method := c.Request().Method
+
+			for _, route := range cfg.Routes {
+				if !strings.HasPrefix(path, route.Prefix) {
+					continue
 				}
+				if len(route.Methods) > 0 {
+					methodMatch := false
+					for _, m := range route.Methods {
+						if m == method {
+							methodMatch = true
+							break
+						}
+					}
+					if !methodMatch {
+						continue
+					}
+				}
+				proxy := newReverseProxy(route.TargetURL, route.StripPrefix, route.Prefix)
+				proxy.ServeHTTP(c.Response(), c.Request())
+				return nil
 			}
+
 			return next(c)
 		}
 	})

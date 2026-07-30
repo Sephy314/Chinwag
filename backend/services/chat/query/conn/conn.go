@@ -1,0 +1,80 @@
+package conn
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/jmoiron/sqlx"
+	natslib "github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
+)
+
+import _ "github.com/jackc/pgx/v5/stdlib"
+
+type Connection struct {
+	DB  *sqlx.DB
+	Nc  *natslib.Conn
+	Js  jetstream.JetStream
+}
+
+type ConnectionConfig struct {
+	DBUrl   string
+	NatsURL string
+	NatsName string
+	Log     *slog.Logger
+}
+
+func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
+	db, err := sqlx.Connect("pgx", cfg.DBUrl)
+	if err != nil {
+		return nil, fmt.Errorf("db connect: %w", err)
+	}
+
+	conn := &Connection{DB: db}
+
+	if cfg.NatsURL != "" {
+		nc, err := natslib.Connect(cfg.NatsURL,
+			natslib.Name(cfg.NatsName),
+			natslib.ReconnectWait(2*time.Second),
+			natslib.MaxReconnects(-1),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("nats connect: %w", err)
+		}
+
+		js, err := jetstream.New(nc)
+		if err != nil {
+			nc.Close()
+			return nil, fmt.Errorf("jetstream new: %w", err)
+		}
+
+		_, err = js.CreateOrUpdateConsumer(context.Background(), "CHAT_EVENTS", jetstream.ConsumerConfig{
+			Name:          "chat-projection",
+			Description:   "Projection consumer for CQRS query service",
+			FilterSubject: "chat.room.>",
+			DeliverPolicy: jetstream.DeliverNewPolicy,
+			AckPolicy:     jetstream.AckExplicitPolicy,
+			MaxDeliver:    3,
+		})
+		if err != nil {
+			nc.Close()
+			return nil, fmt.Errorf("jetstream consumer setup: %w", err)
+		}
+
+		conn.Nc = nc
+		conn.Js = js
+	}
+
+	return conn, nil
+}
+
+func (c *Connection) Close() {
+	if c.DB != nil {
+		c.DB.Close()
+	}
+	if c.Nc != nil {
+		c.Nc.Close()
+	}
+}
