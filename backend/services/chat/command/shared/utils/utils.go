@@ -4,9 +4,9 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 )
 
 func IsEmail(email string) bool {
@@ -16,15 +16,12 @@ func IsEmail(email string) bool {
 }
 
 func GetUserIdByEchoContext(ctx *echo.Context) (*string, error) {
-	token, err := echo.ContextGet[*jwt.Token](ctx, "user")
-
+	claims, err := sharedauth.ClaimsFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	uid, err := token.Claims.GetSubject()
-
-	return &uid, err
+	return &claims.Subject, nil
 }
 
 type ManagerChecker interface {

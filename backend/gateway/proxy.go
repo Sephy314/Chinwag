@@ -48,6 +48,9 @@ func setupRoutes(e *echo.Echo, cfg *Config) {
 				if !strings.HasPrefix(path, route.Prefix) {
 					continue
 				}
+				if route.Suffix != "" && !strings.HasSuffix(path, route.Suffix) {
+					continue
+				}
 				if len(route.Methods) > 0 {
 					methodMatch := false
 					for _, m := range route.Methods {

@@ -18,6 +18,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/chat/query/repo"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/router"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/service"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/cache"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/nats-io/nats.go/jetstream"
@@ -95,10 +96,12 @@ func main() {
 	}
 
 	conns, err := conn.NewConnection(&conn.ConnectionConfig{
-		DBUrl:    cfg.DBUrl,
-		NatsURL:  cfg.NatsURL,
-		NatsName: "chinwag-chat-query",
-		Log:      log,
+		DBUrl:         cfg.DBUrl,
+		RedisAddr:     cfg.RedisAddr,
+		RedisPassword: cfg.RedisPassword,
+		NatsURL:       cfg.NatsURL,
+		NatsName:      "chinwag-chat-query",
+		Log:           log,
 	})
 	if err != nil {
 		log.Error("failed to create connections", "error", err)
@@ -108,8 +111,9 @@ func main() {
 
 	projectionRepo := repo.NewProjectionRepo(conns.DB)
 	memberAdapter := newRoomMemberAdapter(cfg.RoomServiceURL)
+	cacheRedis := cache.NewRedisCache(conns.Rds)
 
-	querySvc := service.NewQueryService(projectionRepo, memberAdapter)
+	querySvc := service.NewQueryService(projectionRepo, memberAdapter, cacheRedis)
 	queryHandler := handler.NewQueryHandler(querySvc)
 
 	if conns.Js != nil {

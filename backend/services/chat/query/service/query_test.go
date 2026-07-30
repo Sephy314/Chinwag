@@ -59,6 +59,24 @@ func (m *MockMemberProvider) GetMembersByRoomId(ctx context.Context, roomId stri
 	return args.Get(0).([]RoomMemberInfo), args.Error(1)
 }
 
+type noopCache struct{}
+
+func (noopCache) Get(_ context.Context, _ string) (string, error) {
+	return "", errors.New("miss")
+}
+
+func (noopCache) Set(_ context.Context, _ string, _ any, _ time.Duration) error {
+	return nil
+}
+
+func (noopCache) Delete(_ context.Context, _ string) error {
+	return nil
+}
+
+func (noopCache) TTL(_ context.Context, _ string) (time.Duration, error) {
+	return 0, errors.New("miss")
+}
+
 func TestGetMessage_Success(t *testing.T) {
 	mockRepo := new(MockProjectionRepo)
 	mockMember := new(MockMemberProvider)
@@ -84,7 +102,7 @@ func TestGetMessage_Success(t *testing.T) {
 		{UserId: userId.String(), RoomId: roomId.String()},
 	}, nil)
 
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 	result, err := svc.GetMessage(context.Background(), messageId, userId)
 
 	assert.NoError(t, err)
@@ -103,7 +121,7 @@ func TestGetMessage_NotFound(t *testing.T) {
 
 	mockRepo.On("GetById", mock.Anything, messageId).Return(domain.MessageProjection{}, errs.ErrNotFound)
 
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 	result, err := svc.GetMessage(context.Background(), messageId, uuid.New())
 
 	assert.Error(t, err)
@@ -128,7 +146,7 @@ func TestGetMessage_NotMember(t *testing.T) {
 	mockRepo.On("GetById", mock.Anything, messageId).Return(msg, nil)
 	mockMember.On("GetMembersByRoomId", mock.Anything, roomId.String()).Return([]RoomMemberInfo{}, nil)
 
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 	result, err := svc.GetMessage(context.Background(), messageId, userId)
 
 	assert.Error(t, err)
@@ -153,7 +171,7 @@ func TestGetMessage_MemberProviderError(t *testing.T) {
 	mockRepo.On("GetById", mock.Anything, messageId).Return(msg, nil)
 	mockMember.On("GetMembersByRoomId", mock.Anything, roomId.String()).Return(nil, errors.New("member service error"))
 
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 	result, err := svc.GetMessage(context.Background(), messageId, uuid.New())
 
 	assert.Error(t, err)
@@ -179,7 +197,7 @@ func TestListMessages_Success(t *testing.T) {
 	mockRepo.On("ListByRoomId", mock.Anything, roomId, "", 50).Return(msgs, (*structs.CursorMeta)(nil), nil)
 
 	ctx := context.WithValue(context.Background(), "userId", userId)
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 
 	req := structs.ListMessagesRequest{RoomID: roomId.String(), Cursor: "", Limit: 50}
 	result, meta, err := svc.ListMessages(ctx, req)
@@ -205,7 +223,7 @@ func TestListMessages_Empty(t *testing.T) {
 	mockRepo.On("ListByRoomId", mock.Anything, roomId, "", 50).Return([]domain.MessageProjection{}, (*structs.CursorMeta)(nil), nil)
 
 	ctx := context.WithValue(context.Background(), "userId", userId)
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 
 	req := structs.ListMessagesRequest{RoomID: roomId.String(), Cursor: "", Limit: 50}
 	result, meta, err := svc.ListMessages(ctx, req)
@@ -225,7 +243,7 @@ func TestListMessages_NotMember(t *testing.T) {
 	mockMember.On("GetMembersByRoomId", mock.Anything, roomId.String()).Return([]RoomMemberInfo{}, nil)
 
 	ctx := context.WithValue(context.Background(), "userId", userId)
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 
 	req := structs.ListMessagesRequest{RoomID: roomId.String(), Cursor: "", Limit: 50}
 	result, meta, err := svc.ListMessages(ctx, req)
@@ -237,7 +255,7 @@ func TestListMessages_NotMember(t *testing.T) {
 }
 
 func TestListMessages_InvalidRoomID(t *testing.T) {
-	svc := NewQueryService(nil, nil)
+	svc := NewQueryService(nil, nil, nil)
 
 	req := structs.ListMessagesRequest{RoomID: "not-a-uuid"}
 	result, meta, err := svc.ListMessages(context.Background(), req)
@@ -257,7 +275,7 @@ func TestListMessages_MemberProviderError(t *testing.T) {
 	mockMember.On("GetMembersByRoomId", mock.Anything, roomId.String()).Return(nil, errors.New("member service error"))
 
 	ctx := context.WithValue(context.Background(), "userId", userId)
-	svc := NewQueryService(mockRepo, mockMember)
+	svc := NewQueryService(mockRepo, mockMember, noopCache{})
 
 	req := structs.ListMessagesRequest{RoomID: roomId.String(), Cursor: "", Limit: 50}
 	result, meta, err := svc.ListMessages(ctx, req)

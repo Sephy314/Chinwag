@@ -1,27 +1,15 @@
 package utils
 
 import (
-	"fmt"
-
-	"github.com/golang-jwt/jwt/v5"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/labstack/echo/v5"
 )
 
-func GetUserIdByEchoContext(c *echo.Context) (*string, error) {
-	token, ok := c.Get("user").(*jwt.Token)
-	if !ok {
-		return nil, fmt.Errorf("user not found in context")
+func GetUserIdByEchoContext(ctx *echo.Context) (*string, error) {
+	claims, err := sharedauth.ClaimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, fmt.Errorf("invalid claims")
-	}
-
-	sub, ok := claims["sub"].(string)
-	if !ok {
-		return nil, fmt.Errorf("sub claim not found")
-	}
-
-	return &sub, nil
+	return &claims.Subject, nil
 }

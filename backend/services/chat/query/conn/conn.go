@@ -9,21 +9,25 @@ import (
 	"github.com/jmoiron/sqlx"
 	natslib "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/redis/go-redis/v9"
 )
 
 import _ "github.com/jackc/pgx/v5/stdlib"
 
 type Connection struct {
 	DB  *sqlx.DB
+	Rds *redis.Client
 	Nc  *natslib.Conn
 	Js  jetstream.JetStream
 }
 
 type ConnectionConfig struct {
-	DBUrl   string
-	NatsURL string
-	NatsName string
-	Log     *slog.Logger
+	DBUrl         string
+	RedisAddr     string
+	RedisPassword string
+	NatsURL       string
+	NatsName      string
+	Log           *slog.Logger
 }
 
 func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
@@ -33,6 +37,18 @@ func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
 	}
 
 	conn := &Connection{DB: db}
+
+	rds := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword,
+		DB:       0,
+	})
+
+	if err := rds.Ping(context.Background()).Err(); err != nil {
+		return nil, fmt.Errorf("redis ping: %w", err)
+	}
+
+	conn.Rds = rds
 
 	if cfg.NatsURL != "" {
 		nc, err := natslib.Connect(cfg.NatsURL,
@@ -73,6 +89,9 @@ func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
 func (c *Connection) Close() {
 	if c.DB != nil {
 		c.DB.Close()
+	}
+	if c.Rds != nil {
+		c.Rds.Close()
 	}
 	if c.Nc != nil {
 		c.Nc.Close()

@@ -1,14 +1,12 @@
 package main
 
-import (
-	"os"
-	"strings"
-)
+import "os"
 
 type ServiceRoute struct {
-	Prefix    string
-	Methods   []string
-	TargetURL string
+	Prefix      string
+	Suffix      string   // optional, path must also end with this
+	Methods     []string
+	TargetURL   string
 	StripPrefix bool
 }
 
@@ -27,7 +25,7 @@ func LoadConfig() *Config {
 	var routes []ServiceRoute
 
 	if authURL := os.Getenv("AUTH_SERVICE_URL"); authURL != "" {
-		routes = append(routes, ServiceRoute{Prefix: "/auth", TargetURL: authURL})
+		routes = append(routes, ServiceRoute{Prefix: "/auth", TargetURL: authURL, StripPrefix: true})
 	}
 
 	roomURL := os.Getenv("ROOM_SERVICE_URL")
@@ -52,7 +50,8 @@ func LoadConfig() *Config {
 			TargetURL: chatCommandURL,
 		})
 		routes = append(routes, ServiceRoute{
-			Prefix:    "/chat/rooms/:roomId/ws",
+			Prefix:    "/chat/rooms/",
+			Suffix:    "/ws",
 			Methods:   []string{"GET"},
 			TargetURL: chatCommandURL,
 		})
@@ -67,12 +66,6 @@ func LoadConfig() *Config {
 	}
 
 	defaultURL := os.Getenv("DEFAULT_SERVICE_URL")
-
-	var stripPrefix []string
-	if sp := os.Getenv("STRIP_PREFIX"); sp != "" {
-		stripPrefix = strings.Split(sp, ",")
-	}
-	_ = stripPrefix
 
 	return &Config{
 		Port:    port,
