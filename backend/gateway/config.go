@@ -9,7 +9,6 @@ type Config struct {
 	Port        string
 	Services    map[string]string
 	StripPrefix []string
-	Default     string
 }
 
 func LoadConfig() *Config {
@@ -31,8 +30,6 @@ func LoadConfig() *Config {
 		services["/chat"] = chatURL
 	}
 
-	defaultURL := os.Getenv("DEFAULT_SERVICE_URL")
-
 	var stripPrefix []string
 	if sp := os.Getenv("STRIP_PREFIX"); sp != "" {
 		stripPrefix = strings.Split(sp, ",")
@@ -42,6 +39,5 @@ func LoadConfig() *Config {
 		Port:        port,
 		Services:    services,
 		StripPrefix: stripPrefix,
-		Default:     defaultURL,
 	}
 }
