@@ -4,16 +4,15 @@ import "os"
 
 type ServiceRoute struct {
 	Prefix      string
-	Suffix      string   // optional, path must also end with this
+	Suffix      string // optional, path must also end with this
 	Methods     []string
 	TargetURL   string
 	StripPrefix bool
 }
 
 type Config struct {
-	Port    string
-	Routes  []ServiceRoute
-	Default string
+	Port   string
+	Routes []ServiceRoute
 }
 
 func LoadConfig() *Config {
@@ -65,11 +64,8 @@ func LoadConfig() *Config {
 		})
 	}
 
-	defaultURL := os.Getenv("DEFAULT_SERVICE_URL")
-
 	return &Config{
-		Port:    port,
-		Routes:  routes,
-		Default: defaultURL,
+		Port:   port,
+		Routes: routes,
 	}
 }

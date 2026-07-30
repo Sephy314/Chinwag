@@ -72,11 +72,4 @@ func setupRoutes(e *echo.Echo, cfg *Config) {
 		}
 	})
 
-	if cfg.Default != "" {
-		e.Any("/*", func(c *echo.Context) error {
-			proxy := newReverseProxy(cfg.Default, false, "")
-			proxy.ServeHTTP(c.Response(), c.Request())
-			return nil
-		})
-	}
 }
