@@ -9,8 +9,8 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/chat/command/domain"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/repo"
-	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -80,7 +80,7 @@ type testTransaction struct {
 	outboxRepo repo.OutboxRepoInterface
 }
 
-func (t *testTransaction) ChatRepo() repo.ChatRepoInterface   { return t.chatRepo }
+func (t *testTransaction) ChatRepo() repo.ChatRepoInterface     { return t.chatRepo }
 func (t *testTransaction) OutboxRepo() repo.OutboxRepoInterface { return t.outboxRepo }
 
 type testUnitOfWork struct {
@@ -136,9 +136,11 @@ func TestCreateMessage_Success(t *testing.T) {
 
 	authorId := uuid.New()
 	roomId := uuid.New()
+	messageId := uuid.New()
 	ctx := context.WithValue(context.Background(), "authorId", authorId)
 
 	req := structs.CreateMessageRequest{
+		Id:          messageId,
 		MessageType: domain.MessageTypeTEXT,
 		Content:     "Hello, world!",
 	}
@@ -157,7 +159,7 @@ func TestCreateMessage_Success(t *testing.T) {
 	}, nil)
 
 	mockRepo.On("CreateMessage", ctx, mock.MatchedBy(func(msg domain.ChatMessage) bool {
-		return msg.Content == "Hello, world!" && msg.RoomId == roomId && msg.AuthorId == authorId
+		return msg.Id == messageId && msg.Content == "Hello, world!" && msg.RoomId == roomId && msg.AuthorId == authorId
 	})).Return(nil)
 
 	mockOutbox.On("Insert", ctx, mock.MatchedBy(func(ev repo.OutboxEvent) bool {
@@ -173,6 +175,7 @@ func TestCreateMessage_Success(t *testing.T) {
 	assert.Equal(t, "Hello, world!", result.Content)
 	assert.Equal(t, "testuser", result.AuthorName)
 	assert.Equal(t, authorId.String(), result.AuthorId)
+	assert.Equal(t, messageId.String(), result.Id)
 	mockRepo.AssertExpectations(t)
 	mockOutbox.AssertExpectations(t)
 	mockUser.AssertExpectations(t)

@@ -118,7 +118,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Message content",
+                        "description": "Message payload, including a client-generated UUID for idempotency",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -494,10 +494,16 @@ const docTemplate = `{
                 "content": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Client-generated message UUID used for idempotency"
+                },
                 "message_type": {
                     "$ref": "#/definitions/domain.MessageType"
                 }
-            }
+            },
+            "required": ["id"]
         },
         "structs.MessageResponse": {
             "type": "object",

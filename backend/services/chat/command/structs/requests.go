@@ -1,8 +1,12 @@
 package structs
 
-import "github.com/Sephy314/chinwag/backend/services/chat/command/domain"
+import (
+	"github.com/Sephy314/chinwag/backend/services/chat/command/domain"
+	"github.com/google/uuid"
+)
 
 type CreateMessageRequest struct {
+	Id          uuid.UUID          `json:"id"`
 	MessageType domain.MessageType `json:"message_type"`
 	Content     string             `json:"content"`
 }

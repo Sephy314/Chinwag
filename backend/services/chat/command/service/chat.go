@@ -9,8 +9,8 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/chat/command/domain"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/repo"
-	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/google/uuid"
 )
 
@@ -73,11 +73,10 @@ func (s *ChatService) CreateMessage(ctx context.Context, roomId uuid.UUID, req s
 		return nil, err
 	}
 
-	id := uuid.Must(uuid.NewV7())
 	now := time.Now()
 
 	msg := domain.ChatMessage{
-		Id:          id,
+		Id:          req.Id,
 		RoomId:      roomId,
 		AuthorId:    authorId,
 		MessageType: req.MessageType,

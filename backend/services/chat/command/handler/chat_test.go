@@ -9,8 +9,9 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/chat/command/domain"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/handler"
-	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/response"
+	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -68,10 +69,11 @@ func TestChatHandler_CreateMessage_Success(t *testing.T) {
 
 	roomID := uuid.New()
 	userID := uuid.New()
+	messageID := uuid.New()
 	now := time.Now()
 
 	expected := &structs.MessageResponse{
-		Id:          uuid.New().String(),
+		Id:          messageID.String(),
 		RoomId:      roomID.String(),
 		AuthorId:    userID.String(),
 		AuthorName:  "testuser",
@@ -81,6 +83,7 @@ func TestChatHandler_CreateMessage_Success(t *testing.T) {
 	}
 
 	mockSvc.On("CreateMessage", mock.Anything, roomID, structs.CreateMessageRequest{
+		Id:          messageID,
 		MessageType: domain.MessageTypeTEXT,
 		Content:     "Hello, world!",
 	}).Return(expected, nil)
@@ -92,11 +95,9 @@ func TestChatHandler_CreateMessage_Success(t *testing.T) {
 		Headers: map[string][]string{
 			echo.HeaderContentType: {echo.MIMEApplicationJSON},
 		},
-		JSONBody: []byte(`{"message_type":0,"content":"Hello, world!"}`),
+		JSONBody: []byte(`{"id":"` + messageID.String() + `","message_type":0,"content":"Hello, world!"}`),
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
-	})
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()}})
 
 	err := h.CreateMessage(c)
 	if err != nil {
@@ -113,6 +114,25 @@ func TestChatHandler_CreateMessage_Success(t *testing.T) {
 	assert.Equal(t, "testuser", resp.Data.AuthorName)
 
 	mockSvc.AssertExpectations(t)
+}
+
+func TestChatHandler_CreateMessage_MissingMessageID(t *testing.T) {
+	mockSvc := new(MockChatService)
+	h := handler.NewChatHandler(mockSvc)
+
+	userID := uuid.New()
+	roomID := uuid.New()
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{{Name: "roomId", Value: roomID.String()}},
+		Headers:    map[string][]string{echo.HeaderContentType: {echo.MIMEApplicationJSON}},
+		JSONBody:   []byte(`{"message_type":0,"content":"Hello"}`),
+	}.ToContextRecorder(t)
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()}})
+
+	err := h.CreateMessage(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	mockSvc.AssertNotCalled(t, "CreateMessage", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestChatHandler_CreateMessage_InvalidRoomID(t *testing.T) {
@@ -149,9 +169,7 @@ func TestChatHandler_CreateMessage_InvalidJSON(t *testing.T) {
 		},
 		JSONBody: []byte(`{invalid json`),
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
-	})
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()}})
 
 	err := h.CreateMessage(c)
 	if err != nil {
@@ -215,9 +233,7 @@ func TestChatHandler_UpdateMessage_Success(t *testing.T) {
 		},
 		JSONBody: []byte(`{"content":"Updated content"}`),
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
-	})
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()}})
 
 	err := h.UpdateMessage(c)
 	if err != nil {
@@ -270,9 +286,7 @@ func TestChatHandler_DeleteMessage_Success(t *testing.T) {
 			{Name: "messageId", Value: messageID.String()},
 		},
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
-	})
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()}})
 
 	err := h.DeleteMessage(c)
 	if err != nil {

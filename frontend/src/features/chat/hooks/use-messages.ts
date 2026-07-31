@@ -13,12 +13,7 @@ import {
   updateMessage,
   deleteMessage,
 } from "@/features/chat/api/chat-api"
-import type {
-  Message,
-  CreateMessageRequest,
-  UpdateMessageRequest,
-  ServerEvent,
-} from "@/types"
+import type { Message, UpdateMessageRequest, ServerEvent } from "@/types"
 import { MessageType } from "@/types"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import { WsClient } from "@/services/websocket-client"
@@ -58,12 +53,7 @@ export function useMessages(roomId: string) {
           case "new_message": {
             const msg = event.data as Message
             if (msg && msg.id) {
-              const data = pages[0].data.filter(
-                (m) =>
-                  !(m.id.startsWith("optimistic-") &&
-                    m.author_id === msg.author_id &&
-                    m.content === msg.content),
-              )
+              const data = pages[0].data.filter((m) => m.id !== msg.id)
               pages[0] = {
                 ...pages[0],
                 data: [msg, ...data],
@@ -128,17 +118,18 @@ export function useMessages(roomId: string) {
   const allMessages = messagesQuery.data?.pages.flatMap((page) => page.data).filter((m): m is Message => m != null) ?? []
 
   const createMsg = useMutation({
-    mutationFn: (content: string) =>
+    mutationFn: ({ id, content }: { id: string; content: string }) =>
       createMessage(roomId, {
+        id,
         content,
         message_type: MessageType.TEXT,
       }),
-    onMutate: async (content) => {
+    onMutate: async ({ id, content }) => {
       await queryClient.cancelQueries({ queryKey })
       const previous = queryClient.getQueryData<typeof messagesQuery.data>(queryKey)
 
       const optimistic: Message = {
-        id: `optimistic-${Date.now()}`,
+        id,
         room_id: roomId,
         author_id: user!.id,
         author_name: user!.name,
@@ -159,7 +150,7 @@ export function useMessages(roomId: string) {
 
       return { previous }
     },
-    onError: (_err, _content, context) => {
+    onError: (_err, _message, context) => {
       if (context?.previous) {
         queryClient.setQueryData(queryKey, context.previous)
       }
@@ -195,7 +186,8 @@ export function useMessages(roomId: string) {
     messages: allMessages,
     isLoading: messagesQuery.isLoading,
     error: messagesQuery.error,
-    createMessage: createMsg.mutateAsync,
+    createMessage: (content: string) =>
+      createMsg.mutateAsync({ id: crypto.randomUUID(), content }),
     editMessage: editMsg.mutateAsync,
     deleteMessage: deleteMsg.mutateAsync,
     fetchNextPage,

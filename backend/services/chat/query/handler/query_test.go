@@ -10,6 +10,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/chat/query/handler"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/response"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -82,8 +83,8 @@ func TestQueryHandler_GetMessage_Success(t *testing.T) {
 			{Name: "messageId", Value: messageID.String()},
 		},
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()},
 	})
 
 	err := h.GetMessage(c)
@@ -147,8 +148,8 @@ func TestQueryHandler_ListMessages_Success(t *testing.T) {
 			{Name: "roomId", Value: roomID.String()},
 		},
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()},
 	})
 
 	err := h.ListMessages(c)
@@ -207,8 +208,8 @@ func TestQueryHandler_ListMessages_WithCursor(t *testing.T) {
 			"cursor": {cursor},
 		},
 	}.ToContextRecorder(t)
-	c.Set("user", &jwt.Token{
-		Claims: jwt.MapClaims{"sub": userID.String()},
+	c.Set(sharedauth.ClaimsContextKey, &sharedauth.Claims{
+		RegisteredClaims: jwt.RegisteredClaims{Subject: userID.String()},
 	})
 
 	err := h.ListMessages(c)

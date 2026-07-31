@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/command/service"
-	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/utils"
+	"github.com/Sephy314/chinwag/backend/services/chat/command/structs"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
@@ -47,6 +47,9 @@ func (h *ChatHandler) CreateMessage(c *echo.Context) error {
 	var req structs.CreateMessageRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
+	}
+	if req.Id == uuid.Nil {
+		return c.JSON(http.StatusBadRequest, response.Error("message id is required"))
 	}
 
 	ctx := c.Request().Context()
