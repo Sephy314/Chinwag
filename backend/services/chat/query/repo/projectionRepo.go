@@ -1,0 +1,175 @@
+package repo
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"time"
+
+	"github.com/Sephy314/chinwag/backend/services/chat/query/domain"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/errs"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+)
+
+type cursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        uuid.UUID `json:"id"`
+}
+
+func encodeCursor(createdAt time.Time, id uuid.UUID) string {
+	c := cursor{CreatedAt: createdAt, Id: id}
+	b, _ := json.Marshal(c)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+func decodeCursor(s string) (cursor, error) {
+	c := cursor{}
+	b, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return c, err
+	}
+	err = json.Unmarshal(b, &c)
+	return c, err
+}
+
+const defaultLimit = 50
+const maxLimit = 200
+
+type ProjectionRepoInterface interface {
+	Upsert(ctx context.Context, msg domain.MessageProjection) error
+	GetById(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error)
+	ListByRoomId(ctx context.Context, roomId uuid.UUID, cursorStr string, limit int) ([]domain.MessageProjection, *structs.CursorMeta, error)
+	UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error
+	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
+}
+
+type ProjectionRepo struct {
+	db sqlx.ExtContext
+}
+
+func NewProjectionRepo(db sqlx.ExtContext) *ProjectionRepo {
+	return &ProjectionRepo{db: db}
+}
+
+func (r *ProjectionRepo) Upsert(ctx context.Context, msg domain.MessageProjection) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO message_projections (id, room_id, author_id, author_name, message_type, content, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (id) DO UPDATE SET
+		   content = EXCLUDED.content,
+		   updated_at = NOW()`,
+		msg.Id, msg.RoomId, msg.AuthorId, msg.AuthorName, msg.MessageType, msg.Content, msg.CreatedAt,
+	)
+	return err
+}
+
+func (r *ProjectionRepo) GetById(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error) {
+	var msg domain.MessageProjection
+	err := sqlx.GetContext(
+		ctx, r.db, &msg,
+		`SELECT id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at
+		 FROM message_projections
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	)
+	return msg, err
+}
+
+func (r *ProjectionRepo) ListByRoomId(ctx context.Context, roomId uuid.UUID, cursorStr string, limit int) ([]domain.MessageProjection, *structs.CursorMeta, error) {
+	if limit <= 0 || limit > maxLimit {
+		limit = defaultLimit
+	}
+
+	var msgs []domain.MessageProjection
+	var err error
+
+	fetchLimit := limit + 1
+
+	if cursorStr == "" {
+		err = sqlx.SelectContext(
+			ctx, r.db, &msgs,
+			`SELECT id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at
+			 FROM message_projections
+			 WHERE room_id = $1 AND deleted_at IS NULL
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT $2`,
+			roomId, fetchLimit,
+		)
+	} else {
+		c, cerr := decodeCursor(cursorStr)
+		if cerr != nil {
+			return nil, nil, cerr
+		}
+		err = sqlx.SelectContext(
+			ctx, r.db, &msgs,
+			`SELECT id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at
+			 FROM message_projections
+			 WHERE room_id = $1 AND deleted_at IS NULL
+			   AND (created_at, id) < ($2, $3)
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT $4`,
+			roomId, c.CreatedAt, c.Id, fetchLimit,
+		)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hasMore := len(msgs) > limit
+	if hasMore {
+		msgs = msgs[:limit]
+	}
+
+	var meta *structs.CursorMeta
+	if hasMore && len(msgs) > 0 {
+		last := msgs[len(msgs)-1]
+		meta = &structs.CursorMeta{
+			NextCursor: encodeCursor(last.CreatedAt, last.Id),
+			HasMore:    true,
+		}
+	}
+
+	return msgs, meta, nil
+}
+
+func (r *ProjectionRepo) UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE message_projections SET content = $1, updated_at = $2
+		 WHERE id = $3 AND deleted_at IS NULL`,
+		content, updatedAt, id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+	return nil
+}
+
+func (r *ProjectionRepo) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE message_projections SET deleted_at = $1 WHERE id = $2 AND deleted_at IS NULL`,
+		deletedAt, id,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+	return nil
+}

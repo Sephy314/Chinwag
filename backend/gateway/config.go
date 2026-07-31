@@ -1,14 +1,18 @@
 package main
 
-import (
-	"os"
-	"strings"
-)
+import "os"
+
+type ServiceRoute struct {
+	Prefix      string
+	Suffix      string // optional, path must also end with this
+	Methods     []string
+	TargetURL   string
+	StripPrefix bool
+}
 
 type Config struct {
-	Port        string
-	Services    map[string]string
-	StripPrefix []string
+	Port   string
+	Routes []ServiceRoute
 }
 
 func LoadConfig() *Config {
@@ -17,27 +21,51 @@ func LoadConfig() *Config {
 		port = "8000"
 	}
 
-	services := make(map[string]string)
+	var routes []ServiceRoute
 
 	if authURL := os.Getenv("AUTH_SERVICE_URL"); authURL != "" {
-		services["/auth"] = authURL
-	}
-	if roomURL := os.Getenv("ROOM_SERVICE_URL"); roomURL != "" {
-		services["/rooms"] = roomURL
-		services["/users"] = roomURL
-	}
-	if chatURL := os.Getenv("CHAT_SERVICE_URL"); chatURL != "" {
-		services["/chat"] = chatURL
+		routes = append(routes, ServiceRoute{Prefix: "/auth", TargetURL: authURL, StripPrefix: true})
 	}
 
-	var stripPrefix []string
-	if sp := os.Getenv("STRIP_PREFIX"); sp != "" {
-		stripPrefix = strings.Split(sp, ",")
+	roomURL := os.Getenv("ROOM_SERVICE_URL")
+	if roomURL != "" {
+		routes = append(routes, ServiceRoute{Prefix: "/rooms", TargetURL: roomURL})
+		routes = append(routes, ServiceRoute{Prefix: "/users", TargetURL: roomURL})
+	}
+
+	chatCommandURL := os.Getenv("CHAT_COMMAND_SERVICE_URL")
+	if chatCommandURL == "" {
+		chatCommandURL = os.Getenv("CHAT_SERVICE_URL")
+	}
+	chatQueryURL := os.Getenv("CHAT_QUERY_SERVICE_URL")
+	if chatQueryURL == "" {
+		chatQueryURL = chatCommandURL
+	}
+
+	if chatCommandURL != "" {
+		routes = append(routes, ServiceRoute{
+			Prefix:    "/chat",
+			Methods:   []string{"POST", "PUT", "DELETE"},
+			TargetURL: chatCommandURL,
+		})
+		routes = append(routes, ServiceRoute{
+			Prefix:    "/chat/rooms/",
+			Suffix:    "/ws",
+			Methods:   []string{"GET"},
+			TargetURL: chatCommandURL,
+		})
+	}
+
+	if chatQueryURL != "" {
+		routes = append(routes, ServiceRoute{
+			Prefix:    "/chat",
+			Methods:   []string{"GET"},
+			TargetURL: chatQueryURL,
+		})
 	}
 
 	return &Config{
-		Port:        port,
-		Services:    services,
-		StripPrefix: stripPrefix,
+		Port:   port,
+		Routes: routes,
 	}
 }

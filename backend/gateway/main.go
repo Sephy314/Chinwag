@@ -48,7 +48,7 @@ func main() {
 
 	setupRoutes(e, cfg)
 
-	slog.Info("gateway starting", "port", cfg.Port, "services", cfg.Services)
+	slog.Info("gateway starting", "port", cfg.Port, "routes", len(cfg.Routes))
 
 	if err := e.Start("0.0.0.0:" + cfg.Port); err != nil {
 		slog.Error("gateway failed to start", "error", err)

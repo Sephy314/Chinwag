@@ -57,6 +57,10 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
+	if err := h.service.RemoveRefreshToken(ctx, cookie.Value); err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+
 	c.SetCookie(&http.Cookie{
 		Name:     "refresh",
 		Value:    refreshToken,

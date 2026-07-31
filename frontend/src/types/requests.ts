@@ -31,6 +31,8 @@ export interface UpdateRoomRequest {
 }
 
 export interface CreateMessageRequest {
+  /** Client-generated UUID used as the idempotency key for this message. */
+  id: string
   content: string
   message_type: MessageType
 }

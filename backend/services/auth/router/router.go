@@ -99,6 +99,8 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		pub.POST("/refresh", r.RefreshHandler.Refresh)
 		pub.POST("/logout", r.UserHandler.Logout)
 		pub.POST("/user", r.UserHandler.CreateUser)
+		pub.GET("/user/:id", r.UserHandler.GetUserByID)
+		pub.GET("/user/email/:email", r.UserHandler.GetUserByEmail)
 
 		if cfg.GoogleOAuthEnabled {
 			googleOAuthHandler := oauth.NewGoogleOAuthHandler(
@@ -120,8 +122,6 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	priv.Use(sharedauth.NewMiddleware(jwksClient))
 	{
 		priv.GET("/whoami", r.UserHandler.WhoAmI)
-		priv.GET("/user/:id", r.UserHandler.GetUserByID)
-		priv.GET("/user/email/:email", r.UserHandler.GetUserByEmail)
 		priv.PUT("/user/:id", r.UserHandler.UpdateUser)
 		priv.DELETE("/user/:id", r.UserHandler.DeleteUser)
 	}
