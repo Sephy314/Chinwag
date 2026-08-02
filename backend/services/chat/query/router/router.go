@@ -58,7 +58,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log))
 
 	{
 		priv.GET("/chat/rooms/:roomId/messages", r.QueryHandler.ListMessages)

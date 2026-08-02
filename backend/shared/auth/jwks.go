@@ -14,6 +14,16 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
+type Logger interface {
+	Info(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
+type noopLogger struct{}
+
+func (noopLogger) Info(string, ...any)  {}
+func (noopLogger) Error(string, ...any) {}
+
 type JWKSClient struct {
 	jwksURL  string
 	cacheTTL time.Duration
@@ -21,6 +31,7 @@ type JWKSClient struct {
 	mu       sync.RWMutex
 	loadedAt time.Time
 	http     *http.Client
+	logger   Logger
 }
 
 func NewJWKSClient(jwksURL string, cacheTTL time.Duration) *JWKSClient {
@@ -29,7 +40,15 @@ func NewJWKSClient(jwksURL string, cacheTTL time.Duration) *JWKSClient {
 		cacheTTL: cacheTTL,
 		set:      jwk.NewSet(),
 		http:     &http.Client{Timeout: 5 * time.Second},
+		logger:   noopLogger{},
 	}
+}
+
+func (c *JWKSClient) SetLogger(logger Logger) {
+	if logger == nil {
+		return
+	}
+	c.logger = logger
 }
 
 func (c *JWKSClient) KeyFunc() jwt.Keyfunc {
@@ -60,6 +79,8 @@ func (c *JWKSClient) exportKey(key jwk.Key) (*ecdsa.PublicKey, error) {
 }
 
 func (c *JWKSClient) refresh() error {
+	c.logger.Info("reloading jwks", "jwks_url", c.jwksURL)
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -109,6 +130,7 @@ func (c *JWKSClient) refresh() error {
 
 	c.set = set
 	c.loadedAt = time.Now()
+	c.logger.Info("jwks reloaded", "jwks_url", c.jwksURL, "key_count", len(raw.Keys))
 	return nil
 }
 
@@ -132,7 +154,15 @@ func (c *JWKSClient) GetKey(kid string) (*ecdsa.PublicKey, error) {
 	c.mu.RUnlock()
 
 	if err := c.refresh(); err != nil {
-		return nil, fmt.Errorf("failed to refresh JWKS: %w", err)
+		c.logger.Error("jwks refresh failed, using cached jwks", "error", err, "jwks_url", c.jwksURL)
+
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+
+		if key, ok := c.set.LookupKeyID(kid); ok {
+			return c.exportKey(key)
+		}
+		return nil, fmt.Errorf("failed to refresh JWKS and key %s not found in cache: %w", kid, err)
 	}
 
 	c.mu.RLock()

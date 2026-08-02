@@ -10,7 +10,9 @@ import (
 
 const ClaimsContextKey = "auth_claims"
 
-func NewMiddleware(client *JWKSClient) echo.MiddlewareFunc {
+func NewMiddleware(client *JWKSClient, log Logger) echo.MiddlewareFunc {
+	client.SetLogger(log)
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")

@@ -119,7 +119,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log))
 	{
 		priv.GET("/whoami", r.UserHandler.WhoAmI)
 		priv.PUT("/user/:id", r.UserHandler.UpdateUser)

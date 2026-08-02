@@ -228,6 +228,7 @@ func main() {
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
 	jwksClient := sharedauth.NewJWKSClient(cfg.JWKSURL, 5*time.Minute)
+	jwksClient.SetLogger(log)
 
 	hub := ws.NewHub(log)
 	go hub.Run()

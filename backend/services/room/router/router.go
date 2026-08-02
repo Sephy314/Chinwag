@@ -74,7 +74,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log))
 	{
 		priv.POST("/rooms", r.RoomHandler.CreateRoom)
 		priv.PUT("/rooms/:id", r.RoomHandler.UpdateRoom)
