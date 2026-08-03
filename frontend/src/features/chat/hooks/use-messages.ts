@@ -20,7 +20,7 @@ import { WsClient } from "@/services/websocket-client"
 import { getErrorMessage } from "@/lib/api-client"
 
 export function useMessages(roomId: string) {
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth()
   const queryClient = useQueryClient()
   const wsRef = useRef<WsClient | null>(null)
   const [onlineCount, setOnlineCount] = useState(0)
@@ -39,7 +39,7 @@ export function useMessages(roomId: string) {
       return undefined
     },
     initialPageParam: undefined as string | undefined,
-    enabled: !!roomId,
+    enabled: !!roomId && !readOnly,
   })
 
   const handleWsMessage = useCallback(
@@ -92,7 +92,7 @@ export function useMessages(roomId: string) {
   )
 
   useEffect(() => {
-    if (!roomId || !user?.id) return
+    if (!roomId || !user?.id || readOnly) return
 
     wsRef.current = new WsClient({
       roomId,
@@ -113,7 +113,7 @@ export function useMessages(roomId: string) {
       wsRef.current?.disconnect()
       wsRef.current = null
     }
-  }, [roomId, user?.id, handleWsMessage])
+  }, [roomId, user?.id, readOnly, handleWsMessage])
 
   const allMessages = messagesQuery.data?.pages.flatMap((page) => page.data).filter((m): m is Message => m != null) ?? []
 

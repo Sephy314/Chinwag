@@ -22,12 +22,12 @@ import { Role } from "@/types"
 import { getErrorMessage } from "@/lib/api-client"
 
 export function useRooms() {
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth()
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["rooms", user?.id],
     queryFn: () => fetchRooms(user!.id),
-    enabled: !!user?.id,
+    enabled: !!user?.id && !readOnly,
   })
 
   return {
@@ -39,10 +39,11 @@ export function useRooms() {
 }
 
 export function useRoom(id: string) {
+  const { readOnly } = useAuth()
   return useQuery({
     queryKey: ["room", id],
     queryFn: () => fetchRoom(id),
-    enabled: !!id,
+    enabled: !!id && !readOnly,
   })
 }
 
@@ -102,13 +103,13 @@ export function useCreateInviteLink(roomId: string) {
 }
 
 export function useIsAdmin(roomId: string) {
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth()
   const { data: roomData } = useRoom(roomId)
 
   const { data, isLoading } = useQuery({
     queryKey: ["roomMember", roomId, user?.id],
     queryFn: () => fetchRoomMember(roomId, user!.id),
-    enabled: !!roomId && !!user?.id,
+    enabled: !!roomId && !!user?.id && !readOnly,
     retry: false,
     throwOnError: false,
   })
@@ -123,10 +124,11 @@ export function useIsAdmin(roomId: string) {
 }
 
 export function useRoomMembers(roomId: string) {
+  const { readOnly } = useAuth()
   const { data, isLoading, error } = useQuery({
     queryKey: ["roomMembers", roomId],
     queryFn: () => fetchRoomMembers(roomId),
-    enabled: !!roomId,
+    enabled: !!roomId && !readOnly,
   })
 
   return {

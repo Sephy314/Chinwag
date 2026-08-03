@@ -22,7 +22,7 @@ const passwordSchema = z.object({
 type PasswordForm = z.infer<typeof passwordSchema>
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth()
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
@@ -112,7 +112,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || readOnly}>
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : null}

@@ -10,9 +10,10 @@ import { getErrorMessage } from "@/lib/api-client"
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>
   disabled?: boolean
+  readOnly?: boolean
 }
 
-export function MessageInput({ onSend, disabled }: MessageInputProps) {
+export function MessageInput({ onSend, disabled, readOnly }: MessageInputProps) {
   const [content, setContent] = useState("")
   const [isSending, setIsSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -52,6 +53,14 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
 
   return (
     <div className="border-t border-gray-800 px-4 py-3">
+      {readOnly && (
+        <div className="mb-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5">
+          <p className="text-xs text-amber-500">
+            Read-only mode — auth service is temporarily unavailable. Sending is
+            paused.
+          </p>
+        </div>
+      )}
       <div className="flex items-end gap-2">
         <Textarea
           ref={textareaRef}
@@ -61,15 +70,21 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
             handleInput()
           }}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? "This room has been popped" : "Type a message..."}
+          placeholder={
+            readOnly
+              ? "Read-only — auth service is temporarily down"
+              : disabled
+                ? "This room has been popped"
+                : "Type a message..."
+          }
           className="min-h-[40px] max-h-[120px] py-2.5"
           rows={1}
           aria-label="Message input"
-          disabled={disabled}
+          disabled={disabled || readOnly}
         />
         <Button
           onClick={handleSend}
-          disabled={!content.trim() || isSending || disabled}
+          disabled={!content.trim() || isSending || disabled || readOnly}
           size="icon"
           className="h-10 w-10 shrink-0"
           aria-label="Send message"

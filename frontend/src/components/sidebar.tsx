@@ -25,7 +25,7 @@ import { CreateRoomDialog } from "@/features/room/components/create-room-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function Sidebar() {
-  const { user, logout } = useAuth()
+  const { user, logout, readOnly } = useAuth()
   const { rooms, isLoading, error, refetch } = useRooms()
   const pathname = usePathname()
   const router = useRouter()
@@ -75,19 +75,31 @@ export function Sidebar() {
           <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
             Rooms
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => setCreateOpen(true)}
-            aria-label="Create room"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          {readOnly && (
+            <span className="text-xs uppercase tracking-wide text-amber-500">Read-only</span>
+          )}
+          {!readOnly && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setCreateOpen(true)}
+              aria-label="Create room"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
         <ScrollArea className="flex-1 px-2 py-2">
-          {isLoading ? (
+          {readOnly ? (
+            <div className="px-2 py-8 text-center">
+              <p className="text-sm text-gray-500">Rooms unavailable</p>
+              <p className="text-xs text-gray-600 mt-1">
+                Auth service is temporarily down
+              </p>
+            </div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
             </div>

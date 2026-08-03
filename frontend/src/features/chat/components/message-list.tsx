@@ -15,6 +15,7 @@ interface MessageListProps {
   fetchNextPage: () => void
   onEdit: (messageId: string, content: string) => Promise<void>
   onDelete: (messageId: string) => Promise<void>
+  readOnly?: boolean
 }
 
 export function MessageList({
@@ -25,6 +26,7 @@ export function MessageList({
   fetchNextPage,
   onEdit,
   onDelete,
+  readOnly,
 }: MessageListProps) {
   const { user } = useAuth()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -103,6 +105,7 @@ export function MessageList({
           key={message.id}
           message={message}
           isOwn={message.author_id === user?.id}
+          readOnly={readOnly}
           onEdit={onEdit}
           onDelete={onDelete}
         />

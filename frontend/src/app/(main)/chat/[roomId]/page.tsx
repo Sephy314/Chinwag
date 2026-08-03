@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Hash, Link2, Shield, Flame, Users, Settings } from "lucide-react"
 import { useRoom, useIsAdmin, usePopRoom } from "@/features/room/hooks/use-rooms"
@@ -11,11 +11,15 @@ import { InviteLinkDialog } from "@/features/room/components/invite-link-dialog"
 import { MembersDialog } from "@/features/room/components/members-dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/features/auth/hooks/use-auth"
+
+const AUTH_HEALTH_POLL_MS = 30_000
 
 export default function ChatPage() {
   const params = useParams<{ roomId: string }>()
   const router = useRouter()
   const roomId = params.roomId
+  const { readOnly, checkSession } = useAuth()
 
   const { data: roomData, isLoading: roomLoading } = useRoom(roomId)
   const { isAdmin } = useIsAdmin(roomId)
@@ -33,6 +37,13 @@ export default function ChatPage() {
 
   const [inviteOpen, setInviteOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkSession()
+    }, AUTH_HEALTH_POLL_MS)
+    return () => clearInterval(interval)
+  }, [checkSession])
 
   const room = roomData?.data
   const isPopped = !!room?.popped_at
@@ -149,10 +160,11 @@ export default function ChatPage() {
         fetchNextPage={fetchNextPage}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        readOnly={readOnly}
       />
 
       <div className="shrink-0">
-        <MessageInput onSend={handleSend} disabled={isPopped} />
+        <MessageInput onSend={handleSend} disabled={isPopped} readOnly={readOnly} />
       </div>
 
       {isAdmin && (

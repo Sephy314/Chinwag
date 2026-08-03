@@ -23,7 +23,7 @@ const profileSchema = z.object({
 type ProfileForm = z.infer<typeof profileSchema>
 
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user, readOnly } = useAuth()
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
@@ -106,7 +106,7 @@ export default function ProfilePage() {
               </div>
             )}
 
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || readOnly}>
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}

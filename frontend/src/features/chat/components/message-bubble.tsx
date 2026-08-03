@@ -19,11 +19,12 @@ import { Textarea } from "@/components/ui/textarea"
 interface MessageBubbleProps {
   message: Message
   isOwn: boolean
+  readOnly?: boolean
   onEdit: (messageId: string, content: string) => Promise<void>
   onDelete: (messageId: string) => Promise<void>
 }
 
-export function MessageBubble({ message, isOwn, onEdit, onDelete }: MessageBubbleProps) {
+export function MessageBubble({ message, isOwn, readOnly, onEdit, onDelete }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [isSaving, setIsSaving] = useState(false)
@@ -147,7 +148,7 @@ export function MessageBubble({ message, isOwn, onEdit, onDelete }: MessageBubbl
         </div>
       </div>
 
-      {isOwn && !isOptimistic && !isEditing && (
+      {isOwn && !isOptimistic && !isEditing && !readOnly && (
         <div className="opacity-0 group-hover:opacity-100 transition-opacity self-start pt-1">
           <DropdownMenu>
             <DropdownMenuTrigger
