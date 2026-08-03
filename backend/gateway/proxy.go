@@ -31,8 +31,8 @@ func newReverseProxy(targetURL string, stripPrefix bool, prefix string) *httputi
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		w.Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		w.WriteHeader(http.StatusBadGateway)
-		w.Write([]byte(`{"success":false,"code":502,"message":"bad gateway"}`))
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"success":false,"code":503,"message":"service unavailable"}`))
 	}
 
 	return proxy

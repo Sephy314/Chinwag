@@ -9,18 +9,54 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
-import { apiPost, apiGet, setAccessToken } from "@/lib/api-client"
+import { apiPost, apiGet, setAccessToken, ApiError } from "@/lib/api-client"
 import { API_PATHS } from "@/lib/api-paths"
 import type { ApiResponse, User, LoginRequest, RegisterRequest } from "@/types"
+
+const USER_CACHE_KEY = "chinwag.cached_user"
+
+function getCachedUser(): User | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(USER_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed.id === "string" && typeof parsed.name === "string") {
+      return parsed as User
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function setCachedUser(user: User | null) {
+  if (typeof window === "undefined") return
+  try {
+    if (user) {
+      window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user))
+    } else {
+      window.localStorage.removeItem(USER_CACHE_KEY)
+    }
+  } catch {
+    // storage unavailable, ignore
+  }
+}
+
+function isAuthUnavailable(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 500
+}
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
+  readOnly: boolean
   login: (data: LoginRequest) => Promise<void>
   register: (data: RegisterRequest) => Promise<void>
   logout: () => void
   checkSession: () => Promise<boolean>
+  refreshSession: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -28,6 +64,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [readOnly, setReadOnly] = useState(false)
   const router = useRouter()
 
   const restoreSession = useCallback(async () => {
@@ -35,13 +72,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
       if (res.success && res.data?.user) {
         setUser(res.data.user)
+        setCachedUser(res.data.user)
+        setReadOnly(false)
         setIsLoading(false)
         return
       }
-    } catch {
-      // not authenticated
+    } catch (err) {
+      if (isAuthUnavailable(err)) {
+        const cached = getCachedUser()
+        if (cached) {
+          setUser(cached)
+          setReadOnly(true)
+          setIsLoading(false)
+          return
+        }
+      }
     }
     setUser(null)
+    setReadOnly(false)
     setIsLoading(false)
   }, [])
 
@@ -57,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const whoami = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
         if (whoami.success && whoami.data?.user) {
           setUser(whoami.data.user)
+          setCachedUser(whoami.data.user)
+          setReadOnly(false)
           router.push("/home")
           return
         }
@@ -85,6 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore errors
     }
     setUser(null)
+    setCachedUser(null)
+    setReadOnly(false)
     setAccessToken(null)
     router.push("/login")
   }, [router])
@@ -94,16 +146,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
       if (res.success && res.data?.user) {
         setUser(res.data.user)
+        setCachedUser(res.data.user)
+        setReadOnly(false)
         setIsLoading(false)
         return true
       }
-    } catch {
-      // not authenticated
+    } catch (err) {
+      if (isAuthUnavailable(err)) {
+        const cached = getCachedUser()
+        if (cached) {
+          setUser(cached)
+          setReadOnly(true)
+          setIsLoading(false)
+          return true
+        }
+      }
     }
     setUser(null)
+    setReadOnly(false)
     setIsLoading(false)
     return false
   }, [])
+
+  const refreshSession = useCallback(async () => {
+    setIsLoading(true)
+    await restoreSession()
+  }, [restoreSession])
 
   return (
     <AuthContext.Provider
@@ -111,10 +179,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isLoading,
         isAuthenticated: !!user,
+        readOnly,
         login,
         register,
         logout,
         checkSession,
+        refreshSession,
       }}
     >
       {children}

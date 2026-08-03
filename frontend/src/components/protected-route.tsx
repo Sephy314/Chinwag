@@ -3,17 +3,18 @@
 import { useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/features/auth/hooks/use-auth"
+import { AuthDegraded } from "@/components/auth-degraded"
 import { Loader2 } from "lucide-react"
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, readOnly } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated && !readOnly) {
       router.replace("/login")
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [isLoading, isAuthenticated, readOnly, router])
 
   if (isLoading) {
     return (
@@ -21,6 +22,10 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
       </div>
     )
+  }
+
+  if (readOnly) {
+    return <AuthDegraded />
   }
 
   if (!isAuthenticated) return null

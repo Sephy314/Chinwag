@@ -10,12 +10,12 @@ import { Loader2 } from "lucide-react"
 export default function InvitePage() {
   const params = useParams<{ token: string }>()
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, readOnly } = useAuth()
   const joinInvite = useJoinRoomViaInvite()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (authLoading || !isAuthenticated) return
+    if (authLoading || !isAuthenticated || readOnly) return
 
     joinInvite.mutate(params.token, {
       onSuccess: (res) => {
@@ -46,7 +46,7 @@ export default function InvitePage() {
         }
       },
     })
-  }, [authLoading, isAuthenticated, params.token])
+  }, [authLoading, isAuthenticated, readOnly, params.token])
 
   if (authLoading) {
     return (
@@ -59,6 +59,18 @@ export default function InvitePage() {
   if (!isAuthenticated) {
     router.replace(`/login?redirect=/invite/${params.token}`)
     return null
+  }
+
+  if (readOnly) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-black">
+        <div className="text-center space-y-4">
+          <p className="text-gray-400 text-sm">
+            Authentication service is temporarily unavailable. Please try again later.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
