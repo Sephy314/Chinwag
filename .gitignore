@@ -4,4 +4,4 @@
 ./backend/Makefile
 .env*
 !.env.example
-qodana.yaml
+./qodana.yaml
