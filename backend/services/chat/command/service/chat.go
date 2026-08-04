@@ -86,7 +86,7 @@ func (s *ChatService) CreateMessage(ctx context.Context, roomId uuid.UUID, req s
 
 	resp := toResponse(msg, user.Name)
 
-	evPayload, err := json.Marshal(map[string]interface{}{
+	evPayload, err := json.Marshal(map[string]any{
 		"type": "new_message",
 		"data": resp,
 	})
@@ -150,7 +150,7 @@ func (s *ChatService) UpdateMessage(ctx context.Context, messageId uuid.UUID, us
 
 	resp := toResponse(updated, user.Name)
 
-	evPayload, err := json.Marshal(map[string]interface{}{
+	evPayload, err := json.Marshal(map[string]any{
 		"type": "updated_message",
 		"data": resp,
 	})
@@ -207,7 +207,7 @@ func (s *ChatService) DeleteMessage(ctx context.Context, messageId uuid.UUID, us
 		RoomId: msg.RoomId.String(),
 	}
 
-	evPayload, err := json.Marshal(map[string]interface{}{
+	evPayload, err := json.Marshal(map[string]any{
 		"type": "deleted_message",
 		"data": deletedEvent,
 	})

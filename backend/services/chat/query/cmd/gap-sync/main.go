@@ -84,18 +84,18 @@ func main() {
 		log.Error("failed to connect to source DB", "error", err)
 		os.Exit(1)
 	}
-	defer sourceDB.Close()
+	defer func() { _ = sourceDB.Close() }()
 
 	targetDB, err := sqlx.Connect("pgx", targetDBUrl)
 	if err != nil {
 		log.Error("failed to connect to target DB", "error", err)
 		os.Exit(1)
 	}
-	defer targetDB.Close()
+	defer func() { _ = targetDB.Close() }()
 
 	var msgs []chatMessage
 	var query string
-	var queryArgs []interface{}
+	var queryArgs []any
 
 	if *afterCursorStr != "" {
 		// Incremental sync: fetch messages strictly newer than the cursor
@@ -109,7 +109,7 @@ func main() {
 		         WHERE (created_at, id) > ($1, $2)
 		         ORDER BY created_at ASC, id ASC
 		         LIMIT $3`
-		queryArgs = []interface{}{c.CreatedAt, c.Id, *limit}
+		queryArgs = []any{c.CreatedAt, c.Id, *limit}
 		log.Info("starting incremental gap sync",
 			"after_created_at", c.CreatedAt,
 			"after_id", c.Id.String(),
@@ -121,7 +121,7 @@ func main() {
 		         FROM chat_messages
 		         ORDER BY created_at ASC, id ASC
 		         LIMIT $1`
-		queryArgs = []interface{}{*limit}
+		queryArgs = []any{*limit}
 		log.Info("starting full gap sync", "limit", *limit)
 	}
 
@@ -208,7 +208,7 @@ func main() {
 		authorName, err := getUserName(msg.AuthorId)
 		if err != nil {
 			log.Error("failed to resolve author name", "id", msg.Id, "author_id", msg.AuthorId, "error", err)
-			tx.Rollback()
+			_ = tx.Rollback()
 			os.Exit(1)
 		}
 
@@ -218,7 +218,7 @@ func main() {
 		)
 		if err != nil {
 			log.Error("failed to insert message", "id", msg.Id, "error", err)
-			tx.Rollback()
+			_ = tx.Rollback()
 			os.Exit(1)
 		}
 
@@ -243,9 +243,9 @@ func main() {
 	// Record gap-sync event in outbox
 	msgId := uuid.Must(uuid.NewV7())
 	now := time.Now()
-	gapSyncPayload, _ := json.Marshal(map[string]interface{}{
+	gapSyncPayload, _ := json.Marshal(map[string]any{
 		"type": "gap_sync_complete",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"total_messages": len(msgs),
 			"inserted":       inserted,
 			"after_cursor":   *afterCursorStr,

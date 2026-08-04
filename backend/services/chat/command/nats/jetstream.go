@@ -16,7 +16,7 @@ import (
 
 type wsEvent struct {
 	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }
 
 type JetStreamEventPublisher struct {
@@ -146,7 +146,11 @@ func (p *JetStreamEventPublisher) Consume(ctx context.Context, consumerName stri
 		}
 
 		var ev wsEvent
-		json.Unmarshal(msg.Data(), &ev)
+		if err := json.Unmarshal(msg.Data(), &ev); err != nil {
+			p.log.Warn("failed to unmarshal event", "subject", msg.Subject(), "error", err)
+			msg.Ack()
+			return
+		}
 
 		p.log.Info("consuming event",
 			"subject", msg.Subject(),

@@ -63,7 +63,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPStore))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
 
 	{
 		priv.GET("/chat/rooms/:roomId/messages", r.QueryHandler.ListMessages)

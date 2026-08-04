@@ -4,7 +4,7 @@ import "github.com/google/uuid"
 
 type Event struct {
 	Type string
-	Data interface{}
+	Data any
 }
 
 type EventPublisher interface {

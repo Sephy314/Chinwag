@@ -107,7 +107,9 @@ func TestListByRoomId_WithMessages(t *testing.T) {
 			Content:     "Message",
 			CreatedAt:   now.Add(-time.Duration(i) * time.Minute),
 		}
-		repo.Upsert(context.Background(), msg)
+		if err := repo.Upsert(context.Background(), msg); err != nil {
+			t.Fatalf("failed to upsert message: %v", err)
+		}
 	}
 
 	msgs, meta, err := repo.ListByRoomId(context.Background(), roomId, "", 50)
@@ -133,7 +135,9 @@ func TestListByRoomId_CursorPagination(t *testing.T) {
 			Content:     "Message",
 			CreatedAt:   now.Add(-time.Duration(i) * time.Minute),
 		}
-		repo.Upsert(context.Background(), msg)
+		if err := repo.Upsert(context.Background(), msg); err != nil {
+			t.Fatalf("failed to upsert message: %v", err)
+		}
 	}
 
 	msgs, meta, err := repo.ListByRoomId(context.Background(), roomId, "", 2)

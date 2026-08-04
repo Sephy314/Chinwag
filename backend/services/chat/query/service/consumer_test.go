@@ -61,9 +61,9 @@ func TestConsumer_HandleCreated(t *testing.T) {
 	authorId := uuid.New()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"type": "new_message",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"id":           msgId.String(),
 			"room_id":      roomId.String(),
 			"author_id":    authorId.String(),
@@ -91,9 +91,9 @@ func TestConsumer_HandleUpdated(t *testing.T) {
 	roomId := uuid.New()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"type": "updated_message",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"id":         msgId.String(),
 			"room_id":    roomId.String(),
 			"content":    "Updated content",
@@ -119,9 +119,9 @@ func TestConsumer_HandleDeleted(t *testing.T) {
 	msgId := uuid.New()
 	roomId := uuid.New()
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"type": "deleted_message",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"id":      msgId.String(),
 			"room_id": roomId.String(),
 		},
@@ -143,9 +143,9 @@ func TestConsumer_HandleDuplicateCreate(t *testing.T) {
 	authorId := uuid.New()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"type": "new_message",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"id":           msgId.String(),
 			"room_id":      roomId.String(),
 			"author_id":    authorId.String(),
@@ -169,9 +169,9 @@ func TestConsumer_HandleUnknownEventType(t *testing.T) {
 	mockRepo := new(MockProjectionRepoConsumer)
 	consumer := NewProjectionConsumer(mockRepo, log())
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"type": "unknown_type",
-		"data": map[string]interface{}{},
+		"data": map[string]any{},
 	})
 
 	// Should not panic, just log a warning
@@ -192,9 +192,9 @@ func TestConsumer_HandleEmptyData(t *testing.T) {
 	mockRepo := new(MockProjectionRepoConsumer)
 	consumer := NewProjectionConsumer(mockRepo, log())
 
-	payload, _ := json.Marshal(map[string]interface{}{
+	payload, _ := json.Marshal(map[string]any{
 		"type": "new_message",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"id":           "invalid-uuid",
 			"room_id":      "invalid-uuid",
 			"author_id":    "invalid-uuid",

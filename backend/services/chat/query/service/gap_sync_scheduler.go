@@ -157,7 +157,7 @@ func (s *GapSyncScheduler) syncGaps(ctx context.Context) {
 		s.log.Error("failed to begin transaction", "error", err)
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO message_projections (id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at)
@@ -173,10 +173,10 @@ func (s *GapSyncScheduler) syncGaps(ctx context.Context) {
 			deleted_at = EXCLUDED.deleted_at`)
 	if err != nil {
 		s.log.Error("failed to prepare statement", "error", err)
-		tx.Rollback()
+		_ = tx.Rollback()
 		return
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	var inserted int
 	var lastProcessedTime time.Time

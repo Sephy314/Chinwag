@@ -34,7 +34,7 @@ func RunAll(dbUrl string, log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to open database for migrations: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	goose.SetDialect("postgres")
 	goose.SetLogger(&slogGoose{l: log})

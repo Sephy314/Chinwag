@@ -162,7 +162,7 @@ func (a *roomMemberAdapter) GetMembersByRoomId(ctx context.Context, roomId strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to call room service: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -210,7 +210,7 @@ func (a *roomMemberAdapter) GetRoomById(ctx context.Context, roomId string) (*se
 	if err != nil {
 		return nil, fmt.Errorf("failed to call room service: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

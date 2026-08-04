@@ -36,7 +36,7 @@ func mockOutboxEvent(id uuid.UUID) repo.OutboxEvent {
 func TestOutboxPublisher_PublishBatch(t *testing.T) {
 	mockOutbox := new(MockOutboxRepo)
 	mockNats := new(MockRawNatsPublisher)
-	log := testLogger(t)
+	log := testLogger()
 
 	evtID := uuid.New()
 	evt := mockOutboxEvent(evtID)
@@ -59,7 +59,7 @@ func TestOutboxPublisher_PublishBatch(t *testing.T) {
 func TestOutboxPublisher_PublishFailure_IncrementsRetry(t *testing.T) {
 	mockOutbox := new(MockOutboxRepo)
 	mockNats := new(MockRawNatsPublisher)
-	log := testLogger(t)
+	log := testLogger()
 
 	evtID := uuid.New()
 	evt := mockOutboxEvent(evtID)
@@ -83,7 +83,7 @@ func TestOutboxPublisher_PublishFailure_IncrementsRetry(t *testing.T) {
 func TestOutboxPublisher_PollFailure(t *testing.T) {
 	mockOutbox := new(MockOutboxRepo)
 	mockNats := new(MockRawNatsPublisher)
-	log := testLogger(t)
+	log := testLogger()
 
 	mockOutbox.On("PollPending", mock.Anything, 50).Return(nil, errors.New("db error"))
 	mockNats.AssertNotCalled(t, "PublishRaw", mock.Anything, mock.Anything, mock.Anything)
@@ -102,7 +102,7 @@ func TestOutboxPublisher_PollFailure(t *testing.T) {
 func TestOutboxPublisher_MarkFailure_DoesNotBlock(t *testing.T) {
 	mockOutbox := new(MockOutboxRepo)
 	mockNats := new(MockRawNatsPublisher)
-	log := testLogger(t)
+	log := testLogger()
 
 	evtID := uuid.New()
 	evt := mockOutboxEvent(evtID)
@@ -122,6 +122,7 @@ func TestOutboxPublisher_MarkFailure_DoesNotBlock(t *testing.T) {
 	mockNats.AssertExpectations(t)
 }
 
-func testLogger(t *testing.T) *slog.Logger {
+
+func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }

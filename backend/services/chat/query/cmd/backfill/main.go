@@ -99,7 +99,7 @@ func main() {
 		if err != nil {
 			return "", fmt.Errorf("fetch user %s: %w", userId, err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -145,14 +145,14 @@ func main() {
 		log.Error("failed to prepare statement", "error", err)
 		os.Exit(1)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	var inserted int
 	for _, msg := range msgs {
 		authorName, err := getUserName(msg.AuthorId)
 		if err != nil {
 			log.Error("failed to resolve author name", "id", msg.Id, "author_id", msg.AuthorId, "error", err)
-			tx.Rollback()
+			_ = tx.Rollback()
 			os.Exit(1)
 		}
 
@@ -162,7 +162,7 @@ func main() {
 		)
 		if err != nil {
 			log.Error("failed to insert message", "id", msg.Id, "error", err)
-			tx.Rollback()
+			_ = tx.Rollback()
 			os.Exit(1)
 		}
 
@@ -185,9 +185,9 @@ func main() {
 
 	msgId := uuid.Must(uuid.NewV7())
 	now := time.Now()
-	backfillPayload, _ := json.Marshal(map[string]interface{}{
+	backfillPayload, _ := json.Marshal(map[string]any{
 		"type": "backfill_complete",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"total_messages": len(msgs),
 			"inserted":       inserted,
 		},

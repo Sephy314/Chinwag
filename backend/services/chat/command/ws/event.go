@@ -9,10 +9,10 @@ import (
 
 type wsEvent struct {
 	Type string      `json:"type"`
-	Data interface{} `json:"data"`
+	Data any `json:"data"`
 }
 
-func encodeEvent(eventType string, data interface{}) ([]byte, error) {
+func encodeEvent(eventType string, data any) ([]byte, error) {
 	return json.Marshal(wsEvent{Type: eventType, Data: data})
 }
 

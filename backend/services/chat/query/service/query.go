@@ -102,7 +102,7 @@ func (s *QueryService) GetMessage(ctx context.Context, messageId uuid.UUID, user
 	}
 
 	resp := toResponse(msg)
-	s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
+	_ = s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
 
 	return resp, nil
 }
@@ -163,7 +163,7 @@ func (s *QueryService) ListMessages(ctx context.Context, req structs.ListMessage
 		result[i] = *resp
 
 		cacheKey := cachePrefix + m.Id.String()
-		s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
+		_ = s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
 	}
 
 	return result, meta, nil
