@@ -68,6 +68,7 @@ func (h *QueryHandler) ListMessages(c *echo.Context) error {
 	req := structs.ListMessagesRequest{
 		RoomID: roomId,
 		Cursor: c.QueryParam("cursor"),
+		After:  c.QueryParam("after"),
 		Limit:  50,
 	}
 

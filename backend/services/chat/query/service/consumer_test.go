@@ -33,6 +33,11 @@ func (m *MockProjectionRepoConsumer) ListByRoomId(ctx context.Context, roomId uu
 	return args.Get(0).([]domain.MessageProjection), args.Get(1).(*structs.CursorMeta), args.Error(2)
 }
 
+func (m *MockProjectionRepoConsumer) ListAfterByRoomId(ctx context.Context, roomId uuid.UUID, afterCursor string, limit int) ([]domain.MessageProjection, error) {
+	args := m.Called(ctx, roomId, afterCursor, limit)
+	return args.Get(0).([]domain.MessageProjection), args.Error(1)
+}
+
 func (m *MockProjectionRepoConsumer) UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error {
 	args := m.Called(ctx, id, content, updatedAt)
 	return args.Error(0)

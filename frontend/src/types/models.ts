@@ -51,6 +51,12 @@ export interface Message {
   updated_at?: string
 }
 
+export interface SystemMessage {
+  type: "user_joined" | "user_left"
+  user_name: string
+  timestamp: string
+}
+
 export interface InviteLink {
   token: string
   room_id: string

@@ -41,6 +41,7 @@ type ProjectionRepoInterface interface {
 	Upsert(ctx context.Context, msg domain.MessageProjection) error
 	GetById(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error)
 	ListByRoomId(ctx context.Context, roomId uuid.UUID, cursorStr string, limit int) ([]domain.MessageProjection, *structs.CursorMeta, error)
+	ListAfterByRoomId(ctx context.Context, roomId uuid.UUID, afterCursor string, limit int) ([]domain.MessageProjection, error)
 	UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error
 	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
 }
@@ -135,8 +136,39 @@ func (r *ProjectionRepo) ListByRoomId(ctx context.Context, roomId uuid.UUID, cur
 	return msgs, meta, nil
 }
 
-func (r *ProjectionRepo) UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error {
-	res, err := r.db.ExecContext(
+// ListAfterByRoomId returns messages strictly newer than the given cursor in
+// ascending (oldest first) order. It is used to reconcile the gap after a
+// WebSocket reconnect: the client passes the newest message it already has as
+// the after cursor and only the missed messages are fetched.
+func (r *ProjectionRepo) ListAfterByRoomId(ctx context.Context, roomId uuid.UUID, afterCursor string, limit int) ([]domain.MessageProjection, error) {
+	if limit <= 0 || limit > maxLimit {
+		limit = maxLimit
+	}
+
+	c, err := decodeCursor(afterCursor)
+	if err != nil {
+		return nil, err
+	}
+
+	var msgs []domain.MessageProjection
+	err = sqlx.SelectContext(
+		ctx, r.db, &msgs,
+		`SELECT id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at
+		 FROM message_projections
+		 WHERE room_id = $1 AND deleted_at IS NULL
+		   AND (created_at, id) > ($2, $3)
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $4`,
+		roomId, c.CreatedAt, c.Id, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return msgs, nil
+}
+
+func (r *ProjectionRepo) UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error {	res, err := r.db.ExecContext(
 		ctx,
 		`UPDATE message_projections SET content = $1, updated_at = $2
 		 WHERE id = $3 AND deleted_at IS NULL`,

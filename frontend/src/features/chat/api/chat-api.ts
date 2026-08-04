@@ -6,9 +6,11 @@ import type { CreateMessageRequest, UpdateMessageRequest } from "@/types"
 export async function fetchMessages(
   roomId: string,
   cursor?: string,
+  after?: string,
 ) {
   return apiGet<Message[]>(API_PATHS.chat.messages(roomId), {
     cursor,
+    after,
   })
 }
 

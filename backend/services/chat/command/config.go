@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	Port           string
@@ -12,6 +15,7 @@ type Config struct {
 	JWKSURL        string
 	FrontendURL    string
 	NatsURL        string
+	InstanceID     string
 }
 
 func LoadConfig() *Config {
@@ -57,6 +61,12 @@ func LoadConfig() *Config {
 		natsURL = "nats://localhost:4222"
 	}
 
+	instanceID := os.Getenv("INSTANCE_ID")
+	if instanceID == "" {
+		instanceID, _ = os.Hostname()
+	}
+	instanceID = strings.NewReplacer(".", "-", ":", "-", "_", "-").Replace(instanceID)
+
 	return &Config{
 		Port:           port,
 		DBUrl:          dbUrl,
@@ -67,5 +77,6 @@ func LoadConfig() *Config {
 		JWKSURL:        jwksURL,
 		FrontendURL:    frontendURL,
 		NatsURL:        natsURL,
+		InstanceID:     instanceID,
 	}
 }

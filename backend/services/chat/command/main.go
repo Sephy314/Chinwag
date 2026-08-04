@@ -290,7 +290,12 @@ func main() {
 
 	if conns.Nats != nil {
 		ctx := context.Background()
-		consumerName := "chat-worker-" + uuid.New().String()
+		// Durable consumer name is derived from a stable instance identity so
+		// that a restart resumes the same JetStream consumer (preserving any
+		// unacked deliveries) instead of abandoning them to a new ephemeral
+		// consumer. Each instance keeps its own consumer so every instance
+		// broadcasts every event to its locally connected clients.
+		consumerName := "chat-ws-" + cfg.InstanceID
 		if err := conns.Nats.Consume(ctx, consumerName, hub.Broadcast); err != nil {
 			log.Error("failed to start NATS consumer", "error", err)
 			os.Exit(1)
@@ -300,7 +305,7 @@ func main() {
 		outboxPublisher := service.NewOutboxPublisher(outboxRepo, conns.Nats, log)
 		go outboxPublisher.Start(ctx)
 
-		log.Info("using NATS JetStream", "consumer", consumerName, "nats_url", cfg.NatsURL)
+		log.Info("using NATS JetStream", "consumer", consumerName, "nats_url", cfg.NatsURL, "instance_id", cfg.InstanceID)
 	} else {
 		log.Info("running without NATS — outbox events will accumulate until NATS is configured")
 	}

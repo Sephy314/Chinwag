@@ -1,7 +1,7 @@
 "use client"
 
 import { LogIn, LogOut } from "lucide-react"
-import type { SystemMessage } from "@/features/chat/hooks/use-messages"
+import type { SystemMessage } from "@/types"
 
 interface SystemMessageBubbleProps {
   message: SystemMessage

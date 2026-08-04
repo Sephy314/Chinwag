@@ -132,6 +132,26 @@ func (s *QueryService) ListMessages(ctx context.Context, req structs.ListMessage
 		}
 	}
 
+	// Reconnect resync path: fetch only messages strictly newer than the
+	// client's newest known message (ascending) using the existing cursor.
+	if req.After != "" {
+		msgs, err := s.repo.ListAfterByRoomId(ctx, roomId, req.After, req.Limit)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		result := make([]structs.MessageResponse, len(msgs))
+		for i, m := range msgs {
+			resp := toResponse(m)
+			result[i] = *resp
+
+			cacheKey := cachePrefix + m.Id.String()
+			s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
+		}
+
+		return result, nil, nil
+	}
+
 	msgs, meta, err := s.repo.ListByRoomId(ctx, roomId, req.Cursor, req.Limit)
 	if err != nil {
 		return nil, nil, err
