@@ -19,13 +19,13 @@ Backend in **Go (Echo)** · Frontend in **Next.js (React 19)**
 
 ## 📋 Table of Contents
 
-- [Features](#-features)
-- [System Layout](#-system-layout)
-- [Backend Architecture](#-backend-architecture)
-- [Tech Stack](#-tech-stack)
-- [API Docs](#-api-docs)
-- [Directory Structure](#-directory-structure)
-- [License](#-license)
+- Features
+- System Layout
+- Backend Architecture
+- Tech Stack
+- API Docs
+- Directory Structure
+- License
 
 ---
 
