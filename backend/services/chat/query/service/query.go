@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/domain"
@@ -54,10 +55,8 @@ func NewQueryService(projectionRepo repo.ProjectionRepoInterface, member RoomMem
 func (s *QueryService) GetMessage(ctx context.Context, messageId uuid.UUID, userId uuid.UUID) (*structs.MessageResponse, error) {
 	cacheKey := cachePrefix + messageId.String()
 
-	cached, err := s.cache.Get(ctx, cacheKey)
-	if err == nil && cached != "" {
-		var msg structs.MessageResponse
-		if json.Unmarshal([]byte(cached), &msg) == nil {
+	if fields, err := s.cache.HGetAll(ctx, cacheKey); err == nil && len(fields) > 0 {
+		if msg, err := hashToResponse(fields); err == nil {
 			members, err := s.member.GetMembersByRoomId(ctx, msg.RoomId)
 			if err != nil {
 				return nil, err
@@ -75,7 +74,7 @@ func (s *QueryService) GetMessage(ctx context.Context, messageId uuid.UUID, user
 					Message: "You are not a member of this room",
 				}
 			}
-			return &msg, nil
+			return msg, nil
 		}
 	}
 
@@ -103,10 +102,7 @@ func (s *QueryService) GetMessage(ctx context.Context, messageId uuid.UUID, user
 	}
 
 	resp := toResponse(msg)
-
-	if b, err := json.Marshal(resp); err == nil {
-		s.cache.Set(ctx, cacheKey, string(b), cacheTTL)
-	}
+	s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
 
 	return resp, nil
 }
@@ -147,9 +143,7 @@ func (s *QueryService) ListMessages(ctx context.Context, req structs.ListMessage
 		result[i] = *resp
 
 		cacheKey := cachePrefix + m.Id.String()
-		if b, err := json.Marshal(resp); err == nil {
-			s.cache.Set(ctx, cacheKey, string(b), cacheTTL)
-		}
+		s.cache.HSet(ctx, cacheKey, responseToHash(resp), cacheTTL)
 	}
 
 	return result, meta, nil
@@ -166,4 +160,52 @@ func toResponse(msg domain.MessageProjection) *structs.MessageResponse {
 		CreatedAt:   msg.CreatedAt,
 		UpdatedAt:   msg.UpdatedAt,
 	}
+}
+
+func responseToHash(msg *structs.MessageResponse) map[string]string {
+	fields := map[string]string{
+		"id":           msg.Id,
+		"room_id":      msg.RoomId,
+		"author_id":    msg.AuthorId,
+		"author_name":  msg.AuthorName,
+		"message_type": strconv.FormatInt(int64(msg.MessageType), 10),
+		"content":      msg.Content,
+		"created_at":   msg.CreatedAt.Format(time.RFC3339Nano),
+	}
+	if msg.UpdatedAt != nil {
+		fields["updated_at"] = msg.UpdatedAt.Format(time.RFC3339Nano)
+	}
+	return fields
+}
+
+func hashToResponse(fields map[string]string) (*structs.MessageResponse, error) {
+	if fields["id"] == "" {
+		return nil, errors.New("cache entry missing id")
+	}
+	messageType, err := strconv.ParseInt(fields["message_type"], 10, 16)
+	if err != nil {
+		return nil, err
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, fields["created_at"])
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &structs.MessageResponse{
+		Id:          fields["id"],
+		RoomId:      fields["room_id"],
+		AuthorId:    fields["author_id"],
+		AuthorName:  fields["author_name"],
+		MessageType: int16(messageType),
+		Content:     fields["content"],
+		CreatedAt:   createdAt,
+	}
+	if updatedStr, ok := fields["updated_at"]; ok && updatedStr != "" {
+		updatedAt, err := time.Parse(time.RFC3339Nano, updatedStr)
+		if err != nil {
+			return nil, err
+		}
+		resp.UpdatedAt = &updatedAt
+	}
+	return resp, nil
 }

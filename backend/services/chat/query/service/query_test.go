@@ -77,6 +77,14 @@ func (noopCache) TTL(_ context.Context, _ string) (time.Duration, error) {
 	return 0, errors.New("miss")
 }
 
+func (noopCache) HSet(_ context.Context, _ string, _ map[string]string, _ time.Duration) error {
+	return nil
+}
+
+func (noopCache) HGetAll(_ context.Context, _ string) (map[string]string, error) {
+	return nil, errors.New("miss")
+}
+
 func TestGetMessage_Success(t *testing.T) {
 	mockRepo := new(MockProjectionRepo)
 	mockMember := new(MockMemberProvider)

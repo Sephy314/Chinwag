@@ -17,6 +17,8 @@ type Cache interface {
 	SAdd(ctx context.Context, key string, ttl time.Duration, members ...string) error
 	SMembers(ctx context.Context, key string) ([]string, error)
 	Eval(ctx context.Context, script string, keys []string, args ...any) (any, error)
+	AcquireLock(ctx context.Context, key string, token string, ttl time.Duration) (bool, error)
+	ReleaseLock(ctx context.Context, key string, token string) error
 }
 
 type RedisCache struct {
@@ -73,4 +75,23 @@ func (rc *RedisCache) SMembers(ctx context.Context, key string) ([]string, error
 
 func (rc *RedisCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
 	return rc.client.Eval(ctx, script, keys, args...).Result()
+}
+
+func (rc *RedisCache) AcquireLock(ctx context.Context, key string, token string, ttl time.Duration) (bool, error) {
+	res, err := rc.client.SetNX(ctx, key, token, ttl).Result()
+	if err != nil {
+		return false, err
+	}
+	return res, nil
+}
+
+const releaseLockScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`
+
+func (rc *RedisCache) ReleaseLock(ctx context.Context, key string, token string) error {
+	return rc.client.Eval(ctx, releaseLockScript, []string{key}, token).Err()
 }
