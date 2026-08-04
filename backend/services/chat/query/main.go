@@ -19,6 +19,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/chat/query/router"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/service"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/cache"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/nats-io/nats.go/jetstream"
@@ -29,8 +30,47 @@ type dpopSetNXAdapter struct {
 	rds *redis.Client
 }
 
-func (a dpopSetNXAdapter) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
-	return a.rds.SetNX(ctx, key, value, ttl).Result()
+func (a dpopSetNXAdapter) ConsumeNonce(ctx context.Context, nonce string) (bool, error) {
+	return consumeNonce(ctx, a.rds, nonce)
+}
+
+func (a dpopSetNXAdapter) ReserveJti(ctx context.Context, jti string, ttl time.Duration) (bool, error) {
+	return a.rds.SetNX(ctx, "dpop:jti:"+jti, "1", ttl).Result()
+}
+
+const consumeNonceScript = `
+local v = redis.call('GET', KEYS[1])
+if not v then
+  return 0
+end
+redis.call('DEL', KEYS[1])
+return 1
+`
+
+func consumeNonce(ctx context.Context, rds *redis.Client, nonce string) (bool, error) {
+	res, err := rds.Eval(ctx, consumeNonceScript, []string{"dpop:nonce:" + nonce}).Result()
+	if err != nil {
+		return false, err
+	}
+	v, ok := res.(int64)
+	if !ok {
+		return false, nil
+	}
+	return v == 1, nil
+}
+
+func newDPoPValidator(rds *redis.Client) *dpop.Validator {
+	store := dpopSetNXAdapter{rds: rds}
+	return &dpop.Validator{
+		NonceStore: store,
+		IssueNonce: func(ctx context.Context) (string, error) {
+			nonce := uuid.Must(uuid.NewV7()).String()
+			if err := rds.Set(ctx, "dpop:nonce:"+nonce, "1", 5*time.Minute).Err(); err != nil {
+				return "", err
+			}
+			return nonce, nil
+		},
+	}
 }
 
 type roomMemberAdapter struct {
@@ -176,10 +216,10 @@ func main() {
 
 	r := router.NewRouter(queryHandler, log)
 	r.Setup(&router.RouterConfig{
-		Port:        cfg.Port,
-		JWKSURL:     cfg.JWKSURL,
-		FrontendURL: cfg.FrontendURL,
-		DPoPStore:   dpopSetNXAdapter{rds: conns.Rds},
+		Port:          cfg.Port,
+		JWKSURL:       cfg.JWKSURL,
+		FrontendURL:   cfg.FrontendURL,
+		DPoPValidator: newDPoPValidator(conns.Rds),
 	})
 
 	log.Info("chat query service starting", "port", cfg.Port)

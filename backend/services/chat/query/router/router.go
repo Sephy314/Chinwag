@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/handler"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -73,8 +74,8 @@ func (r *Router) Setup(cfg *RouterConfig) {
 }
 
 type RouterConfig struct {
-	Port        string
-	JWKSURL     string
-	FrontendURL string
-	DPoPStore   sharedauth.SetNXStore
+	Port          string
+	JWKSURL       string
+	FrontendURL   string
+	DPoPValidator *dpop.Validator
 }

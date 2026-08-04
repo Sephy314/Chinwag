@@ -317,10 +317,10 @@ func main() {
 	r := router.NewRouter(chatHandler, wsHandler, log)
 
 	r.Setup(&router.RouterConfig{
-		Port:        cfg.Port,
-		JWKSURL:     cfg.JWKSURL,
-		FrontendURL: cfg.FrontendURL,
-		DPoPStore:   newDPoPValidator(conns.Rds),
+		Port:          cfg.Port,
+		JWKSURL:       cfg.JWKSURL,
+		FrontendURL:   cfg.FrontendURL,
+		DPoPValidator: newDPoPValidator(conns.Rds),
 	})
 
 	log.Info("chat command service starting", "port", cfg.Port)

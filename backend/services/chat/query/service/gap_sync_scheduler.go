@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/services/chat/query/domain"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/repo"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -65,19 +64,19 @@ func decodeCursor(s string) (cursor, error) {
 }
 
 type GapSyncScheduler struct {
-	sourceDB      sqlx.ExtContext
-	targetDB      sqlx.ExtContext
+	sourceDB       sqlx.ExtContext
+	targetDB       *sqlx.DB
 	projectionRepo repo.ProjectionRepoInterface
-	redis         *redis.Client
+	redis          *redis.Client
 	authServiceURL string
-	log           *slog.Logger
-	httpClient    *http.Client
-	userCache     map[string]string
+	log            *slog.Logger
+	httpClient     *http.Client
+	userCache      map[string]string
 }
 
 func NewGapSyncScheduler(
 	sourceDB sqlx.ExtContext,
-	targetDB sqlx.ExtContext,
+	targetDB *sqlx.DB,
 	projectionRepo repo.ProjectionRepoInterface,
 	redis *redis.Client,
 	authServiceURL string,
