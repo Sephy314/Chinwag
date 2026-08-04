@@ -69,6 +69,7 @@ func main() {
 		GoogleOAuthEnabled: googleCfg.IsValid(),
 		GoogleConfig:       googleCfg,
 		Cache:              cacheRedis,
+		DPoPValidator:      dpopService.Validator(),
 	})
 
 	log.Info("auth service starting", "port", cfg.Port)

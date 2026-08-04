@@ -1,10 +1,9 @@
 package auth
 
 import (
-	"context"
+	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/golang-jwt/jwt/v5"
@@ -13,32 +12,14 @@ import (
 
 const ClaimsContextKey = "auth_claims"
 
-// SetNXStore provides an atomic key-once insertion, used to detect DPoP proof
-// jti replay. It matches the go-redis SetNX behavior via an adapter.
-type SetNXStore interface {
-	SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error)
-}
+const dpopNonceHeader = "DPoP-Nonce"
 
-// DPoPError carries an RFC 9449 error code and its HTTP status.
-type DPoPError struct {
-	Code    string
-	Status  int
-	Message string
-}
-
-func (e *DPoPError) Error() string { return e.Message }
-
-const (
-	dpopProofMaxAge = 60 * time.Second
-	dpopFutureSkew  = 60 * time.Second
-	dpopJtiTTL      = 2 * time.Minute
-)
-
-// NewMiddleware validates the bearer/DPoP access token and, when a replay
-// store is provided, requires a sender-constrained DPoP proof bound to the
-// token's cnf.jkt claim (RFC 9449). If store is nil, DPoP validation is
-// skipped with a warning — production deployments must always pass a store.
-func NewMiddleware(client *JWKSClient, log Logger, store SetNXStore) echo.MiddlewareFunc {
+// NewMiddleware validates the DPoP bearer access token and requires a
+// sender-constrained DPoP proof bound to the token's cnf.jkt claim (RFC 9449).
+// The shared validator applies the same proof/nonce/replay checks used by the
+// token-issuing endpoints. If validator is nil, DPoP validation is skipped
+// with a warning — production deployments must always pass a validator.
+func NewMiddleware(client *JWKSClient, log Logger, validator *dpop.Validator) echo.MiddlewareFunc {
 	client.SetLogger(log)
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -54,12 +35,12 @@ func NewMiddleware(client *JWKSClient, log Logger, store SetNXStore) echo.Middle
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid or expired token"})
 			}
 
-			if store != nil {
-				if derr := verifyDPoP(c, claims, store); derr != nil {
+			if validator != nil {
+				if derr := verifyDPoP(c, claims, validator); derr != nil {
 					return respondDPoPError(c, derr)
 				}
 			} else {
-				log.Info("DPoP validation disabled because no replay store was provided")
+				log.Info("DPoP validation disabled because no validator was provided")
 			}
 
 			c.Set(ClaimsContextKey, claims)
@@ -89,76 +70,41 @@ func parseAuthorization(c *echo.Context) (string, error) {
 	return parts[1], nil
 }
 
-func verifyDPoP(c *echo.Context, claims *Claims, store SetNXStore) *DPoPError {
+func verifyDPoP(c *echo.Context, claims *Claims, v *dpop.Validator) *dpop.Error {
 	if claims.CNF == nil || claims.CNF.Jkt == "" {
-		return &DPoPError{
+		return &dpop.Error{
 			Code:    dpop.ErrorInvalidBinding,
 			Status:  http.StatusUnauthorized,
 			Message: "access token is not bound to a DPoP key",
 		}
 	}
 
-	raw := c.Request().Header.Get(dpop.HeaderName)
-	if raw == "" {
-		return &DPoPError{
-			Code:    dpop.ErrorInvalidProof,
-			Status:  http.StatusBadRequest,
-			Message: "missing DPoP proof",
-		}
+	proof, nonce, err := v.Validate(c.Request().Context(), c.Request())
+	if nonce != "" {
+		c.Response().Header().Set(dpopNonceHeader, nonce)
 	}
-
-	proof, err := dpop.ParseProof(raw)
 	if err != nil {
-		return &DPoPError{
-			Code:    dpop.ErrorInvalidProof,
-			Status:  http.StatusBadRequest,
-			Message: "invalid DPoP proof: " + err.Error(),
+		var de *dpop.Error
+		if errors.As(err, &de) {
+			return de
 		}
-	}
-
-	htu := dpop.RequestHTU(c.Request())
-	if err := proof.Validate(c.Request().Method, htu, time.Now(), dpopProofMaxAge, dpopFutureSkew); err != nil {
-		return &DPoPError{
-			Code:    dpop.ErrorInvalidProof,
-			Status:  http.StatusBadRequest,
-			Message: err.Error(),
-		}
-	}
-
-	if err := proof.VerifySignature(); err != nil {
-		return &DPoPError{
-			Code:    dpop.ErrorInvalidProof,
-			Status:  http.StatusBadRequest,
-			Message: "invalid DPoP proof signature",
-		}
-	}
-
-	acquired, err := store.SetNX(c.Request().Context(), "dpop:jti:"+proof.Claims.Jti, "1", dpopJtiTTL)
-	if err != nil {
-		return &DPoPError{
+		return &dpop.Error{
 			Code:    dpop.ErrorInvalidProof,
 			Status:  http.StatusInternalServerError,
-			Message: "replay cache unavailable",
-		}
-	}
-	if !acquired {
-		return &DPoPError{
-			Code:    dpop.ErrorInvalidProof,
-			Status:  http.StatusBadRequest,
-			Message: "DPoP proof replay detected",
+			Message: "DPoP validation unavailable: " + err.Error(),
 		}
 	}
 
 	jkt, err := proof.Thumbprint()
 	if err != nil {
-		return &DPoPError{
+		return &dpop.Error{
 			Code:    dpop.ErrorInvalidProof,
 			Status:  http.StatusBadRequest,
 			Message: "failed to derive DPoP key thumbprint",
 		}
 	}
 	if jkt != claims.CNF.Jkt {
-		return &DPoPError{
+		return &dpop.Error{
 			Code:    dpop.ErrorInvalidBinding,
 			Status:  http.StatusUnauthorized,
 			Message: "DPoP key does not match the bound access token",
@@ -168,7 +114,7 @@ func verifyDPoP(c *echo.Context, claims *Claims, store SetNXStore) *DPoPError {
 	return nil
 }
 
-func respondDPoPError(c *echo.Context, derr *DPoPError) error {
+func respondDPoPError(c *echo.Context, derr *dpop.Error) error {
 	return c.JSON(derr.Status, map[string]string{
 		"error": derr.Message,
 		"code":  derr.Code,

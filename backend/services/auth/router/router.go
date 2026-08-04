@@ -9,6 +9,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -125,7 +126,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.Cache))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
 	{
 		priv.GET("/whoami", r.UserHandler.WhoAmI)
 		priv.PUT("/user/:id", r.UserHandler.UpdateUser)
@@ -141,4 +142,5 @@ type RouterConfig struct {
 	GoogleOAuthEnabled bool
 	GoogleConfig       *oauth.GoogleConfig
 	Cache              cache.Cache
+	DPoPValidator      *dpop.Validator
 }

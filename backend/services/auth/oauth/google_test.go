@@ -79,6 +79,23 @@ func (m *mockCache) ReleaseLock(ctx context.Context, key string, token string) e
 	return nil
 }
 
+func (m *mockCache) ConsumeNonce(ctx context.Context, nonce string) (bool, error) {
+	if _, ok := m.set["dpop:nonce:"+nonce]; !ok {
+		return false, nil
+	}
+	delete(m.set, "dpop:nonce:"+nonce)
+	return true, nil
+}
+
+func (m *mockCache) ReserveJti(ctx context.Context, jti string, ttl time.Duration) (bool, error) {
+	key := "dpop:jti:" + jti
+	if _, ok := m.set[key]; ok {
+		return false, nil
+	}
+	m.set[key] = "1"
+	return true, nil
+}
+
 type noopLogger struct{}
 
 func (noopLogger) Info(msg string, args ...any)   {}

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
@@ -130,7 +131,7 @@ func (h *UserHandler) Login(c *echo.Context) error {
 
 	jkt, err := proof.Thumbprint()
 	if err != nil {
-		return respondDPoPError(c, nonce, &service.DPoPError{Code: service.DPoPErrorInvalid, Message: "failed to derive DPoP key thumbprint"})
+		return respondDPoPError(c, nonce, &dpop.Error{Code: dpop.ErrorInvalidProof, Message: "failed to derive DPoP key thumbprint"})
 	}
 
 	tokens, err := h.Service.Login(c.Request().Context(), req.Email, req.Password, jkt)

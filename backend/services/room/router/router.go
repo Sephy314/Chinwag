@@ -7,6 +7,7 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/room/handler"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -78,7 +79,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPStore))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
 	{
 		priv.POST("/rooms", r.RoomHandler.CreateRoom)
 		priv.PUT("/rooms/:id", r.RoomHandler.UpdateRoom)
@@ -99,8 +100,8 @@ func (r *Router) Setup(cfg *RouterConfig) {
 }
 
 type RouterConfig struct {
-	Port        string
-	JWKSURL     string
-	FrontendURL string
-	DPoPStore   sharedauth.SetNXStore
+	Port          string
+	JWKSURL       string
+	FrontendURL   string
+	DPoPValidator *dpop.Validator
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/Sephy314/chinwag/backend/services/auth/domain"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
@@ -46,7 +47,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 
 	jkt, err := proof.Thumbprint()
 	if err != nil {
-		return respondDPoPError(c, nonce, &service.DPoPError{Code: service.DPoPErrorInvalid, Message: "failed to derive DPoP key thumbprint"})
+		return respondDPoPError(c, nonce, &dpop.Error{Code: dpop.ErrorInvalidProof, Message: "failed to derive DPoP key thumbprint"})
 	}
 
 	cookie, err := c.Cookie("refresh")
@@ -59,7 +60,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 	if record.Jkt != "" && record.Jkt != jkt {
-		return respondDPoPError(c, nonce, &service.DPoPError{Code: service.DPoPErrorInvalid, Message: "DPoP key does not match the bound refresh token"})
+		return respondDPoPError(c, nonce, &dpop.Error{Code: dpop.ErrorInvalidProof, Message: "DPoP key does not match the bound refresh token"})
 	}
 
 	lockKey := "refresh:lock:" + service.HashRefreshToken(cookie.Value)

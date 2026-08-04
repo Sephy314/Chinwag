@@ -20,6 +20,8 @@ type Cache interface {
 	Eval(ctx context.Context, script string, keys []string, args ...any) (any, error)
 	AcquireLock(ctx context.Context, key string, token string, ttl time.Duration) (bool, error)
 	ReleaseLock(ctx context.Context, key string, token string) error
+	ConsumeNonce(ctx context.Context, nonce string) (bool, error)
+	ReserveJti(ctx context.Context, jti string, ttl time.Duration) (bool, error)
 }
 
 type RedisCache struct {
@@ -99,4 +101,31 @@ return 0
 
 func (rc *RedisCache) ReleaseLock(ctx context.Context, key string, token string) error {
 	return rc.client.Eval(ctx, releaseLockScript, []string{key}, token).Err()
+}
+
+const consumeNonceScript = `
+local v = redis.call('GET', KEYS[1])
+if not v then
+  return 0
+end
+redis.call('DEL', KEYS[1])
+return 1
+`
+
+// ConsumeNonce atomically deletes a single-use DPoP nonce.
+func (rc *RedisCache) ConsumeNonce(ctx context.Context, nonce string) (bool, error) {
+	res, err := rc.client.Eval(ctx, consumeNonceScript, []string{"dpop:nonce:" + nonce}).Result()
+	if err != nil {
+		return false, err
+	}
+	v, ok := res.(int64)
+	if !ok {
+		return false, nil
+	}
+	return v == 1, nil
+}
+
+// ReserveJti atomically records a DPoP proof jti to detect replays.
+func (rc *RedisCache) ReserveJti(ctx context.Context, jti string, ttl time.Duration) (bool, error) {
+	return rc.client.SetNX(ctx, "dpop:jti:"+jti, "1", ttl).Result()
 }
