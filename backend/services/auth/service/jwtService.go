@@ -8,7 +8,7 @@ import (
 )
 
 type JwtServiceInterface interface {
-	NewAccessToken(ctx context.Context, userId string, role domain.Role) (*string, error)
+	NewAccessToken(ctx context.Context, userId string, role domain.Role, jkt string) (*string, error)
 }
 
 type JwtServiceImpl struct {
@@ -23,13 +23,13 @@ func NewJwtService(refreshService RefreshTokenServiceInterface, jwksService Jwks
 	}
 }
 
-func (s *JwtServiceImpl) NewAccessToken(ctx context.Context, userId string, role domain.Role) (*string, error) {
+func (s *JwtServiceImpl) NewAccessToken(ctx context.Context, userId string, role domain.Role, jkt string) (*string, error) {
 	key, err := s.jwksService.GetActiveKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := jwt.Sign(userId, string(role), key.PrivateKey, key.Kid)
+	token, err := jwt.SignWithCNF(userId, string(role), key.PrivateKey, key.Kid, jkt)
 	if err != nil {
 		return nil, err
 	}

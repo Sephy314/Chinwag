@@ -21,7 +21,16 @@ import (
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
+
+type dpopSetNXAdapter struct {
+	rds *redis.Client
+}
+
+func (a dpopSetNXAdapter) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
+	return a.rds.SetNX(ctx, key, value, ttl).Result()
+}
 
 type authUserAdapter struct {
 	authServiceURL string
@@ -260,6 +269,7 @@ func main() {
 		Port:        cfg.Port,
 		JWKSURL:     cfg.JWKSURL,
 		FrontendURL: cfg.FrontendURL,
+		DPoPStore:   dpopSetNXAdapter{rds: conns.Rds},
 	})
 
 	log.Info("chat command service starting", "port", cfg.Port)

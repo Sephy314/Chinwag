@@ -20,7 +20,16 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/room/service"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/cache"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
+
+type dpopSetNXAdapter struct {
+	rds *redis.Client
+}
+
+func (a dpopSetNXAdapter) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
+	return a.rds.SetNX(ctx, key, value, ttl).Result()
+}
 
 type authUserAdapter struct {
 	authServiceURL string
@@ -131,6 +140,7 @@ func main() {
 		Port:        cfg.Port,
 		JWKSURL:     cfg.JWKSURL,
 		FrontendURL: cfg.FrontendURL,
+		DPoPStore:   dpopSetNXAdapter{rds: conns.Rds},
 	})
 
 	log.Info("room service starting", "port", cfg.Port)

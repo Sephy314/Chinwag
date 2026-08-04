@@ -12,6 +12,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/domain"
 	"github.com/Sephy314/chinwag/backend/services/auth/internal/jwt"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
@@ -44,6 +45,7 @@ type GoogleOAuthHandler struct {
 	UserService    *service.UserService
 	JwkService     service.JwksServiceInterface
 	RefreshService service.RefreshTokenServiceInterface
+	Cache          cache.Cache
 	FrontendURL    string
 	log            logger.Logger
 }
@@ -53,6 +55,7 @@ func NewGoogleOAuthHandler(
 	userSvc *service.UserService,
 	jwkSvc service.JwksServiceInterface,
 	refreshSvc service.RefreshTokenServiceInterface,
+	cache cache.Cache,
 	frontendURL string,
 	log logger.Logger,
 ) *GoogleOAuthHandler {
@@ -61,15 +64,35 @@ func NewGoogleOAuthHandler(
 		UserService:    userSvc,
 		JwkService:     jwkSvc,
 		RefreshService: refreshSvc,
+		Cache:          cache,
 		FrontendURL:    frontendURL,
 		log:            log,
 	}
 }
 
+const oauthStateTTL = 10 * time.Minute
+
+const consumeStateScript = `
+local v = redis.call('GET', KEYS[1])
+if not v then
+  return ''
+end
+redis.call('DEL', KEYS[1])
+return v
+`
+
 func (h *GoogleOAuthHandler) HandleRedirect(c *echo.Context) error {
 	state := uuid.Must(uuid.NewV7()).String()
+	jkt := c.QueryParam("jkt")
 
-	h.log.Info("oauth redirect initiated", "state", state)
+	if jkt != "" {
+		if err := h.Cache.Set(c.Request().Context(), "oauth:state:"+state, jkt, oauthStateTTL); err != nil {
+			h.log.Error("oauth: failed to store state binding", "error", err)
+			return c.JSON(http.StatusInternalServerError, response.Error("failed to start oauth"))
+		}
+	}
+
+	h.log.Info("oauth redirect initiated", "state", state, "dpop_bound", jkt != "")
 
 	params := url.Values{
 		"client_id":     {h.Config.ClientID},
@@ -116,7 +139,9 @@ func (h *GoogleOAuthHandler) HandleCallback(c *echo.Context) error {
 	h.log.Info("oauth: user info fetched", "email", userInfo.Email)
 
 	ctx := c.Request().Context()
-	tokens, err := h.findOrCreateUser(ctx, userInfo)
+	jkt := h.consumeState(ctx, state)
+
+	tokens, err := h.findOrCreateUser(ctx, userInfo, jkt)
 	if err != nil {
 		h.log.Error("oauth: find or create user failed", "email", userInfo.Email, "error", err)
 		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_user_failed")
@@ -205,7 +230,22 @@ func (h *GoogleOAuthHandler) fetchUserInfo(accessToken string) (*googleUserInfo,
 	return &userInfo, nil
 }
 
-func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleUserInfo) (*structs.TokenSet, error) {
+func (h *GoogleOAuthHandler) consumeState(ctx context.Context, state string) string {
+	if state == "" {
+		return ""
+	}
+
+	res, err := h.Cache.Eval(ctx, consumeStateScript, []string{"oauth:state:" + state})
+	if err != nil {
+		h.log.Error("oauth: failed to consume state", "error", err)
+		return ""
+	}
+
+	s, _ := res.(string)
+	return s
+}
+
+func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleUserInfo, jkt string) (*structs.TokenSet, error) {
 	user, err := h.UserService.GetUserByEmail(ctx, info.Email)
 	if err != nil {
 		user, err = h.createUserFromGoogle(ctx, info)
@@ -219,7 +259,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleU
 		return nil, err
 	}
 
-	accessToken, err := jwt.Sign(user.Id, string(user.Role), key.PrivateKey, key.Kid)
+	accessToken, err := jwt.SignWithCNF(user.Id, string(user.Role), key.PrivateKey, key.Kid, jkt)
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +268,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleU
 	err = h.RefreshService.InsertRefreshToken(ctx, structs.RefreshToken{
 		Subject:      user.Id,
 		RefreshToken: refreshToken,
+		Jkt:          jkt,
 	})
 	if err != nil {
 		return nil, err

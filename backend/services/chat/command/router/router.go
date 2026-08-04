@@ -45,6 +45,10 @@ func (r *Router) Setup(cfg *RouterConfig) {
 			echo.HeaderContentType,
 			echo.HeaderAccept,
 			echo.HeaderAuthorization,
+			"DPoP",
+		},
+		ExposeHeaders: []string{
+			"DPoP-Nonce",
 		},
 		AllowMethods: []string{
 			http.MethodGet,
@@ -65,7 +69,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPStore))
 	{
 		priv.POST("/chat/rooms/:roomId/messages", r.ChatHandler.CreateMessage)
 		priv.PUT("/chat/rooms/:roomId/messages/:messageId", r.ChatHandler.UpdateMessage)
@@ -81,4 +85,5 @@ type RouterConfig struct {
 	Port        string
 	JWKSURL     string
 	FrontendURL string
+	DPoPStore   sharedauth.SetNXStore
 }

@@ -15,7 +15,7 @@ import (
 
 const consumeRefreshTokenScript = `
 if redis.call('EXISTS', KEYS[1]) == 0 then
-  return {'NOT_FOUND', '', '', ''}
+  return {'NOT_FOUND', '', '', '', ''}
 end
 local rec = redis.call('HGETALL', KEYS[1])
 local t = {}
@@ -23,13 +23,13 @@ for i = 1, #rec, 2 do
   t[rec[i]] = rec[i + 1]
 end
 if t['revoked'] == '1' then
-  return {'REVOKED', '', '', ''}
+  return {'REVOKED', '', '', '', ''}
 end
 if t['used'] == '1' then
-  return {'USED', t['user_id'], t['lineage_id'], t['parent_hash']}
+  return {'USED', t['user_id'], t['lineage_id'], t['parent_hash'], t['jkt']}
 end
 redis.call('HSET', KEYS[1], 'used', '1')
-return {'OK', t['user_id'], t['lineage_id'], t['parent_hash']}
+return {'OK', t['user_id'], t['lineage_id'], t['parent_hash'], t['jkt']}
 `
 
 type RefreshTokenServiceInterface interface {
@@ -66,6 +66,7 @@ func (r *RefreshTokenService) InsertRefreshToken(ctx context.Context, token stru
 		"user_id":     token.Subject,
 		"lineage_id":  lineageID,
 		"parent_hash": token.ParentHash,
+		"jkt":         token.Jkt,
 		"used":        "0",
 		"revoked":     "0",
 		"created_at":  strconv.FormatInt(time.Now().Unix(), 10),
@@ -85,7 +86,7 @@ func (r *RefreshTokenService) ConsumeRefreshToken(ctx context.Context, refreshTo
 	}
 
 	arr, ok := result.([]interface{})
-	if !ok || len(arr) < 4 {
+	if !ok || len(arr) < 5 {
 		return nil, errs.ErrCacheNotFound
 	}
 
@@ -93,6 +94,7 @@ func (r *RefreshTokenService) ConsumeRefreshToken(ctx context.Context, refreshTo
 		UserID:     asString(arr[1]),
 		LineageID:  asString(arr[2]),
 		ParentHash: asString(arr[3]),
+		Jkt:        asString(arr[4]),
 	}
 
 	switch asString(arr[0]) {
@@ -137,6 +139,7 @@ func (r *RefreshTokenService) toRecord(fields map[string]string) *structs.Refres
 		UserID:     fields["user_id"],
 		LineageID:  fields["lineage_id"],
 		ParentHash: fields["parent_hash"],
+		Jkt:        fields["jkt"],
 		Used:       fields["used"] == "1",
 		Revoked:    fields["revoked"] == "1",
 		CreatedAt:  createdAt,

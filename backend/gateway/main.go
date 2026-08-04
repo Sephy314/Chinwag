@@ -31,6 +31,10 @@ func main() {
 			echo.HeaderAccept,
 			echo.HeaderAuthorization,
 			echo.HeaderXRequestID,
+			"DPoP",
+		},
+		ExposeHeaders: []string{
+			"DPoP-Nonce",
 		},
 		AllowMethods: []string{
 			http.MethodGet,

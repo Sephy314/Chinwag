@@ -15,12 +15,18 @@ import (
 
 type UserHandler struct {
 	Service *service.UserService
+	dpop    service.DPoPServiceInterface
 	log     logger.Logger
 }
 
-func NewUserHandler(s *service.UserService, log logger.Logger) *UserHandler {
+func NewUserHandler(s *service.UserService, log logger.Logger, dpop ...service.DPoPServiceInterface) *UserHandler {
+	var dpopSvc service.DPoPServiceInterface
+	if len(dpop) > 0 {
+		dpopSvc = dpop[0]
+	}
 	return &UserHandler{
 		Service: s,
+		dpop:    dpopSvc,
 		log:     log,
 	}
 }
@@ -116,7 +122,18 @@ func (h *UserHandler) Login(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
 
-	tokens, err := h.Service.Login(c.Request().Context(), req.Email, req.Password)
+	proof, nonce, err := h.dpop.Validate(c.Request().Context(), c.Request())
+	if err != nil {
+		return respondDPoPError(c, nonce, err)
+	}
+	defer setDPoPNonce(c, nonce)
+
+	jkt, err := proof.Thumbprint()
+	if err != nil {
+		return respondDPoPError(c, nonce, &service.DPoPError{Code: service.DPoPErrorInvalid, Message: "failed to derive DPoP key thumbprint"})
+	}
+
+	tokens, err := h.Service.Login(c.Request().Context(), req.Email, req.Password, jkt)
 	if err != nil {
 		h.log.Warn("login: authentication failed", "email", req.Email, "error", err)
 		return c.JSON(errs.ParseError(err))

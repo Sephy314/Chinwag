@@ -23,22 +23,43 @@ type RefreshHandlerImpl struct {
 	service    service.RefreshTokenServiceInterface
 	jwtService service.JwtServiceInterface
 	locker     cache.Cache
+	dpop       service.DPoPServiceInterface
 }
 
-func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService service.JwtServiceInterface, locker cache.Cache) *RefreshHandlerImpl {
+func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService service.JwtServiceInterface, locker cache.Cache, dpop service.DPoPServiceInterface) *RefreshHandlerImpl {
 	return &RefreshHandlerImpl{
 		service:    service,
 		jwtService: jwtService,
 		locker:     locker,
+		dpop:       dpop,
 	}
 }
 
 func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	ctx := c.Request().Context()
 
+	proof, nonce, err := h.dpop.Validate(ctx, c.Request())
+	if err != nil {
+		return respondDPoPError(c, nonce, err)
+	}
+	defer setDPoPNonce(c, nonce)
+
+	jkt, err := proof.Thumbprint()
+	if err != nil {
+		return respondDPoPError(c, nonce, &service.DPoPError{Code: service.DPoPErrorInvalid, Message: "failed to derive DPoP key thumbprint"})
+	}
+
 	cookie, err := c.Cookie("refresh")
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, response.Error("missing refresh token"))
+	}
+
+	record, err := h.service.GetRefreshToken(ctx, cookie.Value)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+	if record.Jkt != "" && record.Jkt != jkt {
+		return respondDPoPError(c, nonce, &service.DPoPError{Code: service.DPoPErrorInvalid, Message: "DPoP key does not match the bound refresh token"})
 	}
 
 	lockKey := "refresh:lock:" + service.HashRefreshToken(cookie.Value)
@@ -54,15 +75,15 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		_ = h.locker.ReleaseLock(ctx, lockKey, lockToken)
 	}()
 
-	record, err := h.service.ConsumeRefreshToken(ctx, cookie.Value)
+	consumed, err := h.service.ConsumeRefreshToken(ctx, cookie.Value)
 	if err != nil {
 		if errors.Is(err, errs.ErrRefreshTokenReused) {
-			_ = h.service.RevokeLineage(ctx, record.LineageID)
+			_ = h.service.RevokeLineage(ctx, consumed.LineageID)
 		}
 		return c.JSON(errs.ParseError(err))
 	}
 
-	token, err := h.jwtService.NewAccessToken(ctx, record.UserID, domain.USER)
+	token, err := h.jwtService.NewAccessToken(ctx, consumed.UserID, domain.USER, jkt)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
@@ -70,10 +91,11 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	refreshToken := uuid.Must(uuid.NewV7()).String()
 
 	err = h.service.InsertRefreshToken(ctx, structs.RefreshToken{
-		Subject:      record.UserID,
+		Subject:      consumed.UserID,
 		RefreshToken: refreshToken,
-		LineageID:    record.LineageID,
+		LineageID:    consumed.LineageID,
 		ParentHash:   service.HashRefreshToken(cookie.Value),
+		Jkt:          jkt,
 	})
 	if err != nil {
 		return c.JSON(errs.ParseError(err))

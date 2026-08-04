@@ -5,12 +5,14 @@ type RefreshToken struct {
 	RefreshToken string
 	LineageID    string
 	ParentHash   string
+	Jkt          string
 }
 
 type RefreshTokenRecord struct {
 	UserID     string
 	LineageID  string
 	ParentHash string
+	Jkt        string
 	Used       bool
 	Revoked    bool
 	CreatedAt  int64

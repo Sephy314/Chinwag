@@ -149,7 +149,7 @@ func (s *UserService) CreateOAuthUser(ctx context.Context, user domain.User) err
 	})
 }
 
-func (s *UserService) Login(ctx context.Context, email string, pw string) (*structs.TokenSet, error) {
+func (s *UserService) Login(ctx context.Context, email string, pw string, jkt string) (*structs.TokenSet, error) {
 	s.log.Info("login attempt", "email", email)
 
 	user, err := s.Repo.GetUserByEmail(ctx, email)
@@ -172,7 +172,7 @@ func (s *UserService) Login(ctx context.Context, email string, pw string) (*stru
 		return nil, err
 	}
 
-	accessToken, err := jwt.Sign(user.Id, string(user.Role), key.PrivateKey, key.Kid)
+	accessToken, err := jwt.SignWithCNF(user.Id, string(user.Role), key.PrivateKey, key.Kid, jkt)
 	if err != nil {
 		s.log.Error("login failed: could not generate token", "email", email, "error", err)
 		return nil, err
@@ -183,6 +183,7 @@ func (s *UserService) Login(ctx context.Context, email string, pw string) (*stru
 	err = s.RefreshService.InsertRefreshToken(ctx, structs.RefreshToken{
 		Subject:      user.Id,
 		RefreshToken: refreshToken,
+		Jkt:          jkt,
 	})
 	if err != nil {
 		s.log.Error("login failed: could not insert refresh token", "email", email, "error", err)

@@ -7,6 +7,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/handler"
 	"github.com/Sephy314/chinwag/backend/services/auth/oauth"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/labstack/echo/v5"
@@ -75,6 +76,10 @@ func (r *Router) Setup(cfg *RouterConfig) {
 			echo.HeaderContentType,
 			echo.HeaderAccept,
 			echo.HeaderAuthorization,
+			"DPoP",
+		},
+		ExposeHeaders: []string{
+			"DPoP-Nonce",
 		},
 		AllowMethods: []string{
 			http.MethodGet,
@@ -108,6 +113,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 				r.UserHandler.Service,
 				r.JwksService,
 				r.UserHandler.Service.RefreshService,
+				cfg.Cache,
 				cfg.FrontendURL,
 				r.log,
 			)
@@ -119,7 +125,7 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	}
 
 	priv := e.Group("")
-	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log))
+	priv.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.Cache))
 	{
 		priv.GET("/whoami", r.UserHandler.WhoAmI)
 		priv.PUT("/user/:id", r.UserHandler.UpdateUser)
@@ -134,4 +140,5 @@ type RouterConfig struct {
 	FrontendURL        string
 	GoogleOAuthEnabled bool
 	GoogleConfig       *oauth.GoogleConfig
+	Cache              cache.Cache
 }

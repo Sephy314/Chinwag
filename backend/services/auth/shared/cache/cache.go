@@ -10,6 +10,7 @@ import (
 type Cache interface {
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key string, value any, ttl time.Duration) error
+	SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error)
 	Delete(ctx context.Context, key string) error
 	TTL(ctx context.Context, key string) (time.Duration, error)
 	HSet(ctx context.Context, key string, fields map[string]string, ttl time.Duration) error
@@ -35,6 +36,10 @@ func (rc *RedisCache) Get(ctx context.Context, key string) (string, error) {
 
 func (rc *RedisCache) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
 	return rc.client.Set(ctx, key, value, ttl).Err()
+}
+
+func (rc *RedisCache) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
+	return rc.client.SetNX(ctx, key, value, ttl).Result()
 }
 
 func (rc *RedisCache) Delete(ctx context.Context, key string) error {

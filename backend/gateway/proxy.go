@@ -20,8 +20,21 @@ func newReverseProxy(targetURL string, stripPrefix bool, prefix string) *httputi
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
+
+		if req.Header.Get("X-Forwarded-Proto") == "" {
+			proto := "http"
+			if req.TLS != nil {
+				proto = "https"
+			}
+			req.Header.Set("X-Forwarded-Proto", proto)
+		}
+		if req.Header.Get("X-Forwarded-Host") == "" {
+			req.Header.Set("X-Forwarded-Host", req.Host)
+		}
+
 		req.Host = target.Host
 		if stripPrefix {
+			req.Header.Set("X-Forwarded-Prefix", prefix)
 			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
 			if req.URL.Path == "" {
 				req.URL.Path = "/"
