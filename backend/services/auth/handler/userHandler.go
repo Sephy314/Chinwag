@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/labstack/echo/v5"
 )
 
@@ -111,7 +111,7 @@ func (h *UserHandler) WhoAmI(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	return c.JSON(http.StatusOK, response.OK(map[string]interface{}{
+	return c.JSON(http.StatusOK, response.OK(map[string]any{
 		"user": i.ToProjection(),
 	}))
 }
