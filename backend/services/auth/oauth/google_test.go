@@ -21,16 +21,16 @@ func newMockCache() *mockCache {
 	return &mockCache{set: map[string]string{}}
 }
 
-func (m *mockCache) Get(ctx context.Context, key string) (string, error) {
+func (m *mockCache) Get(_ context.Context, key string) (string, error) {
 	return m.set[key], nil
 }
 
-func (m *mockCache) Set(ctx context.Context, key string, value any, ttl time.Duration) error {
+func (m *mockCache) Set(_ context.Context, key string, value any, _ time.Duration) error {
 	m.set[key] = value.(string)
 	return nil
 }
 
-func (m *mockCache) SetNX(ctx context.Context, key string, value any, ttl time.Duration) (bool, error) {
+func (m *mockCache) SetNX(_ context.Context, key string, value any, _ time.Duration) (bool, error) {
 	if _, ok := m.set[key]; ok {
 		return false, nil
 	}
@@ -38,32 +38,32 @@ func (m *mockCache) SetNX(ctx context.Context, key string, value any, ttl time.D
 	return true, nil
 }
 
-func (m *mockCache) Delete(ctx context.Context, key string) error {
+func (m *mockCache) Delete(_ context.Context, key string) error {
 	delete(m.set, key)
 	return nil
 }
 
-func (m *mockCache) TTL(ctx context.Context, key string) (time.Duration, error) {
+func (m *mockCache) TTL(_ context.Context, key string) (time.Duration, error) {
 	return 0, nil
 }
 
-func (m *mockCache) HSet(ctx context.Context, key string, fields map[string]string, ttl time.Duration) error {
+func (m *mockCache) HSet(_ context.Context, key string, _ map[string]string, _ time.Duration) error {
 	return nil
 }
 
-func (m *mockCache) HGetAll(ctx context.Context, key string) (map[string]string, error) {
+func (m *mockCache) HGetAll(_ context.Context, _ string) (map[string]string, error) {
 	return nil, nil
 }
 
-func (m *mockCache) SAdd(ctx context.Context, key string, ttl time.Duration, members ...string) error {
+func (m *mockCache) SAdd(_ context.Context, _ string, _ time.Duration, _ ...string) error {
 	return nil
 }
 
-func (m *mockCache) SMembers(ctx context.Context, key string) ([]string, error) {
+func (m *mockCache) SMembers(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
 }
 
-func (m *mockCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
+func (m *mockCache) Eval(_ context.Context, _ string, keys []string, _ ...any) (any, error) {
 	v, ok := m.set[keys[0]]
 	if ok {
 		delete(m.set, keys[0])
@@ -71,15 +71,15 @@ func (m *mockCache) Eval(ctx context.Context, script string, keys []string, args
 	return v, nil
 }
 
-func (m *mockCache) AcquireLock(ctx context.Context, key string, token string, ttl time.Duration) (bool, error) {
+func (m *mockCache) AcquireLock(_ context.Context, _ string, _ string, _ time.Duration) (bool, error) {
 	return true, nil
 }
 
-func (m *mockCache) ReleaseLock(ctx context.Context, key string, token string) error {
+func (m *mockCache) ReleaseLock(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-func (m *mockCache) ConsumeNonce(ctx context.Context, nonce string) (bool, error) {
+func (m *mockCache) ConsumeNonce(_ context.Context, nonce string) (bool, error) {
 	if _, ok := m.set["dpop:nonce:"+nonce]; !ok {
 		return false, nil
 	}
@@ -87,7 +87,7 @@ func (m *mockCache) ConsumeNonce(ctx context.Context, nonce string) (bool, error
 	return true, nil
 }
 
-func (m *mockCache) ReserveJti(ctx context.Context, jti string, ttl time.Duration) (bool, error) {
+func (m *mockCache) ReserveJti(_ context.Context, jti string, _ time.Duration) (bool, error) {
 	key := "dpop:jti:" + jti
 	if _, ok := m.set[key]; ok {
 		return false, nil
@@ -98,12 +98,12 @@ func (m *mockCache) ReserveJti(ctx context.Context, jti string, ttl time.Duratio
 
 type noopLogger struct{}
 
-func (noopLogger) Info(msg string, args ...any)   {}
-func (noopLogger) Error(msg string, args ...any)  {}
-func (noopLogger) Debug(msg string, args ...any)  {}
-func (noopLogger) Warn(msg string, args ...any)   {}
-func (noopLogger) Fatal(msg string, args ...any)  {}
-func (noopLogger) With(args ...any) logger.Logger { return noopLogger{} }
+func (noopLogger) Info(_ string, _ ...any)   {}
+func (noopLogger) Error(_ string, _ ...any)  {}
+func (noopLogger) Debug(_ string, _ ...any)  {}
+func (noopLogger) Warn(_ string, _ ...any)   {}
+func (noopLogger) Fatal(_ string, _ ...any)  {}
+func (noopLogger) With(_ ...any) logger.Logger { return noopLogger{} }
 
 func newTestLogger() logger.Logger { return noopLogger{} }
 
