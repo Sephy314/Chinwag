@@ -72,6 +72,21 @@ func NewGoogleOAuthHandler(
 
 const oauthStateTTL = 10 * time.Minute
 
+// isValidJkt reports whether s looks like a valid RFC 7638 SHA-256
+// thumbprint (base64url, 43 characters). The jkt must always be present so
+// OAuth-issued tokens are always bound to a DPoP key.
+func isValidJkt(s string) bool {
+	if len(s) != 43 {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
 const consumeStateScript = `
 local v = redis.call('GET', KEYS[1])
 if not v then
@@ -82,17 +97,20 @@ return v
 `
 
 func (h *GoogleOAuthHandler) HandleRedirect(c *echo.Context) error {
-	state := uuid.Must(uuid.NewV7()).String()
 	jkt := c.QueryParam("jkt")
 
-	if jkt != "" {
-		if err := h.Cache.Set(c.Request().Context(), "oauth:state:"+state, jkt, oauthStateTTL); err != nil {
-			h.log.Error("oauth: failed to store state binding", "error", err)
-			return c.JSON(http.StatusInternalServerError, response.Error("failed to start oauth"))
-		}
+	if !isValidJkt(jkt) {
+		h.log.Warn("oauth redirect rejected: missing invalid dpop key binding", "jkt_set", jkt != "")
+		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_binding_required")
 	}
 
-	h.log.Info("oauth redirect initiated", "state", state, "dpop_bound", jkt != "")
+	state := uuid.Must(uuid.NewV7()).String()
+	if err := h.Cache.Set(c.Request().Context(), "oauth:state:"+state, jkt, oauthStateTTL); err != nil {
+		h.log.Error("oauth: failed to store state binding", "error", err)
+		return c.JSON(http.StatusInternalServerError, response.Error("failed to start oauth"))
+	}
+
+	h.log.Info("oauth redirect initiated", "state", state, "dpop_bound", true)
 
 	params := url.Values{
 		"client_id":     {h.Config.ClientID},
@@ -140,6 +158,11 @@ func (h *GoogleOAuthHandler) HandleCallback(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 	jkt := h.consumeState(ctx, state)
+
+	if !isValidJkt(jkt) {
+		h.log.Warn("oauth callback rejected: state binding missing or expired", "state", state)
+		return c.Redirect(http.StatusTemporaryRedirect, h.FrontendURL+"/login?error=oauth_binding_lost")
+	}
 
 	tokens, err := h.findOrCreateUser(ctx, userInfo, jkt)
 	if err != nil {
