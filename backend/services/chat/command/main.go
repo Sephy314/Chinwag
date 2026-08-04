@@ -261,7 +261,7 @@ func main() {
 
 	chatSvc := service.NewChatService(chatRepoImpl, unitOfWork, userAdapter, roomMemberProv)
 	chatHandler := handler.NewChatHandler(chatSvc)
-	wsHandler := handler.NewWebSocketHandler(hub, jwksClient, log)
+	wsHandler := handler.NewWebSocketHandler(hub, conns.Rds, log)
 
 	r := router.NewRouter(chatHandler, wsHandler, log)
 

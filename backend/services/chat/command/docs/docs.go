@@ -354,7 +354,7 @@ const docTemplate = `{
         },
         "/chat/rooms/{roomId}/ws": {
             "get": {
-                "description": "Upgrade to a WebSocket connection for real-time messaging in a room. Pass the JWT token as a query parameter. After upgrade, the server broadcasts new_message, updated_message, and deleted_message events. Client can send {\"type\":\"ping\"} and receive {\"type\":\"pong\"}.",
+                "description": "Upgrade to a WebSocket connection for real-time messaging in a room. Pass a short-lived single-use WebSocket ticket (obtained from POST /chat/rooms/{roomId}/ws-ticket) as a query parameter; the durable access token is never sent over the URL. After upgrade, the server broadcasts new_message, updated_message, and deleted_message events. Client can send {\"type\":\"ping\"} and receive {\"type\":\"pong\"}.",
                 "produces": [
                     "application/json"
                 ],
@@ -372,8 +372,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "JWT access token",
-                        "name": "token",
+                        "description": "Short-lived single-use WS ticket",
+                        "name": "ticket",
                         "in": "query",
                         "required": true
                     }
@@ -393,7 +393,7 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Missing or invalid token",
+                        "description": "Missing, invalid, or expired WS ticket",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {

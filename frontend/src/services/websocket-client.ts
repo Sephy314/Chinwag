@@ -1,5 +1,5 @@
-import { getAccessToken } from "@/lib/api-client"
-import type { ServerEvent, WsMessageHandler } from "@/types"
+import { apiPost } from "@/lib/api-client"
+import type { ApiResponse, ServerEvent, WsMessageHandler } from "@/types"
 
 type WsStatus = "disconnected" | "connecting" | "connected"
 
@@ -21,6 +21,7 @@ export class WsClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null
   private intentionalClose = false
+  private connectInFlight = false
   private status: WsStatus = "disconnected"
 
   constructor(options: WsClientOptions) {
@@ -30,47 +31,81 @@ export class WsClient {
   }
 
   connect() {
-    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
+    if (
+      this.connectInFlight ||
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING
+    ) {
       return
     }
 
     this.intentionalClose = false
     this.setStatus("connecting")
+    this.connectInFlight = true
+    this.openSocket()
+  }
 
-    const token = getAccessToken()
-    if (!token) {
-      this.scheduleReconnect()
-      return
-    }
+  /**
+   * Fetches a short-lived, single-use WebSocket ticket from the API (the
+   * request is authenticated with a DPoP proof) and opens the socket with the
+   * ticket instead of the durable access token, which is never placed in the
+   * URL.
+   */
+  private async openSocket() {
+    try {
+      const res = await apiPost<{ ticket: string }>(
+        `/chat/rooms/${this.roomId}/ws-ticket`,
+        undefined,
+        true,
+      )
+      const ticket = res.data?.ticket
 
-    const url = `${WS_BASE}/chat/rooms/${this.roomId}/ws?token=${encodeURIComponent(token)}`
-    this.ws = new WebSocket(url)
-
-    this.ws.onopen = () => {
-      this.reconnectAttempt = 0
-      this.setStatus("connected")
-      this.startHeartbeat()
-    }
-
-    this.ws.onmessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data) as ServerEvent
-        this.onMessage(data)
-      } catch {
-        // ignore malformed messages
+      if (this.intentionalClose) {
+        this.connectInFlight = false
+        return
       }
-    }
 
-    this.ws.onclose = () => {
-      this.stopHeartbeat()
-      this.setStatus("disconnected")
+      if (!ticket) {
+        this.connectInFlight = false
+        this.scheduleReconnect()
+        return
+      }
+
+      const url = `${WS_BASE}/chat/rooms/${this.roomId}/ws?ticket=${encodeURIComponent(ticket)}`
+      this.ws = new WebSocket(url)
+      this.connectInFlight = false
+
+      this.ws.onopen = () => {
+        this.reconnectAttempt = 0
+        this.setStatus("connected")
+        this.startHeartbeat()
+      }
+
+      this.ws.onmessage = (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data) as ServerEvent
+          this.onMessage(data)
+        } catch {
+          // ignore malformed messages
+        }
+      }
+
+      this.ws.onclose = () => {
+        this.stopHeartbeat()
+        this.setStatus("disconnected")
+        if (!this.intentionalClose) {
+          this.scheduleReconnect()
+        }
+      }
+
+      this.ws.onerror = () => {
+        // onclose will fire after this
+      }
+    } catch {
+      this.connectInFlight = false
       if (!this.intentionalClose) {
         this.scheduleReconnect()
       }
-    }
-
-    this.ws.onerror = () => {
-      // onclose will fire after this
     }
   }
 
