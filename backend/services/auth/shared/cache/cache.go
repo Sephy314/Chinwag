@@ -12,6 +12,11 @@ type Cache interface {
 	Set(ctx context.Context, key string, value any, ttl time.Duration) error
 	Delete(ctx context.Context, key string) error
 	TTL(ctx context.Context, key string) (time.Duration, error)
+	HSet(ctx context.Context, key string, fields map[string]string, ttl time.Duration) error
+	HGetAll(ctx context.Context, key string) (map[string]string, error)
+	SAdd(ctx context.Context, key string, ttl time.Duration, members ...string) error
+	SMembers(ctx context.Context, key string) ([]string, error)
+	Eval(ctx context.Context, script string, keys []string, args ...any) (any, error)
 }
 
 type RedisCache struct {
@@ -36,4 +41,36 @@ func (rc *RedisCache) Delete(ctx context.Context, key string) error {
 
 func (rc *RedisCache) TTL(ctx context.Context, key string) (time.Duration, error) {
 	return rc.client.TTL(ctx, key).Result()
+}
+
+func (rc *RedisCache) HSet(ctx context.Context, key string, fields map[string]string, ttl time.Duration) error {
+	if err := rc.client.HSet(ctx, key, fields).Err(); err != nil {
+		return err
+	}
+	if ttl > 0 {
+		return rc.client.Expire(ctx, key, ttl).Err()
+	}
+	return nil
+}
+
+func (rc *RedisCache) HGetAll(ctx context.Context, key string) (map[string]string, error) {
+	return rc.client.HGetAll(ctx, key).Result()
+}
+
+func (rc *RedisCache) SAdd(ctx context.Context, key string, ttl time.Duration, members ...string) error {
+	if err := rc.client.SAdd(ctx, key, members).Err(); err != nil {
+		return err
+	}
+	if ttl > 0 {
+		return rc.client.Expire(ctx, key, ttl).Err()
+	}
+	return nil
+}
+
+func (rc *RedisCache) SMembers(ctx context.Context, key string) ([]string, error) {
+	return rc.client.SMembers(ctx, key).Result()
+}
+
+func (rc *RedisCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
+	return rc.client.Eval(ctx, script, keys, args...).Result()
 }

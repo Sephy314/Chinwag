@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -37,12 +38,15 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, response.Error("missing refresh token"))
 	}
 
-	uid, err := h.service.GetUserIdByRefreshToken(ctx, cookie.Value)
+	record, err := h.service.ConsumeRefreshToken(ctx, cookie.Value)
 	if err != nil {
+		if errors.Is(err, errs.ErrRefreshTokenReused) {
+			_ = h.service.RevokeLineage(ctx, record.LineageID)
+		}
 		return c.JSON(errs.ParseError(err))
 	}
 
-	token, err := h.jwtService.NewAccessToken(ctx, *uid, domain.USER)
+	token, err := h.jwtService.NewAccessToken(ctx, record.UserID, domain.USER)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
@@ -50,14 +54,12 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	refreshToken := uuid.Must(uuid.NewV7()).String()
 
 	err = h.service.InsertRefreshToken(ctx, structs.RefreshToken{
-		Subject:      *uid,
+		Subject:      record.UserID,
 		RefreshToken: refreshToken,
+		LineageID:    record.LineageID,
+		ParentHash:   service.HashRefreshToken(cookie.Value),
 	})
 	if err != nil {
-		return c.JSON(errs.ParseError(err))
-	}
-
-	if err := h.service.RemoveRefreshToken(ctx, cookie.Value); err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
 

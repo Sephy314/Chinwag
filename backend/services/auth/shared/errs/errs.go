@@ -56,6 +56,16 @@ var (
 		Status:  http.StatusBadRequest,
 		Message: "No key",
 	}
+
+	ErrRefreshTokenReused = &AppError{
+		Status:  http.StatusUnauthorized,
+		Message: "Refresh token reuse detected",
+	}
+
+	ErrRefreshTokenRevoked = &AppError{
+		Status:  http.StatusUnauthorized,
+		Message: "Refresh token revoked",
+	}
 )
 
 func ParseError(err error) (int, *response.Response[any]) {
