@@ -1,8 +1,7 @@
 ./frontend/node_modules
 ./frontend/.next
-./frontend/
 .idea
 ./backend/Makefile
 .env*
 !.env.example
-gateway/gateway
+qodana.yaml

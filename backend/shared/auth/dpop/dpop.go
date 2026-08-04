@@ -120,9 +120,11 @@ func parsePublicKey(raw json.RawMessage) (*ecdsa.PublicKey, error) {
 	if pub.Curve != elliptic.P256() {
 		return nil, errors.New("unsupported curve, expected P-256")
 	}
+	//nolint:staticcheck // Using deprecated X, Y fields is necessary for key validation
 	if pub.X == nil || pub.Y == nil || pub.X.Sign() <= 0 || pub.Y.Sign() <= 0 {
 		return nil, errors.New("invalid public key point")
 	}
+	//nolint:staticcheck // Using deprecated X, Y fields for curve validation
 	if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
 		return nil, errors.New("public key point not on curve")
 	}
@@ -150,6 +152,7 @@ func Thumbprint(pub *ecdsa.PublicKey) (string, error) {
 	}
 	size := (pub.Curve.Params().BitSize + 7) / 8
 
+	//nolint:staticcheck // Using deprecated X, Y fields for thumbprint calculation
 	canonical := fmt.Sprintf(
 		`{"crv":"P-256","kty":"EC","x":%q,"y":%q}`,
 		b64.EncodeToString(paddedBytes(pub.X.Bytes(), size)),
