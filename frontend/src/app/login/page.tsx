@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { MessageSquare, Loader2 } from "lucide-react"
 import { useAuth } from "@/features/auth/hooks/use-auth"
+import { getGoogleAuthorizeURL } from "@/lib/dpop"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,8 +46,9 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleLogin = () => {
-    window.location.href = "http://localhost:8000/auth/google"
+  const handleGoogleLogin = async () => {
+    const url = await getGoogleAuthorizeURL("http://localhost:8000/auth/google")
+    window.location.href = url
   }
 
   return (

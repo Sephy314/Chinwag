@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
-import { apiPost, apiGet, setAccessToken, ApiError } from "@/lib/api-client"
+import { apiPost, apiGet, apiRequest, setAccessToken, ApiError } from "@/lib/api-client"
 import { API_PATHS } from "@/lib/api-paths"
 import type { ApiResponse, User, LoginRequest, RegisterRequest } from "@/types"
 
@@ -99,7 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (data: LoginRequest) => {
-      const res = await apiPost<{ token: string }>(API_PATHS.auth.login, data, false)
+      const res = await apiRequest<{ token: string }>(API_PATHS.auth.login, {
+        method: "POST",
+        body: data,
+        auth: false,
+      })
       if (res.success && res.data?.token) {
         setAccessToken(res.data.token)
         const whoami = await apiGet<{ user: User }>(API_PATHS.auth.whoami)

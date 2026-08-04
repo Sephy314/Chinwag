@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ApiError } from "@/lib/api-client"
+import { getGoogleAuthorizeURL } from "@/lib/dpop"
 
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(50),
@@ -46,8 +47,9 @@ export default function RegisterPage() {
     }
   }
 
-  const handleGoogleSignUp = () => {
-    window.location.href = "http://localhost:8000/auth/google"
+  const handleGoogleSignUp = async () => {
+    const url = await getGoogleAuthorizeURL("http://localhost:8000/auth/google")
+    window.location.href = url
   }
 
   return (

@@ -1,10 +1,12 @@
 import type { ApiResponse } from "@/types"
+import { createDPoPProof } from "./dpop"
 
 const API_BASE = ""
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
 let refreshInProgress = false
+let dpopNonce: string | null = null
 
 export function setAccessToken(token: string | null) {
   accessToken = token
@@ -12,6 +14,63 @@ export function setAccessToken(token: string | null) {
 
 export function getAccessToken(): string | null {
   return accessToken
+}
+
+function setDPoPNonce(nonce: string | null) {
+  dpopNonce = nonce
+}
+
+async function buildDPoPHeaders(method: string, url: string): Promise<Record<string, string>> {
+  const { proof } = await createDPoPProof({ method, url, nonce: dpopNonce ?? undefined })
+  return { "DPoP": proof }
+}
+
+async function fetchWithProof(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<Response> {
+  const dpopHeaders = await buildDPoPHeaders(method, url)
+  return fetch(url, {
+    method,
+    headers: { ...headers, ...dpopHeaders },
+    body,
+    credentials: "include",
+  })
+}
+
+async function isUseNonceResponse(res: Response): Promise<boolean> {
+  if (res.status !== 400) return false
+  try {
+    const data: { code?: string } = await res.clone().json()
+    return data?.code === "use_dpop_nonce"
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Fetches with a DPoP proof attached. On a `use_dpop_nonce` challenge it
+ * stores the server nonce and retries exactly once (RFC 9449 section 8.3).
+ */
+async function doFetch(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<Response> {
+  let res = await fetchWithProof(url, method, headers, body)
+
+  if (await isUseNonceResponse(res)) {
+    const nonce = res.headers.get("DPoP-Nonce")
+    if (nonce) {
+      setDPoPNonce(nonce)
+      res = await fetchWithProof(url, method, headers, body)
+    }
+  }
+
+  return res
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -22,10 +81,7 @@ async function refreshAccessToken(): Promise<string | null> {
   refreshInProgress = true
 
   try {
-    const res = await fetch(`${API_BASE}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    })
+    const res = await doFetch(`${API_BASE}/auth/refresh`, "POST", {}, undefined)
 
     if (!res.ok) {
       accessToken = null
@@ -116,27 +172,17 @@ export async function apiRequest<T>(
   if (auth) {
     const token = await getValidToken()
     if (token) {
-      headers["Authorization"] = `Bearer ${token}`
+      headers["Authorization"] = `DPoP ${token}`
     }
   }
 
-  let res = await fetch(urlStr, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: "include",
-  })
+  let res = await doFetch(urlStr, method, headers, body ? JSON.stringify(body) : undefined)
 
   if (res.status === 401 && auth) {
     const newToken = await refreshAccessToken()
     if (newToken) {
-      headers["Authorization"] = `Bearer ${newToken}`
-      res = await fetch(urlStr, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-        credentials: "include",
-      })
+      headers["Authorization"] = `DPoP ${newToken}`
+      res = await doFetch(urlStr, method, headers, body ? JSON.stringify(body) : undefined)
     }
   }
 
@@ -161,8 +207,6 @@ export function apiGet<T>(path: string, params?: Record<string, string | number 
 export function apiPost<T>(path: string, body?: unknown, auth?: boolean) {
   return apiRequest<T>(path, { method: "POST", body, auth })
 }
-
-
 
 export function apiPut<T>(path: string, body?: unknown) {
   return apiRequest<T>(path, { method: "PUT", body })
