@@ -13,26 +13,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  async rewrites() {
-    return [
-      {
-        source: "/auth/:path*",
-        destination: "http://localhost:8000/auth/:path*",
-      },
-      {
-        source: "/chat/rooms/:path*",
-        destination: "http://localhost:8000/chat/rooms/:path*",
-      },
-      {
-        source: "/rooms/:path*",
-        destination: "http://localhost:8000/rooms/:path*",
-      },
-      {
-        source: "/users/:path*",
-        destination: "http://localhost:8000/users/:path*",
-      },
-    ]
-  },
 }
 
 export default nextConfig

@@ -5,6 +5,7 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type InfiniteData,
 } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -13,7 +14,7 @@ import {
   updateMessage,
   deleteMessage,
 } from "@/features/chat/api/chat-api"
-import type { Message, UpdateMessageRequest, ServerEvent } from "@/types"
+import type { ApiResponse, Message, UpdateMessageRequest, ServerEvent } from "@/types"
 import { MessageType } from "@/types"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import { WsClient } from "@/services/websocket-client"
@@ -24,12 +25,18 @@ interface Cursor {
   id: string
 }
 
+function seedPage(data: Message[]): ApiResponse<Message[]> {
+  return { success: true, code: "OK", message: "", data }
+}
+
+type MessagePage = ApiResponse<Message[]>
+type MessageQueryData = InfiniteData<MessagePage, string | undefined>
+
 export function useMessages(roomId: string) {
   const { user, readOnly } = useAuth()
   const queryClient = useQueryClient()
   const wsRef = useRef<WsClient | null>(null)
   const lastMessageCursorRef = useRef<Cursor | null>(null)
-  const [onlineCount, setOnlineCount] = useState(0)
   const [wsConnected, setWsConnected] = useState(false)
 
   const queryKey = useMemo(() => ["messages", roomId] as const, [roomId])
@@ -50,14 +57,24 @@ export function useMessages(roomId: string) {
 
   const handleWsMessage = useCallback(
     (event: ServerEvent) => {
-      queryClient.setQueryData<typeof messagesQuery.data>(queryKey, (old) => {
-        if (!old || old.pages.length === 0) return old
+      queryClient.setQueryData<MessageQueryData>(queryKey, (old): MessageQueryData | undefined => {
+        // The very first message of a new room often arrives over WS before the
+        // initial query has resolved (old is still undefined). Seed a fresh page
+        // so it is not dropped.
+        const msg = event.type === "new_message" ? (event.data as Message | null) : null
+        if (!old || old.pages.length === 0 || !Array.isArray(old.pages[0]?.data)) {
+          if (!msg || !msg.id) return old
+          lastMessageCursorRef.current = {
+            created_at: msg.created_at,
+            id: msg.id,
+          }
+          return { pages: [seedPage([msg])], pageParams: [undefined] as (string | undefined)[] }
+        }
 
         const pages = [...old.pages]
 
         switch (event.type) {
           case "new_message": {
-            const msg = event.data as Message
             if (msg && msg.id) {
               const data = pages[0].data.filter((m) => m.id !== msg.id)
               pages[0] = {
@@ -124,8 +141,8 @@ export function useMessages(roomId: string) {
 
               if (resyncedMessages.data && resyncedMessages.data.length > 0) {
                 // Merge resynced messages with existing data, deduplicating by id
-                queryClient.setQueryData<typeof messagesQuery.data>(queryKey, (old) => {
-                  if (!old || old.pages.length === 0) return old
+queryClient.setQueryData<MessageQueryData>(queryKey, (old): MessageQueryData | undefined => {
+                  if (!old || old.pages.length === 0 || !Array.isArray(old.pages[0]?.data)) return old
                   const pages = [...old.pages]
                   const existingIds = new Set(pages[0].data.map((m) => m.id))
                   const newMessages = resyncedMessages.data.filter((m) => !existingIds.has(m.id))
@@ -153,7 +170,11 @@ export function useMessages(roomId: string) {
     }
   }, [roomId, user?.id, readOnly, handleWsMessage, messagesQuery.data, queryClient, queryKey])
 
-  const allMessages = messagesQuery.data?.pages.flatMap((page) => page.data).filter((m): m is Message => m != null) ?? []
+  // Track the newest message's cursor for reconnect gap fill
+  const allMessages = useMemo(
+    () => messagesQuery.data?.pages.flatMap((page) => page.data ?? []) ?? [],
+    [messagesQuery.data],
+  )
 
   // Track the newest message's cursor for reconnect gap fill
   useEffect(() => {
@@ -175,7 +196,7 @@ export function useMessages(roomId: string) {
       }),
     onMutate: async ({ id, content }) => {
       await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<typeof messagesQuery.data>(queryKey)
+      const previous = queryClient.getQueryData<MessageQueryData | undefined>(queryKey)
 
       const optimistic: Message = {
         id,
@@ -187,8 +208,10 @@ export function useMessages(roomId: string) {
         created_at: new Date().toISOString(),
       }
 
-      queryClient.setQueryData<typeof messagesQuery.data>(queryKey, (old) => {
-        if (!old || old.pages.length === 0 || !old.pages[0]?.data) return old
+      queryClient.setQueryData<MessageQueryData>(queryKey, (old): MessageQueryData | undefined => {
+        if (!old || old.pages.length === 0 || !old.pages[0] || !Array.isArray(old.pages[0].data)) {
+          return { pages: [seedPage([optimistic])], pageParams: [undefined] as (string | undefined)[] }
+        }
         const pages = [...old.pages]
         pages[0] = {
           ...pages[0],
@@ -198,6 +221,11 @@ export function useMessages(roomId: string) {
       })
 
       return { previous }
+    },
+    onSuccess: () => {
+      // Reconcile with the projection so the optimistic message is never left
+      // out if the initial query was canceled before it resolved.
+      queryClient.invalidateQueries({ queryKey })
     },
     onError: (_err, _message, context) => {
       if (context?.previous) {
@@ -242,7 +270,6 @@ export function useMessages(roomId: string) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    onlineCount,
     wsConnected,
   }
 }

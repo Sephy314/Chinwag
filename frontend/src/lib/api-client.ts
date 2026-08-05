@@ -5,8 +5,9 @@ const API_BASE = ""
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
-let refreshInProgress = false
 let dpopNonce: string | null = null
+/** Serialize DPoP requests so single-use nonces are not raced. */
+let dpopGate: Promise<unknown> = Promise.resolve()
 
 export function setAccessToken(token: string | null) {
   accessToken = token
@@ -20,9 +21,10 @@ function setDPoPNonce(nonce: string | null) {
   dpopNonce = nonce
 }
 
-async function buildDPoPHeaders(method: string, url: string): Promise<Record<string, string>> {
-  const { proof } = await createDPoPProof({ method, url, nonce: dpopNonce ?? undefined })
-  return { "DPoP": proof }
+function captureDPoPNonce(res: Response) {
+  const nonce = res.headers.get("DPoP-Nonce")
+  if (nonce) setDPoPNonce(nonce)
+  return nonce
 }
 
 async function fetchWithProof(
@@ -30,11 +32,12 @@ async function fetchWithProof(
   method: string,
   headers: Record<string, string>,
   body: string | undefined,
+  nonce: string | undefined,
 ): Promise<Response> {
-  const dpopHeaders = await buildDPoPHeaders(method, url)
+  const { proof } = await createDPoPProof({ method, url, nonce })
   return fetch(url, {
     method,
-    headers: { ...headers, ...dpopHeaders },
+    headers: { ...headers, DPoP: proof },
     body,
     credentials: "include",
   })
@@ -50,9 +53,20 @@ async function isUseNonceResponse(res: Response): Promise<boolean> {
   }
 }
 
+function withDPoPGate<T>(fn: () => Promise<T>): Promise<T> {
+  const next = dpopGate.then(fn, fn)
+  dpopGate = next.then(
+    () => undefined,
+    () => undefined,
+  )
+  return next
+}
+
 /**
- * Fetches with a DPoP proof attached. On a `use_dpop_nonce` challenge it
- * stores the server nonce and retries exactly once (RFC 9449 section 8.3).
+ * Fetches with a DPoP proof. Always stores DPoP-Nonce from the response
+ * (including successes). On `use_dpop_nonce`, retries with that challenge
+ * nonce (RFC 9449 §8.3). Serialized so concurrent callers do not burn the
+ * same single-use nonce.
  */
 async function doFetch(
   url: string,
@@ -60,50 +74,52 @@ async function doFetch(
   headers: Record<string, string>,
   body: string | undefined,
 ): Promise<Response> {
-  let res = await fetchWithProof(url, method, headers, body)
+  return withDPoPGate(async () => {
+    let res = await fetchWithProof(url, method, headers, body, dpopNonce ?? undefined)
+    let challengeNonce = captureDPoPNonce(res)
 
-  if (await isUseNonceResponse(res)) {
-    const nonce = res.headers.get("DPoP-Nonce")
-    if (nonce) {
-      setDPoPNonce(nonce)
-      res = await fetchWithProof(url, method, headers, body)
+    for (let attempt = 0; attempt < 2 && (await isUseNonceResponse(res)); attempt++) {
+      if (!challengeNonce) break
+      res = await fetchWithProof(url, method, headers, body, challengeNonce)
+      challengeNonce = captureDPoPNonce(res)
     }
-  }
 
-  return res
+    return res
+  })
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  if (refreshInProgress && refreshPromise) {
+  if (refreshPromise) {
     return refreshPromise
   }
 
-  refreshInProgress = true
+  refreshPromise = (async () => {
+    try {
+      const res = await doFetch(`${API_BASE}/auth/refresh`, "POST", {}, undefined)
 
-  try {
-    const res = await doFetch(`${API_BASE}/auth/refresh`, "POST", {}, undefined)
+      if (!res.ok) {
+        accessToken = null
+        return null
+      }
 
-    if (!res.ok) {
+      const body: ApiResponse<{ token: string }> = await res.json()
+
+      if (body.success && body.data?.token) {
+        accessToken = body.data.token
+        return accessToken
+      }
+
       accessToken = null
       return null
+    } catch {
+      accessToken = null
+      return null
+    } finally {
+      refreshPromise = null
     }
+  })()
 
-    const body: ApiResponse<{ token: string }> = await res.json()
-
-    if (body.success && body.data?.token) {
-      accessToken = body.data.token
-      return accessToken
-    }
-
-    accessToken = null
-    return null
-  } catch {
-    accessToken = null
-    return null
-  } finally {
-    refreshInProgress = false
-    refreshPromise = null
-  }
+  return refreshPromise
 }
 
 function isTokenExpired(token: string): boolean {
@@ -120,11 +136,7 @@ async function getValidToken(): Promise<string | null> {
     return accessToken
   }
 
-  if (!refreshPromise) {
-    refreshPromise = refreshAccessToken()
-  }
-
-  return refreshPromise
+  return refreshAccessToken()
 }
 
 export class ApiError extends Error {
