@@ -1,0 +1,93 @@
+# ---------------------------------------------------------------------------
+# Redis — refresh tokens, DPoP nonce/jti, WS tickets, query cache.
+# AOF persistence enabled; password comes from the chinwag-secrets Secret.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: chinwag
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: chinwag
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server"]
+          args:
+            - "--appendonly"
+            - "yes"
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+          ports:
+            - name: redis
+              containerPort: 6379
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: REDIS_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'redis-cli -a "$REDIS_PASSWORD" ping'
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'redis-cli -a "$REDIS_PASSWORD" ping'
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: redis-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: chinwag
+spec:
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis

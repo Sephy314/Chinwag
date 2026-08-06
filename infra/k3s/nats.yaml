@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------------------
+# NATS JetStream — outbox event bus for the chat CQRS pipeline.
+# Single node with JetStream enabled and persistent storage.
+# The CHAT_EVENTS stream is created automatically by chat-command on startup.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nats-data
+  namespace: chinwag
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+  namespace: chinwag
+spec:
+  clusterIP: None # headless, paired with the StatefulSet
+  selector:
+    app: nats
+  ports:
+    - name: client
+      port: 4222
+      targetPort: client
+    - name: monitor
+      port: 8222
+      targetPort: monitor
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nats
+  namespace: chinwag
+  labels:
+    app: nats
+spec:
+  serviceName: nats
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nats
+  template:
+    metadata:
+      labels:
+        app: nats
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: nats
+          image: nats:2-alpine
+          args:
+            - "--jetstream"
+            - "--store_dir=/data"
+            - "--server_name=nats-0"
+          ports:
+            - name: client
+              containerPort: 4222
+            - name: monitor
+              containerPort: 8222
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nats-data

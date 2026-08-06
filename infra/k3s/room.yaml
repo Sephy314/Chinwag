@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# Room Service — room/member/invite management, pop scheduler.
+# Runs DB migrations at startup (goose); depends on postgres, redis and auth
+# (calls AUTH_SERVICE_URL /user/:id and AUTH_JWKS_URL).
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: room
+  namespace: chinwag
+  labels:
+    app: room
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: room
+  template:
+    metadata:
+      labels:
+        app: room
+    spec:
+      containers:
+        - name: room
+          image: chinwag/room:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: chinwag-config
+          env:
+            - name: ROOM_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: ROOM_DB_URL
+            - name: REDIS_PW
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: REDIS_PASSWORD
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: room
+  namespace: chinwag
+spec:
+  selector:
+    app: room
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http

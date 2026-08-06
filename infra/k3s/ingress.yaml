@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# Single Traefik Ingress (k3s default ingress controller).
+#
+# Path routing mirrors the "edge" role that nginx played in the Docker Compose
+# design and the gateway's own route table:
+#   /auth, /rooms, /users, /chat  → gateway (includes WebSocket upgrade for
+#                                   /chat/rooms/:id/ws)
+#   /                            → frontend
+#
+# Adjust `host` to your node IP / domain. For local access, map it in /etc/hosts:
+#   echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
+# Then set FRONTEND_URL in configmap.yaml to match (http://chinwag.local).
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chinwag
+  namespace: chinwag
+  annotations:
+    # Traefik listens on the web entrypoint (port 80) in k3s.
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: chinwag.local
+      http:
+        paths:
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8000
+          - path: /rooms
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8000
+          - path: /users
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8000
+          - path: /chat
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000

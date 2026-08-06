@@ -1,0 +1,21 @@
+# ---------------------------------------------------------------------------
+# Kustomize entrypoint — apply everything with a single command:
+#   kubectl apply -k infra/k3s
+# Resources are listed so `kubectl apply -f` also works per-file.
+# ---------------------------------------------------------------------------
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres.yaml
+  - redis.yaml
+  - nats.yaml
+  - gateway.yaml
+  - auth.yaml
+  - room.yaml
+  - chat-command.yaml
+  - chat-query.yaml
+  - frontend.yaml
+  - ingress.yaml
