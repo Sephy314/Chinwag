@@ -4,13 +4,8 @@
 #
 # Build context is the `frontend/` directory.
 #
-# NEXT_PUBLIC_WS_URL is inlined into the client bundle at BUILD time, so it must
-# be passed as a build argument matching the externally reachable WebSocket
-# origin (the k3s Ingress host), e.g.:
-#
-#   docker build \
-#     --build-arg NEXT_PUBLIC_WS_URL=ws://chinwag.local \
-#     -t chinwag/frontend:latest .
+# The WebSocket origin is derived from the browser's current origin at runtime
+# (see src/services/websocket-client.ts), so no build-time WS URL is required.
 #
 # Requires `output: "standalone"` in next.config.ts (already set).
 # =============================================================================
@@ -29,8 +24,6 @@ RUN npm ci
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS build
 WORKDIR /app
-ARG NEXT_PUBLIC_WS_URL=ws://localhost:8000
-ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
