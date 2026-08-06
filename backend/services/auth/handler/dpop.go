@@ -23,7 +23,9 @@ func respondDPoPError(c *echo.Context, nonce string, err error) error {
 	if de, ok := err.(*dpop.Error); ok {
 		code = de.Code
 		msg = de.Message
-		status = de.Status
+		if de.Status != 0 {
+			status = de.Status
+		}
 	}
 
 	return c.JSON(status, response.Response[any]{
