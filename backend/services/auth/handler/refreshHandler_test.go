@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -283,5 +284,26 @@ func TestRefreshHandler_Refresh_InsertTokenError(t *testing.T) {
 	refresh.AssertExpectations(t)
 	jwtSvc.AssertExpectations(t)
 	locker.AssertExpectations(t)
+	dpopSvc.AssertExpectations(t)
+}
+
+func TestRefreshHandler_Refresh_ConnError(t *testing.T) {
+	refresh := new(MockRefreshTokenService)
+	jwtSvc := new(MockJwtService)
+	locker := new(MockCache)
+	dpopSvc := new(MockDPoPService)
+	h := newRefreshHandler(refresh, jwtSvc, locker, dpopSvc)
+
+	proof := makeProof(t)
+	dpopSvc.On("Validate", mock.Anything, mock.Anything).Return(proof, "nonce-1", nil).Once()
+	// DB/Redis is down: GetRefreshToken fails with a connection error.
+	refresh.On("GetRefreshToken", mock.Anything, testRefreshCookie).Return(nil, sql.ErrConnDone).Once()
+
+	c, rec := refreshRequest(t, true)
+	err := h.Refresh(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	locker.AssertNotCalled(t, "AcquireLock", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	refresh.AssertExpectations(t)
 	dpopSvc.AssertExpectations(t)
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -392,4 +393,46 @@ func TestRoomHandler_PopRoom_Unauthorized(t *testing.T) {
 	err := h.PopRoom(c)
 	assert.ErrorIs(t, err, echo.ErrUnauthorized)
 	memberSvc.AssertNotCalled(t, "HasManagerPermission", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestRoomHandler_GetRoom_DBConnError(t *testing.T) {
+	svc := new(MockRoomService)
+	h := NewRoomHandler(svc, new(MockRoomMemberService))
+
+	roomId := uuid.New()
+	// DB is down: the service propagates sql.ErrConnDone and the handler must
+	// respond with a clean 500.
+	svc.On("GetRoomById", mock.Anything, roomId).Return(nil, sql.ErrConnDone).Once()
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{{Name: "id", Value: roomId.String()}},
+	}.ToContextRecorder(t)
+
+	err := h.GetRoom(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var resp response.Response[any]
+	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Internal Server Error", resp.Message)
+	assert.NotContains(t, rec.Body.String(), "sql:")
+	svc.AssertExpectations(t)
+}
+
+func TestRoomHandler_DeleteRoom_DBConnError(t *testing.T) {
+	svc := new(MockRoomService)
+	h := NewRoomHandler(svc, new(MockRoomMemberService))
+
+	roomId := uuid.New()
+	svc.On("DeleteRoom", mock.Anything, roomId).Return(sql.ErrConnDone).Once()
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{{Name: "id", Value: roomId.String()}},
+	}.ToContextRecorder(t)
+
+	err := h.DeleteRoom(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	svc.AssertExpectations(t)
 }

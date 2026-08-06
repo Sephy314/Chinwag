@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -369,4 +370,47 @@ func TestUserHandler_Logout(t *testing.T) {
 	}
 	assert.NotNil(t, refreshCookie)
 	assert.Equal(t, -1, refreshCookie.MaxAge)
+}
+
+func TestUserHandler_GetUserByID_DBConnError(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	h := newUserHandlerWith(userRepo, new(MockJwksService), new(MockRefreshTokenService), nil)
+
+	// DB is down: the service propagates sql.ErrConnDone and the handler must
+	// turn it into a clean 500 response without leaking the raw error.
+	userRepo.On("GetUser", mock.Anything, "u1").Return(nil, sql.ErrConnDone).Once()
+
+	c, rec := echotest.ContextConfig{
+		PathValues: []echo.PathValue{{Name: "id", Value: "u1"}},
+	}.ToContextRecorder(t)
+
+	err := h.GetUserByID(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+	var resp response.Response[any]
+	assert.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
+	assert.Equal(t, "Internal Server Error", resp.Message)
+	assert.NotContains(t, rec.Body.String(), "sql:")
+	userRepo.AssertExpectations(t)
+}
+
+func TestUserHandler_CreateUser_DBConnError(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	h := newUserHandlerWith(userRepo, new(MockJwksService), new(MockRefreshTokenService), nil)
+
+	userRepo.On("CreateUser", mock.Anything, mock.Anything).Return(sql.ErrConnDone).Once()
+
+	c, rec := echotest.ContextConfig{
+		Headers: map[string][]string{
+			echo.HeaderContentType: {echo.MIMEApplicationJSON},
+		},
+		JSONBody: []byte(`{"name":"Alice","email":"alice@example.com","password":"secret"}`),
+	}.ToContextRecorder(t)
+
+	err := h.CreateUser(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	userRepo.AssertExpectations(t)
 }

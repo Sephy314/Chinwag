@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -339,10 +340,10 @@ func TestUserService_Login_Success(t *testing.T) {
 func TestUserService_Login_UserNotFound(t *testing.T) {
 	userRepo := new(MockUserRepo)
 	jwk := new(MockJwksService)
-	refresh := new(MockRefreshTokenService)
-	svc := baseUserService(userRepo, jwk, refresh)
+	svc := baseUserService(userRepo, jwk, new(MockRefreshTokenService))
 
-	userRepo.On("GetUserByEmail", mock.Anything, "nobody@example.com").Return(nil, errs.ErrNotFound).Once()
+	// Production repo returns sql.ErrNoRows when the user does not exist.
+	userRepo.On("GetUserByEmail", mock.Anything, "nobody@example.com").Return(nil, sql.ErrNoRows).Once()
 
 	tokens, err := svc.Login(context.Background(), "nobody@example.com", "pw", "jkt")
 
@@ -414,5 +415,50 @@ func TestUserService_Login_RefreshInsertError(t *testing.T) {
 	assert.EqualError(t, err, "redis down")
 	jwk.AssertExpectations(t)
 	refresh.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
+}
+
+// ---- DB down / connection issue propagation ----
+
+func TestUserService_GetUser_DBConnError(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	svc := baseUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService))
+
+	// sql.ErrConnDone: connection to the DB is closed/broken.
+	userRepo.On("GetUser", mock.Anything, "u1").Return(nil, sql.ErrConnDone).Once()
+
+	user, err := svc.GetUser(context.Background(), "u1")
+
+	assert.Nil(t, user)
+	assert.ErrorIs(t, err, sql.ErrConnDone)
+	userRepo.AssertExpectations(t)
+}
+
+func TestUserService_GetUserByEmail_Timeout(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	svc := baseUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService))
+
+	// context.DeadlineExceeded: query timed out while DB was unreachable.
+	userRepo.On("GetUserByEmail", mock.Anything, "a@example.com").Return(nil, context.DeadlineExceeded).Once()
+
+	user, err := svc.GetUserByEmail(context.Background(), "a@example.com")
+
+	assert.Nil(t, user)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	userRepo.AssertExpectations(t)
+}
+
+func TestUserService_Login_DBConnError(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	jwk := new(MockJwksService)
+	svc := baseUserService(userRepo, jwk, new(MockRefreshTokenService))
+
+	userRepo.On("GetUserByEmail", mock.Anything, "a@example.com").Return(nil, sql.ErrConnDone).Once()
+
+	tokens, err := svc.Login(context.Background(), "a@example.com", "pw", "jkt")
+
+	assert.Nil(t, tokens)
+	assert.ErrorIs(t, err, sql.ErrConnDone)
+	jwk.AssertNotCalled(t, "GetActiveKey", mock.Anything)
 	userRepo.AssertExpectations(t)
 }

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"github.com/Sephy314/chinwag/backend/services/auth/domain"
 	"github.com/Sephy314/chinwag/backend/services/auth/internal/jwt"
@@ -14,8 +16,10 @@ import (
 )
 
 type UserService struct {
-	Repo           repo.UserRepository
-	Cache          interface{ Get(ctx context.Context, key string) (string, error) }
+	Repo  repo.UserRepository
+	Cache interface {
+		Get(ctx context.Context, key string) (string, error)
+	}
 	JwkService     JwksServiceInterface
 	RefreshService RefreshTokenServiceInterface
 	uow            repo.UnitOfWork
@@ -154,8 +158,15 @@ func (s *UserService) Login(ctx context.Context, email string, pw string, jkt st
 
 	user, err := s.Repo.GetUserByEmail(ctx, email)
 	if err != nil {
-		s.log.Warn("login failed: user not found", "email", email)
-		return nil, errs.ErrInvalidCreds
+		// Only mask "no such user" as invalid credentials. Infrastructure
+		// errors (DB down, timeouts, broken connections) must propagate so the
+		// handler can return 500 instead of a misleading 400.
+		if errors.Is(err, sql.ErrNoRows) {
+			s.log.Warn("login failed: user not found", "email", email)
+			return nil, errs.ErrInvalidCreds
+		}
+		s.log.Error("login failed: could not load user", "email", email, "error", err)
+		return nil, err
 	}
 
 	if err = bcrypt.CompareHashAndPassword(

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"testing"
@@ -445,5 +446,53 @@ func TestRoomService_PopRoom_RepoError(t *testing.T) {
 	err := svc.PopRoom(context.Background(), roomId)
 
 	assert.EqualError(t, err, "db down")
+	mockRepo.AssertExpectations(t)
+}
+
+// ---- DB down / connection issue propagation ----
+
+func TestRoomService_GetRoomById_DBConnError(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	svc := NewRoomService(mockRepo)
+
+	roomId := uuid.New()
+	// sql.ErrConnDone: connection to the DB is closed/broken.
+	mockRepo.On("GetRoomById", mock.Anything, roomId).Return(domain.Room{}, sql.ErrConnDone).Once()
+
+	room, err := svc.GetRoomById(context.Background(), roomId)
+
+	assert.Nil(t, room)
+	assert.ErrorIs(t, err, sql.ErrConnDone)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestRoomService_GetRoomsByOwnerId_Timeout(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	svc := NewRoomService(mockRepo)
+
+	ownerId := uuid.New()
+	// context.DeadlineExceeded: query timed out while DB was unreachable.
+	mockRepo.On("GetRoomsByOwnerId", mock.Anything, ownerId).Return(nil, context.DeadlineExceeded).Once()
+
+	rooms, err := svc.GetRoomsByOwnerId(context.Background(), ownerId)
+
+	assert.Nil(t, rooms)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestRoomService_CreateRoom_DBConnError(t *testing.T) {
+	mockRepo := new(MockRoomRepo)
+	svc := NewRoomService(mockRepo)
+
+	ownerId := uuid.New()
+	ctx := context.WithValue(context.Background(), "ownerId", ownerId)
+
+	mockRepo.On("CreateRoom", mock.Anything, mock.Anything).Return(sql.ErrConnDone).Once()
+
+	room, err := svc.CreateRoom(ctx, structs.CreateRoomRequest{Name: "General"})
+
+	assert.NotNil(t, room)
+	assert.ErrorIs(t, err, sql.ErrConnDone)
 	mockRepo.AssertExpectations(t)
 }
