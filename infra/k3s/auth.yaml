@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+# Auth Service — users, JWT/DPoP, JWKS, refresh tokens, optional Google OAuth.
+# Runs DB migrations at startup (goose) so it must wait for postgres+redis.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth
+  namespace: chinwag
+  labels:
+    app: auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth
+  template:
+    metadata:
+      labels:
+        app: auth
+    spec:
+      containers:
+        - name: auth
+          image: chinwag/auth:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: chinwag-config
+          env:
+            - name: AUTH_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: AUTH_DB_URL
+            - name: REDIS_PW
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: REDIS_PASSWORD
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: GOOGLE_CLIENT_SECRET
+            - name: GOOGLE_REDIRECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: GOOGLE_REDIRECT_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth
+  namespace: chinwag
+spec:
+  selector:
+    app: auth
+  ports:
+    - name: http
+      port: 8081
+      targetPort: http

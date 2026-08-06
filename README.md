@@ -24,6 +24,7 @@ Backend in **Go (Echo)** · Frontend in **Next.js (React 19)**
 - Backend Architecture
 - Tech Stack
 - API Docs
+- Deployment (k3s)
 - Directory Structure
 - License
 
@@ -153,7 +154,50 @@ The shared validator in `backend/shared/auth/dpop` is used by every service. Key
 Each service exposes a **Swagger UI** at `/docs`, reachable through the gateway's `/auth`, `/rooms`, and `/chat` paths.
 
 ---
+� Deployment (k3s)
 
+The project ships with a pure-manifest Kubernetes deployment for **k3s** (no Helm required).
+All deployment artifacts live in [`infra/k3s`](infra/k3s), with a Dockerfile per component:
+
+| Artifact | Purpose |
+|---|---|
+| [`backend/Dockerfile`](backend/Dockerfile) | Parameterized multi-stage builder for every Go service (`--build-arg SERVICE=...`) |
+| [`frontend/Dockerfile`](frontend/Dockerfile) | Next.js standalone image (requires `output: "standalone"` in `next.config.ts`) |
+| [`infra/k3s/*.yaml`](infra/k3s) | Namespace, ConfigMap, Secret, Postgres/Redis/NATS, all service Deployments + Services, Traefik Ingress |
+| [`infra/k3s/build-images.sh`](infra/k3s/build-images.sh) | Builds all images and optionally imports them into local k3s |
+
+Quick start (see [`infra/k3s/README.md`](infra/k3s/README.md) for details):
+
+```bash
+# 1. Build images and import into local k3s
+cd infra/k3s
+NEXT_PUBLIC_WS_URL=ws://chinwag.local ./build-images.sh --load
+
+# 2. Apply everything (kustomize)
+kubectl apply -k infra/k3s
+
+# 3. Map the ingress host (use your k3s node IP)
+echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
+
+# 4. Verify
+kubectl -n chinwag get pods
+curl -s http://chinwag.local/health
+```
+
+Key deployment facts:
+
+- **PostgreSQL** runs as a single StatefulSet holding all four service schemas
+  (`chinwag_auth`, `chinwag_room`, `chinwag_chat`, `chinwag_chat_projection`).
+- **Redis** (AOF) and **NATS JetStream** are deployed alongside; the `CHAT_EVENTS`
+  stream is created automatically by the chat-command service.
+- A single **Traefik Ingress** routes `/auth`, `/rooms`, `/users`, `/chat` to the
+  gateway (including WebSocket upgrade) and `/` to the frontend.
+- Secrets (DB/Redis passwords, optional Google OAuth) live in `infra/k3s/secret.yaml`;
+  rotate them before any non-local deployment.
+
+---
+
+## �
 ## 📁 Directory Structure
 
 ```

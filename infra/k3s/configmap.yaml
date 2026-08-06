@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# Non-secret application configuration.
+# Mirrors the environment variables each service reads in its config.go.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chinwag-config
+  namespace: chinwag
+data:
+  # --- Service listener ports (match codebase defaults) ---
+  GATEWAY_PORT: "8000"
+  AUTH_PORT: "8081"
+  ROOM_PORT: "8082"
+  CHAT_PORT: "8083"
+  CHAT_QUERY_PORT: "8084"
+
+  # --- Inter-service discovery via Kubernetes DNS ---
+  AUTH_SERVICE_URL: "http://auth:8081"
+  ROOM_SERVICE_URL: "http://room:8082"
+  CHAT_COMMAND_SERVICE_URL: "http://chat-command:8083"
+  CHAT_QUERY_SERVICE_URL: "http://chat-query:8084"
+  AUTH_JWKS_URL: "http://auth:8081/.well-known/jwks.json"
+
+  # --- Shared infrastructure ---
+  REDIS_ADDR: "redis:6379"
+  NATS_URL: "nats://nats:4222"
+
+  # --- Frontend-facing URLs ---
+  # FRONTEND_URL is used by auth/room for OAuth redirects and must match the
+  # externally reachable host (the same host used by the Ingress below).
+  FRONTEND_URL: "http://chinwag.local"
+  # GATEWAY_URL is used by the Next.js proxy (src/proxy.ts) to rewrite
+  # same-origin API/WS requests to the gateway when they hit the frontend pod.
+  GATEWAY_URL: "http://gateway:8000"

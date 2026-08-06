@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------------------
+# API Gateway — stateless reverse proxy (Echo). Routes to the backend services
+# based on AUTH_SERVICE_URL / ROOM_SERVICE_URL / CHAT_*_SERVICE_URL.
+# Externally reachable through the Ingress at /auth, /rooms, /users, /chat.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: chinwag
+  labels:
+    app: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: chinwag/gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: chinwag-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: chinwag
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

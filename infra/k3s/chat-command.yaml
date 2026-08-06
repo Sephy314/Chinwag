@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Chat Command Service — message writes, outbox → NATS, WebSocket hub.
+# Runs DB migrations at startup (goose). Depends on postgres, redis, nats,
+# auth (user lookups + JWKS) and room (member lookups).
+#
+# INSTANCE_ID is pinned to the pod name (fieldRef) so the durable JetStream
+# consumer name (chat-ws-<instance>) stays stable across pod restarts.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-command
+  namespace: chinwag
+  labels:
+    app: chat-command
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat-command
+  template:
+    metadata:
+      labels:
+        app: chat-command
+    spec:
+      containers:
+        - name: chat-command
+          image: chinwag/chat-command:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: chinwag-config
+          env:
+            - name: CHAT_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: CHAT_DB_URL
+            - name: REDIS_PW
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: REDIS_PASSWORD
+            - name: INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          readinessProbe:
+            httpGet:
+              path: /chat/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /chat/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-command
+  namespace: chinwag
+spec:
+  selector:
+    app: chat-command
+  ports:
+    - name: http
+      port: 8083
+      targetPort: http
