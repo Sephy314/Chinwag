@@ -171,7 +171,7 @@ Quick start (see [`infra/k3s/README.md`](infra/k3s/README.md) for details):
 ```bash
 # 1. Build images and import into local k3s
 cd infra/k3s
-NEXT_PUBLIC_WS_URL=ws://chinwag.local ./build-images.sh --load
+./build-images.sh --load
 
 # 2. Apply everything (kustomize)
 kubectl apply -k infra/k3s

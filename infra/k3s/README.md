@@ -34,7 +34,7 @@ Docker와 k3s가 같은 호스트에 있으면 `--load` 옵션으로 한 번에 
 ```bash
 # 이미지 빌드 + k3s로 import
 cd infra/k3s
-NEXT_PUBLIC_WS_URL=ws://<node-ip-or-host> ./build-images.sh --load
+./build-images.sh --load
 
 # (이미지만 빌드)
 ./build-images.sh
@@ -42,9 +42,9 @@ NEXT_PUBLIC_WS_URL=ws://<node-ip-or-host> ./build-images.sh --load
 ./load-images.sh
 ```
 
-> **`NEXT_PUBLIC_WS_URL`** 은 프론트엔드 클라이언트 번들에 빌드 시점에 인라인됩니다.
-> 브라우저에서 접근 가능한 WebSocket origin(`ws://<node-ip>` 또는 `ws://chinwag.local`)으로
-> 설정해야 합니다. 기본값은 `ws://chinwag.local`입니다.
+> WebSocket 주소는 브라우저가 현재 접속한 origin에서 자동 파생됩니다
+> (`src/services/websocket-client.ts`, Ingress가 `/chat`을 gateway로 라우팅).
+> 별도의 WS 주소 설정이나 빌드 인자는 필요하지 않습니다.
 
 ## 2. 적용 (apply)
 
@@ -77,7 +77,7 @@ echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
 - Swagger UI: `http://chinwag.local/auth/docs`, `http://chinwag.local/rooms/docs`, `http://chinwag.local/chat/docs`
 
 > 다른 호스트명을 쓰려면 `ingress.yaml`의 `host`와 `configmap.yaml`의 `FRONTEND_URL`을
-> 함께 바꾸고, 프론트엔드 이미지를 `NEXT_PUBLIC_WS_URL=ws://<새호스트>`로 다시 빌드하세요.
+> 함께 바꾸면 됩니다. WebSocket은 브라우저 origin을 그대로 따르므로 별도 설정이 필요 없습니다.
 
 ## 4. 검증
 

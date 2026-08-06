@@ -9,7 +9,36 @@ interface WsClientOptions {
   onStatusChange?: (status: WsStatus) => void
 }
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"
+/**
+ * WebSocket origin.
+ *
+ * In production the browser connects to the same origin it loaded the page
+ * from: the Ingress routes `/chat` (including the WebSocket upgrade) to the
+ * gateway, so `ws://` + `location.host` needs no configuration.
+ *
+ * In local dev the frontend (Next.js, :3000) and the gateway (:8000) are
+ * separate origins, so the gateway port is used instead.
+ *
+ * An explicit NEXT_PUBLIC_WS_URL still overrides this when the WebSocket
+ * server lives on a different origin than the frontend.
+ */
+const WS_BASE = (() => {
+  const explicit = process.env.NEXT_PUBLIC_WS_URL
+  if (explicit) return explicit
+
+  if (typeof window === "undefined") {
+    // SSR guard; never used to open a real socket.
+    return "ws://localhost:8000"
+  }
+
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws"
+  const port =
+    window.location.port === "3000" ? "8000" : window.location.port
+  const host = port
+    ? `${window.location.hostname}:${port}`
+    : window.location.hostname
+  return `${scheme}://${host}`
+})()
 
 export class WsClient {
   private ws: WebSocket | null = null
