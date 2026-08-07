@@ -6,8 +6,8 @@
 #   ./build-images.sh            # build only
 #   ./build-images.sh --load     # build + import into local k3s (containerd)
 #
-# The WebSocket base is derived at runtime from the browser origin
-# (src/services/websocket-client.ts), so no build-time WS arg is needed.
+# The frontend derives the WebSocket origin from the browser's current origin
+# (src/services/websocket-client.ts), so no build-time WS URL is required.
 # =============================================================================
 set -euo pipefail
 

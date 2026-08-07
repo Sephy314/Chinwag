@@ -4,9 +4,8 @@
 #
 # Build context is the `frontend/` directory.
 #
-# The WebSocket base is derived at RUNTIME from the browser origin
-# (src/services/websocket-client.ts: http->ws, https->wss, same host), so no
-# build-time WS argument is needed.
+# The WebSocket origin is derived from the browser's current origin at runtime
+# (see src/services/websocket-client.ts), so no build-time WS URL is required.
 #
 # Requires `output: "standalone"` in next.config.ts (already set).
 # =============================================================================

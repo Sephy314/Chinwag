@@ -42,9 +42,9 @@ cd infra/k3s
 ./load-images.sh
 ```
 
-> **WebSocket 주소**는 런타임에 브라우저 origin에서 자동 유도됩니다
-> (`src/services/websocket-client.ts`: http→ws, https→wss, 동일 호스트).
-> 별도의 빌드 인자가 필요 없습니다.
+> WebSocket 주소는 브라우저가 현재 접속한 origin에서 자동 파생됩니다
+> (`src/services/websocket-client.ts`, Ingress가 `/chat`을 gateway로 라우팅).
+> 별도의 WS 주소 설정이나 빌드 인자는 필요하지 않습니다.
 
 ## 2. 적용 (apply)
 
@@ -77,7 +77,7 @@ echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
 - Swagger UI: `http://chinwag.local/auth/docs`, `http://chinwag.local/rooms/docs`, `http://chinwag.local/chat/docs`
 
 > 다른 호스트명을 쓰려면 `ingress.yaml`의 `host`와 `configmap.yaml`의 `FRONTEND_URL`을
-> 함께 바꾸면 됩니다 (WS 주소는 브라우저 origin에서 자동 유도되므로 별도 빌드가 필요 없습니다).
+> 함께 바꾸면 됩니다. WebSocket은 브라우저 origin을 그대로 따르므로 별도 설정이 필요 없습니다.
 
 ## 4. 검증
 
