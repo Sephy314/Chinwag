@@ -12,9 +12,9 @@
 # automatically). Plain HTTP on :80 is handled by ingress-redirect.yaml
 # (redirect to https) — see middleware.yaml.
 #
-# Adjust `host` to your node IP / domain. For local access, map it in /etc/hosts:
-#   echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
-# Then set FRONTEND_URL in configmap.yaml to match (https://chinwag.local).
+# No `host` in rules: the ingress matches any host, so it also answers for the
+# node IP without an /etc/hosts entry. TLS below still terminates chinwag.local
+# via the chinwag-tls secret; set FRONTEND_URL in configmap.yaml to match.
 # ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -31,8 +31,7 @@ spec:
         - chinwag.local
       secretName: chinwag-tls
   rules:
-    - host: chinwag.local
-      http:
+    - http:
         paths:
           - path: /auth
             pathType: Prefix
