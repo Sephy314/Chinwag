@@ -26,6 +26,19 @@ Kubernetes(k3s) 기반 배포 매니페스트입니다. 기존 애플리케이�
 - Docker (`docker build` / `docker save`용)
 - `kubectl` (k3s 설치 시 함께 제공)
 
+## 0. 원클릭 배포 (권장)
+
+빌드 → k3s 로드 → apply → 롤아웃 대기 → 헬스 체크를 한 번에 수행합니다.
+
+```bash
+cd infra/k3s
+./deploy.sh                  # 전체 배포
+./deploy.sh --no-build       # 이미지 빌드/로드 생략 (이미 로드된 이미지 사용)
+./deploy.sh --apply          # 매니페스트만 적용 (검증 생략)
+```
+
+전제: `secret.yaml`이 디스크에 있어야 합니다 (`cp secret.yaml.example secret.yaml` 후 값 입력).
+
 ## 1. 이미지 빌드 및 로드
 
 k3s는 containerd를 사용하므로 `docker build`한 이미지를 k3s 런타임으로 import해야 합니다.
