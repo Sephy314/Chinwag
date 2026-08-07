@@ -1,73 +1,79 @@
 # Chinwag on k3s
 
-Kubernetes(k3s) 기반 배포 매니페스트입니다. 기존 애플리케이션 코드는 수정하지 않고,
-`backend/Dockerfile`, `frontend/Dockerfile`, `infra/k3s/*.yaml` 만으로 배포합니다.
+Kubernetes (k3s) deployment manifests. Deploys purely with
+`backend/Dockerfile`, `frontend/Dockerfile`, and `infra/k3s/*.yaml` — no
+application code changes required.
 
-## 구성 요소
+## Components
 
-| 컴포넌트 | 종류 | 포트 | 설명 |
+| Component | Kind | Port | Description |
 |---|---|---|---|
-| `postgres` | StatefulSet | 5432 | 4개 스키마(`chinwag_auth`, `chinwag_room`, `chinwag_chat`, `chinwag_chat_projection`) 생성, `local-path` PVC |
-| `redis` | Deployment | 6379 | AOF 영속화, Secret 비밀번호 |
-| `nats` | StatefulSet | 4222 | JetStream 단일 노드, `local-path` PVC (`CHAT_EVENTS` 스트림은 chat-command가 자동 생성) |
-| `gateway` | Deployment (2) | 8000 | Echo 리버스 프록시 |
-| `auth` | Deployment | 8081 | 인증/JWKS/OAuth |
-| `room` | Deployment | 8082 | 룸/멤버/초대 |
-| `chat-command` | Deployment | 8083 | 메시지 쓰기 + WebSocket |
-| `chat-query` | Deployment | 8084 | 메시지 조회(projection) |
-| `frontend` | Deployment (2) | 3000 | Next.js standalone 서버 |
-| `chinwag` Ingress | Traefik | 80 | `/auth /rooms /users /chat` → gateway, `/` → frontend |
+| `postgres` | StatefulSet | 5432 | Creates the 4 schemas (`chinwag_auth`, `chinwag_room`, `chinwag_chat`, `chinwag_chat_projection`), `local-path` PVC |
+| `redis` | Deployment | 6379 | AOF persistence, password from Secret |
+| `nats` | StatefulSet | 4222 | Single-node JetStream, `local-path` PVC (`CHAT_EVENTS` stream is auto-created by chat-command) |
+| `gateway` | Deployment (2) | 8000 | Echo reverse proxy |
+| `auth` | Deployment | 8081 | Auth/JWKS/OAuth |
+| `room` | Deployment | 8082 | Rooms/members/invites |
+| `chat-command` | Deployment | 8083 | Message writes + WebSocket |
+| `chat-query` | Deployment | 8084 | Message reads (projection) |
+| `frontend` | Deployment (2) | 3000 | Next.js standalone server |
+| `chinwag` Ingress | Traefik | 80→443 | `/auth /rooms /users /chat` → gateway, `/` → frontend (HTTPS) |
 
-모든 리소스는 `chinwag` Namespace에 배치됩니다.
+All resources are deployed in the `chinwag` namespace.
 
-## 사전 요구사항
+## Prerequisites
 
-- 로컬 k3s 클러스터 (`curl -sfL https://get.k3s.io | sh -`)
-- Docker (`docker build` / `docker save`용)
-- `kubectl` (k3s 설치 시 함께 제공)
+- Local k3s cluster (`curl -sfL https://get.k3s.io | sh -`)
+- Docker (for `docker build` / `docker save`)
+- `kubectl` (installed with k3s)
 
-## 0. 원클릭 배포 (권장)
+## 0. One-click deploy (recommended)
 
-빌드 → k3s 로드 → apply → 롤아웃 대기 → 헬스 체크를 한 번에 수행합니다.
+Build → load into k3s → apply → wait for rollouts → health check in one step.
 
 ```bash
 cd infra/k3s
-./deploy.sh                  # 전체 배포
-./deploy.sh --no-build       # 이미지 빌드/로드 생략 (이미 로드된 이미지 사용)
-./deploy.sh --apply          # 매니페스트만 적용 (검증 생략)
+./deploy.sh                  # Full deploy
+./deploy.sh --no-build       # Skip image build/load (use already-loaded images)
+./deploy.sh --apply          # Apply manifests only (skip verification)
 ```
 
-전제: `secret.yaml`이 디스크에 있어야 합니다 (`cp secret.yaml.example secret.yaml` 후 값 입력).
+Prerequisite: `secret.yaml` must exist on disk (`cp secret.yaml.example secret.yaml`, then fill in
+values). `deploy.sh` automatically runs `./tls.sh` before applying to create the HTTPS
+`chinwag-tls` secret.
 
-## 1. 이미지 빌드 및 로드
+## 1. Building and loading images
 
-k3s는 containerd를 사용하므로 `docker build`한 이미지를 k3s 런타임으로 import해야 합니다.
-Docker와 k3s가 같은 호스트에 있으면 `--load` 옵션으로 한 번에 처리됩니다.
+k3s uses containerd, so images built with `docker build` must be imported into the k3s runtime.
+If Docker and k3s are on the same host, the `--load` option handles it in one step.
 
 ```bash
-# 이미지 빌드 + k3s로 import
+# Build images + import into k3s
 cd infra/k3s
 ./build-images.sh --load
 
-# (이미지만 빌드)
+# (Build images only)
 ./build-images.sh
-# (k3s로 import만)
+# (Import into k3s only)
 ./load-images.sh
 ```
 
-> WebSocket 주소는 브라우저가 현재 접속한 origin에서 자동 파생됩니다
-> (`src/services/websocket-client.ts`, Ingress가 `/chat`을 gateway로 라우팅).
-> 별도의 WS 주소 설정이나 빌드 인자는 필요하지 않습니다.
+> The WebSocket URL is derived automatically from the origin the browser is connected to
+> (`src/services/websocket-client.ts`, with the Ingress routing `/chat` to the gateway).
+> No separate WS URL setting or build argument is required.
 
-## 2. 적용 (apply)
+## 2. Applying
 
 ```bash
 cd infra/k3s
 
-# 권장: kustomize 일괄 적용 (리소스 순서 자동 처리)
+# Generate the HTTPS self-signed cert + chinwag-tls secret (once; idempotent)
+./tls.sh
+
+# Recommended: apply everything with kustomize (handles resource ordering)
 kubectl apply -k .
 
-# 또는 개별 파일 순서대로
+# Or apply individual files in order
 kubectl apply -f namespace.yaml
 kubectl apply -f configmap.yaml -f secret.yaml
 kubectl apply -f postgres.yaml -f redis.yaml -f nats.yaml
@@ -76,54 +82,82 @@ kubectl apply -f chat-command.yaml -f chat-query.yaml -f frontend.yaml
 kubectl apply -f ingress.yaml
 ```
 
-## 3. 접속 호스트 설정
+## 3. Host setup
 
-Ingress의 host는 `chinwag.local`로 되어 있습니다. `/etc/hosts`에 k3s 노드 IP를 등록합니다.
+The Ingress host is `chinwag.local`. Register your k3s node IP in `/etc/hosts`.
 
 ```bash
-# k3s가 실행 중인 노드의 IP로 교체
-echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
+# Replace with the IP of the node running k3s
+sudo sh -c 'echo "<k3s-node-ip> chinwag.local" >> /etc/hosts'
 ```
 
-- 웹 UI: http://chinwag.local
-- 게이트웨이 health: http://chinwag.local/health (또는 내부적으로 `gateway:8000/health`)
-- Swagger UI: `http://chinwag.local/auth/docs`, `http://chinwag.local/rooms/docs`, `http://chinwag.local/chat/docs`
+- Web UI: https://chinwag.local
+- Gateway health: https://chinwag.local/health (or internally `gateway:8000/health`)
+- Swagger UI: `https://chinwag.local/auth/docs`, `https://chinwag.local/rooms/docs`, `https://chinwag.local/chat/docs`
 
-> 다른 호스트명을 쓰려면 `ingress.yaml`의 `host`와 `configmap.yaml`의 `FRONTEND_URL`을
-> 함께 바꾸면 됩니다. WebSocket은 브라우저 origin을 그대로 따르므로 별도 설정이 필요 없습니다.
+> To use a different hostname, change the `host` in `ingress.yaml` and `FRONTEND_URL` in
+> `configmap.yaml` together. WebSocket follows the browser origin, so no extra config is needed.
 
-## 4. 검증
+## 3.1 HTTPS (TLS)
+
+`chinwag.local` is a local-only hostname, so Let's Encrypt is not an option — HTTPS is set up with
+a **self-signed CA**.
+
+- `./tls.sh` generates a CA + server certificate (`infra/k3s/.tls/`, gitignored) and registers it
+  as the `chinwag-tls` TLS secret in the `chinwag` namespace. `deploy.sh` runs it automatically.
+- `ingress.yaml` terminates TLS with `chinwag-tls` on the `websecure` entrypoint (:443).
+- `ingress-redirect.yaml` + `middleware.yaml` redirect :80 requests to https.
+- `FRONTEND_URL` is `https://chinwag.local` (used for OAuth redirects).
+
+Renewing/regenerating the certificate:
 
 ```bash
-# 파드 상태 확인 (모두 Running/Ready)
+cd infra/k3s
+./tls.sh --force            # Regenerate CA + cert (rotates trust)
+./tls.sh --ip 192.168.1.10  # Add a node IP to the SANs
+```
+
+To avoid browser warnings, register the local CA as a trusted root CA in your OS (as printed when
+tls.sh completes):
+
+```bash
+sudo cp infra/k3s/.tls/ca.crt /usr/local/share/ca-certificates/chinwag-ca.crt
+sudo update-ca-certificates
+```
+
+## 4. Verification
+
+```bash
+# Check pod status (all Running/Ready)
 kubectl -n chinwag get pods
 
-# 로그 확인
+# Check logs
 kubectl -n chinwag logs -l app=auth
 
-# 게이트웨이를 통해 각 서비스 health 확인
-curl -s http://chinwag.local/health                      # gateway
-curl -s http://chinwag.local/auth/health                 # auth
-curl -s http://chinwag.local/rooms/health                # room
-curl -s http://chinwag.local/chat/health                 # chat-command / chat-query
+# Check each service health via the gateway
+curl -sk https://chinwag.local/health                      # gateway
+curl -sk https://chinwag.local/auth/health                 # auth
+curl -sk https://chinwag.local/rooms/health                # room
+curl -sk https://chinwag.local/chat/health                 # chat-command / chat-query
 
-# 내부 DNS/SVC 검증 (파드 안에서)
+# Verify internal DNS/SVC (from inside a pod)
 kubectl -n chinwag exec deploy/gateway -- wget -qO- http://auth:8081/health
 
-# 이벤트 확인
+# Check events
 kubectl -n chinwag get events --sort-by=.lastTimestamp
 ```
 
-회원가입/로그인 → 룸 생성 → 메시지 전송(WebSocket 실시간 수신) 흐름으로 종단 검증합니다.
+End-to-end verification: sign up / sign in → create a room → send a message (received in real time
+over WebSocket).
 
-## 5. 환경변수/시크릿 변경
+## 5. Changing environment variables / secrets
 
-| 파일 | 내용 |
+| File | Contents |
 |---|---|
-| `configmap.yaml` | 비밀 아닌 공통 설정 (포트, 서비스 URL, `FRONTEND_URL`, `NATS_URL` 등) |
-| `secret.yaml` | DB 비밀번호, Redis 비밀번호, Google OAuth (로컬 개발용 기본값 포함) |
+| `configmap.yaml` | Non-secret shared config (ports, service URLs, `FRONTEND_URL`, `NATS_URL`, etc.) |
+| `secret.yaml` | DB passwords, Redis password, Google OAuth (includes local-dev defaults) |
 
-Secret 교체 후 재배포:
+After replacing a Secret, redeploy:
 
 ```bash
 kubectl -n chinwag create secret generic chinwag-secrets \
@@ -133,31 +167,31 @@ kubectl -n chinwag create secret generic chinwag-secrets \
 kubectl -n chinwag rollout restart deploy auth room chat-command chat-query redis
 ```
 
-> ⚠️ Google OAuth를 켜려면 `secret.yaml`의 `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URL`을
-> 설정하고, `GOOGLE_REDIRECT_URL`이 `FRONTEND_URL`과 일치하는지 확인하세요.
+> ⚠️ To enable Google OAuth, set `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URL` in `secret.yaml` and make
+> sure `GOOGLE_REDIRECT_URL` matches `FRONTEND_URL`.
 
-## 6. 삭제
+## 6. Deletion
 
 ```bash
 kubectl delete -k infra/k3s
 ```
 
-PVC(`local-path`) 데이터는 삭제 후에도 남습니다. 완전 삭제:
+PVC (`local-path`) data survives deletion. For a full teardown:
 
 ```bash
 kubectl -n chinwag delete pvc --all
 ```
 
-## 7. 이미지 태그 변경
+## 7. Changing image tags
 
-`image: chinwag/<service>:latest` 태그를 원하는 버전으로 바꾸려면 각 deployment 파일의
-`image` 필드와 `build-images.sh`의 태그를 함께 수정하세요. 사설 레지스트리를 쓰는 경우
-`imagePullPolicy: IfNotPresent`를 `Always`로 바꾸고 레지스트리 주소를 포함한 태그를 사용합니다.
+To change the `image: chinwag/<service>:latest` tag to a version of your choice, update both the
+`image` field in each deployment file and the tag in `build-images.sh`. If you use a private
+registry, change `imagePullPolicy: IfNotPresent` to `Always` and use a tag that includes the
+registry address.
 
-## 8. 스케일링 참고
+## 8. Scaling notes
 
-- `gateway`, `frontend`는 무상태라 복제본을 늘려도 안전합니다.
-- `auth`, `room`, `chat-command`, `chat-query`는 **시작 시 DB 마이그레이션을 실행**하므로
-  복제본을 1로 유지합니다(마이그레이션 레이스 방지). `chat-command`는 파드당 고정된
-  JetStream durable consumer(`chat-ws-<pod>`)를 사용하므로 파드 재시작 시에도 유실 없이
-  이어받습니다.
+- `gateway` and `frontend` are stateless, so scaling replicas up is safe.
+- `auth`, `room`, `chat-command`, and `chat-query` run **DB migrations at startup**, so keep
+  replicas at 1 (to avoid migration races). `chat-command` uses a fixed per-pod JetStream durable
+  consumer (`chat-ws-<pod>`), so it resumes without loss even across pod restarts.

@@ -165,23 +165,22 @@ All deployment artifacts live in [`infra/k3s`](infra/k3s), with a Dockerfile per
 | [`frontend/Dockerfile`](frontend/Dockerfile) | Next.js standalone image (requires `output: "standalone"` in `next.config.ts`) |
 | [`infra/k3s/*.yaml`](infra/k3s) | Namespace, ConfigMap, Secret, Postgres/Redis/NATS, all service Deployments + Services, Traefik Ingress |
 | [`infra/k3s/build-images.sh`](infra/k3s/build-images.sh) | Builds all images and optionally imports them into local k3s |
+| [`infra/k3s/deploy.sh`](infra/k3s/deploy.sh) | One-click deploy: build, import into k3s, apply manifests, wait for rollouts, verify health |
+| [`infra/k3s/tls.sh`](infra/k3s/tls.sh) | Generates a self-signed HTTPS cert and the `chinwag-tls` secret for the ingress |
 
 Quick start (see [`infra/k3s/README.md`](infra/k3s/README.md) for details):
 
 ```bash
-# 1. Build images and import into local k3s
-cd infra/k3s
-./build-images.sh --load
-
-# 2. Apply everything (kustomize)
-kubectl apply -k infra/k3s
-
-# 3. Map the ingress host (use your k3s node IP)
+# 1. Map the ingress host to your k3s node IP (one-time)
 echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
 
-# 4. Verify
-kubectl -n chinwag get pods
-curl -s http://chinwag.local/health
+# 2. One-click deploy: build images, import into k3s, apply manifests,
+#    generate the HTTPS cert (tls.sh), wait for rollouts, verify health.
+cd infra/k3s
+./deploy.sh
+
+# 3. Verify
+curl -sk https://chinwag.local/health
 ```
 
 Key deployment facts:
