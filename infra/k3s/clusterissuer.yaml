@@ -19,10 +19,14 @@ metadata:
 spec:
   selfSigned: {}
 ---
+# chinwag-ca is a NAMESPACED Issuer (not a ClusterIssuer) because the CA secret
+# lives in the `chinwag` namespace — a CA ClusterIssuer cannot resolve a secret
+# outside its own (empty) namespace and fails with `secrets "..." not found`.
 apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+kind: Issuer
 metadata:
   name: chinwag-ca
+  namespace: chinwag
 spec:
   ca:
     secretName: chinwag-ca

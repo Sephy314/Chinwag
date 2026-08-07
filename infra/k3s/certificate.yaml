@@ -3,10 +3,11 @@
 #
 #   chinwag-ca   -> self-signed local CA         (secret `chinwag-ca`)
 #   chinwag-tls  -> server cert for the ingress  (secret `chinwag-tls`)
-#   postgres-tls -> server cert for postgres TLS (secret `postgres-tls`)
+#   postgres-tls -> cert for in-cluster postgres  (secret `postgres-tls`)
 #
-# cert-manager renews these automatically before expiry (renewBefore = 30 days)
-# and rewrites the secrets; Traefik / postgres pick them up.
+# All leaf certs are issued by the NAMESPACED `Issuer` `chinwag-ca` (see
+# clusterissuer.yaml). cert-manager renews them automatically before expiry
+# (renewBefore = 30 days) and rewrites the secret; Traefik / postgres pick it up.
 # ---------------------------------------------------------------------------
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -40,7 +41,7 @@ spec:
     - 127.0.0.1
   issuerRef:
     name: chinwag-ca
-    kind: ClusterIssuer
+    kind: Issuer
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -60,4 +61,4 @@ spec:
     - 127.0.0.1
   issuerRef:
     name: chinwag-ca
-    kind: ClusterIssuer
+    kind: Issuer
