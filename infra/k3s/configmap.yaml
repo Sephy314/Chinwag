@@ -29,7 +29,8 @@ data:
   # --- Frontend-facing URLs ---
   # FRONTEND_URL is used by auth/room for OAuth redirects and must match the
   # externally reachable host (the same host used by the Ingress below).
-  FRONTEND_URL: "http://chinwag.local"
+  # HTTPS is served by Traefik on :443 with the chinwag-tls secret (see tls.sh).
+  FRONTEND_URL: "https://chinwag.local"
   # GATEWAY_URL is used by the Next.js proxy (src/proxy.ts) to rewrite
   # same-origin API/WS requests to the gateway when they hit the frontend pod.
   GATEWAY_URL: "http://gateway:8000"

@@ -18,4 +18,6 @@ resources:
   - chat-command.yaml
   - chat-query.yaml
   - frontend.yaml
+  - middleware.yaml
   - ingress.yaml
+  - ingress-redirect.yaml

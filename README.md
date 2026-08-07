@@ -173,15 +173,18 @@ Quick start (see [`infra/k3s/README.md`](infra/k3s/README.md) for details):
 cd infra/k3s
 ./build-images.sh --load
 
-# 2. Apply everything (kustomize)
+# 2. HTTPS 자체서명 인증서 생성 (chinwag-tls 시크릿, 최초 1회/멱등)
+./tls.sh
+
+# 3. Apply everything (kustomize)
 kubectl apply -k infra/k3s
 
-# 3. Map the ingress host (use your k3s node IP)
+# 4. Map the ingress host (use your k3s node IP)
 echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
 
-# 4. Verify
+# 5. Verify
 kubectl -n chinwag get pods
-curl -s http://chinwag.local/health
+curl -sk https://chinwag.local/health
 ```
 
 Key deployment facts:

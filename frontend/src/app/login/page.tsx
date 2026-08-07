@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { MessageSquare, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import { getGoogleAuthorizeURL } from "@/lib/dpop"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ApiError } from "@/lib/api-client"
+import { Logo } from "@/components/logo"
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -56,9 +57,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-blue-600/20 p-3">
-              <MessageSquare className="h-8 w-8 text-blue-500" />
-            </div>
+            <Logo className="h-14 w-14" />
           </div>
           <CardTitle>Welcome back</CardTitle>
           <CardDescription>Sign in to your account</CardDescription>
