@@ -49,7 +49,7 @@ export default function RegisterPage() {
   }
 
   const handleGoogleSignUp = async () => {
-    const url = await getGoogleAuthorizeURL("http://localhost:8000/auth/google")
+    const url = await getGoogleAuthorizeURL("/auth/google")
     window.location.href = url
   }
 
