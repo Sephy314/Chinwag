@@ -23,6 +23,22 @@ spec:
       labels:
         app: chat-command
     spec:
+      initContainers:
+        - name: wait-postgres
+          image: busybox:1.36
+          command: ["sh", "-c"]
+          args:
+            - "i=0; until nc -z postgres 5432; do i=$((i+1)); [ $i -ge 150 ] && { echo 'postgres not ready'; exit 1; }; echo 'waiting for postgres'; sleep 2; done"
+        - name: wait-redis
+          image: busybox:1.36
+          command: ["sh", "-c"]
+          args:
+            - "i=0; until nc -z redis 6379; do i=$((i+1)); [ $i -ge 150 ] && { echo 'redis not ready'; exit 1; }; echo 'waiting for redis'; sleep 2; done"
+        - name: wait-nats
+          image: busybox:1.36
+          command: ["sh", "-c"]
+          args:
+            - "i=0; until nc -z nats 4222; do i=$((i+1)); [ $i -ge 150 ] && { echo 'nats not ready'; exit 1; }; echo 'waiting for nats'; sleep 2; done"
       containers:
         - name: chat-command
           image: chinwag/chat-command:latest
