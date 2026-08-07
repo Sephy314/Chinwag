@@ -32,9 +32,14 @@ spec:
     secretName: chinwag-ca
 ---
 # Let's Encrypt (ACME) — issues the PUBLIC, browser-trusted `chinwag-tls` cert
-# for chinwag.duckdns.org. HTTP-01 challenge is answered through the Traefik
-# ingress on :80 (public port-forwarded to this node). cert-manager renews it
-# automatically before expiry.
+# for chinwag.duckdns.org and auto-renews it.
+#
+# DNS-01 via the duckdns webhook (cert-manager-webhook-duckdns, see
+# duckdns-webhook.yaml): it sets a duckdns TXT record for validation, so NO
+# inbound :80/:443 or router hairpin NAT is needed. Requires a duckdns API
+# token in the secret `duckdns-credentials` (namespace cert-manager), e.g.:
+#   kubectl -n cert-manager create secret generic duckdns-credentials \
+#     --from-literal=token='<duckdns-token>'
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -46,6 +51,11 @@ spec:
     privateKeySecretRef:
       name: letsencrypt-account
     solvers:
-      - http01:
-          ingress:
-            class: traefik
+      - dns01:
+          webhook:
+            groupName: acme.duckdns.org
+            solverName: duckdns
+            config:
+              apiTokenSecretRef:
+                name: duckdns-credentials
+                key: token

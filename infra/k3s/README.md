@@ -104,10 +104,11 @@ IP; :80/:443 port-forwarded to the k3s node). No `/etc/hosts` entry is required.
 TLS is managed by **cert-manager** in-cluster — it issues the `chinwag-tls` secret used by the
 Traefik ingress and **auto-renews it** before expiry (no cron or manual step).
 
-The public, browser-trusted cert is issued by **Let's Encrypt**:
+The public, browser-trusted cert is issued by **Let's Encrypt** via **DNS-01** (duckdns):
 
-- `letsencrypt` ClusterIssuer (ACME) answers the HTTP-01 challenge through the Traefik ingress on
-  :80 (cert-manager creates the temporary challenge route automatically).
+- `letsencrypt` ClusterIssuer (ACME) validates through a duckdns **TXT record** using the
+  `cert-manager-webhook-duckdns` webhook (`duckdns-webhook.yaml`). No inbound :80/:443 or router
+  hairpin NAT is needed.
 - `Certificate/chinwag-tls` (secret `chinwag-tls`) covers `chinwag.duckdns.org` and is auto-renewed.
 - `chinwag-selfsigned` ClusterIssuer mints a self-signed CA (`chinwag-ca`) used only for the
   **internal** `postgres-tls` cert — postgres is only reachable inside the cluster, so it doesn't
@@ -117,7 +118,15 @@ The public, browser-trusted cert is issued by **Let's Encrypt**:
 - `FRONTEND_URL` is `https://chinwag.duckdns.org` (used for OAuth redirects); `GOOGLE_REDIRECT_URL`
   must use the same host.
 
-`deploy.sh` installs cert-manager on first run and waits for the certificate to become Ready.
+One-time setup (duckdns API token, in the `cert-manager` namespace):
+
+```bash
+kubectl -n cert-manager create secret generic duckdns-credentials \
+  --from-literal=token='<your-duckdns-api-token>'
+```
+
+`deploy.sh` installs cert-manager on first run, applies the duckdns webhook, and waits for the
+certificate to become Ready.
 
 Check status:
 
@@ -127,16 +136,18 @@ kubectl -n chinwag describe certificate/chinwag-tls
 kubectl -n chinwag get clusterissuer letsencrypt
 ```
 
-Troubleshooting: if the certificate never becomes Ready, inspect the ACME order/challenge:
+Troubleshooting: if the certificate never becomes Ready, inspect the ACME order/challenge and the
+webhook:
 
 ```bash
 kubectl -n chinwag get order,challenge
 kubectl -n chinwag describe certificate/chinwag-tls
+kubectl -n cert-manager logs deploy/cert-manager-webhook-duckdns --tail=50
+kubectl -n cert-manager get apiservice v1alpha1.acme.duckdns.org
 ```
 
-> Prerequisites for Let's Encrypt: `chinwag.duckdns.org` must resolve to the node's public IP and
-> :80/:443 must be reachable from the internet. The old self-signed CA flow remains available in
-> `tls.sh` as a legacy fallback for a local-only deployment.
+> The old self-signed CA flow remains available in `tls.sh` as a legacy fallback for a local-only
+> deployment.
 
 ## 4. Verification
 
