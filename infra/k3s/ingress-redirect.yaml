@@ -1,0 +1,31 @@
+# ---------------------------------------------------------------------------
+# HTTP (:80) -> HTTPS (:443) redirect for chinwag.local.
+#
+# A separate minimal Ingress is used because Traefik's k8s Ingress provider
+# applies the middleware annotation to every router generated from an
+# Ingress — so the real (TLS) ingress in ingress.yaml must stay on the
+# `websecure` entrypoint only, and the redirect lives here on `web`.
+# The backend service is never actually reached (the middleware redirects
+# first); it just needs to exist.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chinwag-redirect
+  namespace: chinwag
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: chinwag-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: chinwag.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000

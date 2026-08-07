@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { MessageSquare, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ApiError } from "@/lib/api-client"
 import { getGoogleAuthorizeURL } from "@/lib/dpop"
+import { Logo } from "@/components/logo"
 
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(50),
@@ -57,9 +58,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-blue-600/20 p-3">
-              <MessageSquare className="h-8 w-8 text-blue-500" />
-            </div>
+            <Logo className="h-14 w-14" />
           </div>
           <CardTitle>Create account</CardTitle>
           <CardDescription>Join the conversation</CardDescription>

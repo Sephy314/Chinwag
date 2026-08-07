@@ -7,3 +7,5 @@
 ./qodana.yaml
 infra/k3s/secret.yaml
 infra/k3s/*.secret.yaml
+infra/k3s/.tls/
+.vscode

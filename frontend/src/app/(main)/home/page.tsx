@@ -1,15 +1,13 @@
 "use client"
 
-import { MessageSquare } from "lucide-react"
+import { Logo } from "@/components/logo"
 
 export default function HomePage() {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="text-center max-w-sm">
         <div className="flex justify-center mb-6">
-          <div className="rounded-full bg-blue-600/10 p-4">
-            <MessageSquare className="h-12 w-12 text-blue-500" />
-          </div>
+          <Logo className="h-20 w-20" />
         </div>
         <h1 className="text-2xl font-semibold text-gray-100 mb-2">
           Welcome to Chinwag
