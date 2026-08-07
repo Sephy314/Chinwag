@@ -6,11 +6,11 @@
 # before expiry — no cron or manual step needed (replaces the old tls.sh).
 #
 #   - chinwag-selfsigned : bootstrap issuer used only to mint the local CA.
-#   - chinwag-ca         : local CA issuer that signs the server cert
-#                          (default for the local chinwag.local deployment).
-#   - letsencrypt        : ACME (Let's Encrypt) issuer for a real public
-#                          domain. Uncomment + set a real email/domain to
-#                          switch to publicly-trusted auto-renewing certs.
+#   - chinwag-ca         : namespaced CA Issuer that signs INTERNAL certs
+#                          (postgres-tls) from the self-signed local CA.
+#   - letsencrypt        : ACME (Let's Encrypt) ClusterIssuer that issues the
+#                          PUBLIC, browser-trusted cert (chinwag-tls) for
+#                          chinwag.duckdns.org and auto-renews it.
 # ---------------------------------------------------------------------------
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -31,23 +31,21 @@ spec:
   ca:
     secretName: chinwag-ca
 ---
-# For a real public domain (e.g. chat.example.com):
-#   - uncomment this issuer and set a real email,
-#   - point certificate.yaml's chinwag-tls at issuerRef letsencrypt,
-#   - add your domain to dnsNames.
-# cert-manager then issues + auto-renews via Let's Encrypt (HTTP-01 through
-# the Traefik ingress).
-# apiVersion: cert-manager.io/v1
-# kind: ClusterIssuer
-# metadata:
-#   name: letsencrypt
-# spec:
-#   acme:
-#     server: https://acme-v02.api.letsencrypt.org/directory
-#     email: you@example.com
-#     privateKeySecretRef:
-#       name: letsencrypt-account
-#     solvers:
-#       - http01:
-#           ingress:
-#             class: traefik
+# Let's Encrypt (ACME) — issues the PUBLIC, browser-trusted `chinwag-tls` cert
+# for chinwag.duckdns.org. HTTP-01 challenge is answered through the Traefik
+# ingress on :80 (public port-forwarded to this node). cert-manager renews it
+# automatically before expiry.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: rdy00328@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-account
+    solvers:
+      - http01:
+          ingress:
+            class: traefik

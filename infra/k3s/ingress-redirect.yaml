@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# HTTP (:80) -> HTTPS (:443) redirect for chinwag.local.
+# HTTP (:80) -> HTTPS (:443) redirect for chinwag.duckdns.org.
 #
 # A separate minimal Ingress is used because Traefik's k8s Ingress provider
 # applies the middleware annotation to every router generated from an
@@ -19,7 +19,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: chinwag.local
+    - host: chinwag.duckdns.org
       http:
         paths:
           - path: /
