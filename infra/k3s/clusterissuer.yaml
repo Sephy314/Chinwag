@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# cert-manager ClusterIssuers for Chinwag TLS.
+#
+# cert-manager manages the whole certificate lifecycle in-cluster: it issues
+# the `chinwag-tls` secret used by the Traefik ingress and AUTO-RENEWS it
+# before expiry — no cron or manual step needed (replaces the old tls.sh).
+#
+#   - chinwag-selfsigned : bootstrap issuer used only to mint the local CA.
+#   - chinwag-ca         : local CA issuer that signs the server cert
+#                          (default for the local chinwag.local deployment).
+#   - letsencrypt        : ACME (Let's Encrypt) issuer for a real public
+#                          domain. Uncomment + set a real email/domain to
+#                          switch to publicly-trusted auto-renewing certs.
+# ---------------------------------------------------------------------------
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: chinwag-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: chinwag-ca
+spec:
+  ca:
+    secretName: chinwag-ca
+---
+# For a real public domain (e.g. chat.example.com):
+#   - uncomment this issuer and set a real email,
+#   - point certificate.yaml's chinwag-tls at issuerRef letsencrypt,
+#   - add your domain to dnsNames.
+# cert-manager then issues + auto-renews via Let's Encrypt (HTTP-01 through
+# the Traefik ingress).
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: you@example.com
+#     privateKeySecretRef:
+#       name: letsencrypt-account
+#     solvers:
+#       - http01:
+#           ingress:
+#             class: traefik

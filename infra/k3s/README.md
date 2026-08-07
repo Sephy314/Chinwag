@@ -19,7 +19,8 @@ application code changes required.
 | `frontend` | Deployment (2) | 3000 | Next.js standalone server |
 | `chinwag` Ingress | Traefik | 80→443 | `/auth /rooms /users /chat` → gateway, `/` → frontend (HTTPS) |
 
-All resources are deployed in the `chinwag` namespace.
+All resources are deployed in the `chinwag` namespace. TLS certificates are issued and
+**auto-renewed** by **cert-manager** (installed in its own `cert-manager` namespace) — see §3.1.
 
 ## Prerequisites
 
@@ -39,8 +40,8 @@ cd infra/k3s
 ```
 
 Prerequisite: `secret.yaml` must exist on disk (`cp secret.yaml.example secret.yaml`, then fill in
-values). `deploy.sh` automatically runs `./tls.sh` before applying to create the HTTPS
-`chinwag-tls` secret.
+values). On first run `deploy.sh` also installs cert-manager (needs network) and waits for the
+TLS certificate to be ready — HTTPS is handled by cert-manager (see §3.1).
 
 ## 1. Building and loading images
 
@@ -67,8 +68,8 @@ cd infra/k3s
 ```bash
 cd infra/k3s
 
-# Generate the HTTPS self-signed cert + chinwag-tls secret (once; idempotent)
-./tls.sh
+# One-time: install cert-manager (v1.21.1) for TLS cert management
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.1/cert-manager.yaml
 
 # Recommended: apply everything with kustomize (handles resource ordering)
 kubectl apply -k .
@@ -80,6 +81,7 @@ kubectl apply -f postgres.yaml -f redis.yaml -f nats.yaml
 kubectl apply -f gateway.yaml -f auth.yaml -f room.yaml
 kubectl apply -f chat-command.yaml -f chat-query.yaml -f frontend.yaml
 kubectl apply -f ingress.yaml
+kubectl apply -f clusterissuer.yaml -f certificate.yaml
 ```
 
 ## 3. Host setup
@@ -100,30 +102,50 @@ sudo sh -c 'echo "<k3s-node-ip> chinwag.local" >> /etc/hosts'
 
 ## 3.1 HTTPS (TLS)
 
-`chinwag.local` is a local-only hostname, so Let's Encrypt is not an option — HTTPS is set up with
-a **self-signed CA**.
+TLS is managed by **cert-manager** in-cluster — it issues the `chinwag-tls` secret used by the
+Traefik ingress and **auto-renews it** before expiry (no cron or manual step).
 
-- `./tls.sh` generates a CA + server certificate (`infra/k3s/.tls/`, gitignored) and registers it
-  as the `chinwag-tls` TLS secret in the `chinwag` namespace. `deploy.sh` runs it automatically.
+`chinwag.local` is a local-only hostname, so the default issuer is a **self-signed CA**
+(`clusterissuer.yaml` / `certificate.yaml`):
+
+- `chinwag-selfsigned` ClusterIssuer mints a self-signed CA (`Certificate/chinwag-ca`, secret
+  `chinwag-ca`).
+- `chinwag-ca` ClusterIssuer signs the server cert (`Certificate/chinwag-tls`, secret
+  `chinwag-tls`; 90d validity, renewed 30d before expiry).
 - `ingress.yaml` terminates TLS with `chinwag-tls` on the `websecure` entrypoint (:443).
 - `ingress-redirect.yaml` + `middleware.yaml` redirect :80 requests to https.
 - `FRONTEND_URL` is `https://chinwag.local` (used for OAuth redirects).
 
-Renewing/regenerating the certificate:
+`deploy.sh` installs cert-manager on first run and waits for the certificate to become Ready.
+
+Check status:
 
 ```bash
-cd infra/k3s
-./tls.sh --force            # Regenerate CA + cert (rotates trust)
-./tls.sh --ip 192.168.1.10  # Add a node IP to the SANs
+kubectl -n chinwag get certificate
+kubectl -n chinwag describe certificate/chinwag-tls
 ```
 
-To avoid browser warnings, register the local CA as a trusted root CA in your OS (as printed when
-tls.sh completes):
+To avoid browser warnings, trust the local CA (extracted from the `chinwag-ca` secret) in your OS:
 
 ```bash
-sudo cp infra/k3s/.tls/ca.crt /usr/local/share/ca-certificates/chinwag-ca.crt
+kubectl -n chinwag get secret chinwag-ca -o jsonpath='{.data.tls\.crt}' \
+  | base64 -d | sudo tee /usr/local/share/ca-certificates/chinwag-ca.crt >/dev/null
 sudo update-ca-certificates
 ```
+
+### Switching to Let's Encrypt (public domain)
+
+For a real public domain (e.g. `chat.example.com`), cert-manager can issue **publicly-trusted**
+certs and renew them automatically:
+
+1. Uncomment the `letsencrypt` ClusterIssuer in `clusterissuer.yaml` and set a real email.
+2. Point `Certificate/chinwag-tls` at `issuerRef: letsencrypt` and add your domain to `dnsNames`.
+3. Update `ingress.yaml` `host`/`tls.hosts` and `configmap.yaml` `FRONTEND_URL`.
+4. `kubectl apply -k infra/k3s` — cert-manager issues + auto-renews via Let's Encrypt (HTTP-01
+   through the Traefik ingress).
+
+> The old `tls.sh` script is now legacy — kept only as a manual fallback. cert-manager
+> supersedes it.
 
 ## 4. Verification
 

@@ -59,11 +59,18 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 echo "    all checks passed"
 
-# --- TLS secret ------------------------------------------------------------
-# Self-signed cert for chinwag.local (created once; idempotent).
-# Run `./tls.sh --force` to rotate, or `./tls.sh --ip <node-ip>` to add an IP SAN.
-echo "==> Ensuring TLS secret (chinwag-tls)"
-./tls.sh
+# --- cert-manager (TLS) ------------------------------------------------------
+# cert-manager issues + auto-renews the `chinwag-tls` secret in-cluster
+# (see clusterissuer.yaml / certificate.yaml). Installed once if missing.
+CERT_MANAGER_VERSION="v1.21.1"
+if ! ${KUBECTL} get namespace cert-manager >/dev/null 2>&1; then
+  echo "==> Installing cert-manager ${CERT_MANAGER_VERSION}"
+  ${KUBECTL} apply -f \
+    "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
+fi
+echo "==> Waiting for cert-manager to be ready"
+${KUBECTL} -n cert-manager rollout status deploy/cert-manager deploy/cert-manager-webhook deploy/cert-manager-cainjector --timeout=180s >/dev/null ||
+  { echo "ERROR: cert-manager failed to become ready" >&2; exit 1; }
 
 # --- Build + load images ----------------------------------------------------
 if [ "${NO_BUILD}" -eq 0 ]; then
@@ -94,6 +101,11 @@ ${KUBECTL} -n chinwag rollout status statefulset/postgres --timeout=120s >/dev/n
 echo "    -> nats"
 ${KUBECTL} -n chinwag rollout status statefulset/nats --timeout=120s >/dev/null ||
   { echo "ERROR: nats failed to roll out" >&2; exit 1; }
+
+# --- TLS certificate ready ----------------------------------------------------
+echo "==> Waiting for TLS certificate (chinwag-tls) to be Ready"
+${KUBECTL} -n chinwag wait --for=condition=Ready certificate/chinwag-tls --timeout=120s >/dev/null ||
+  { echo "ERROR: TLS certificate not ready — see 'kubectl -n chinwag describe certificate/chinwag-tls'" >&2; exit 1; }
 
 # --- Verify -------------------------------------------------------------------
 echo "==> Pods"
