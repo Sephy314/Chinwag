@@ -16,7 +16,7 @@ Kubernetes(k3s) 기반 배포 매니페스트입니다. 기존 애플리케이�
 | `chat-command` | Deployment | 8083 | 메시지 쓰기 + WebSocket |
 | `chat-query` | Deployment | 8084 | 메시지 조회(projection) |
 | `frontend` | Deployment (2) | 3000 | Next.js standalone 서버 |
-| `chinwag` Ingress | Traefik | 80 | `/auth /rooms /users /chat` → gateway, `/` → frontend |
+| `chinwag` Ingress | Traefik | 80→443 | `/auth /rooms /users /chat` → gateway, `/` → frontend (HTTPS) |
 
 모든 리소스는 `chinwag` Namespace에 배치됩니다.
 
@@ -38,6 +38,7 @@ cd infra/k3s
 ```
 
 전제: `secret.yaml`이 디스크에 있어야 합니다 (`cp secret.yaml.example secret.yaml` 후 값 입력).
+`deploy.sh`는 적용 전에 `./tls.sh`를 자동 실행해 HTTPS용 `chinwag-tls` 시크릿을 만듭니다.
 
 ## 1. 이미지 빌드 및 로드
 
@@ -64,6 +65,9 @@ cd infra/k3s
 ```bash
 cd infra/k3s
 
+# HTTPS용 자체서명 인증서 + chinwag-tls 시크릿 생성 (최초 1회, 멱등)
+./tls.sh
+
 # 권장: kustomize 일괄 적용 (리소스 순서 자동 처리)
 kubectl apply -k .
 
@@ -82,15 +86,40 @@ Ingress의 host는 `chinwag.local`로 되어 있습니다. `/etc/hosts`에 k3s �
 
 ```bash
 # k3s가 실행 중인 노드의 IP로 교체
-echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
+sudo sh -c 'echo "<k3s-node-ip> chinwag.local" >> /etc/hosts'
 ```
 
-- 웹 UI: http://chinwag.local
-- 게이트웨이 health: http://chinwag.local/health (또는 내부적으로 `gateway:8000/health`)
-- Swagger UI: `http://chinwag.local/auth/docs`, `http://chinwag.local/rooms/docs`, `http://chinwag.local/chat/docs`
+- 웹 UI: https://chinwag.local
+- 게이트웨이 health: https://chinwag.local/health (또는 내부적으로 `gateway:8000/health`)
+- Swagger UI: `https://chinwag.local/auth/docs`, `https://chinwag.local/rooms/docs`, `https://chinwag.local/chat/docs`
 
 > 다른 호스트명을 쓰려면 `ingress.yaml`의 `host`와 `configmap.yaml`의 `FRONTEND_URL`을
 > 함께 바꾸면 됩니다. WebSocket은 브라우저 origin을 그대로 따르므로 별도 설정이 필요 없습니다.
+
+## 3.1 HTTPS (TLS)
+
+`chinwag.local`은 로컬 전용 호스트명이라 Let's Encrypt를 쓸 수 없으므로, **자체서명 CA**로 HTTPS를 구성합니다.
+
+- `./tls.sh`가 CA + 서버 인증서를 생성하고 (`infra/k3s/.tls/`, gitignore됨) 이를 `chinwag-tls`
+  TLS 시크릿으로 `chinwag` 네임스페이스에 등록합니다. `deploy.sh`가 자동으로 실행합니다.
+- `ingress.yaml`은 `websecure` 엔트리포인트(:443)에서 `chinwag-tls`로 TLS를 종료합니다.
+- `ingress-redirect.yaml` + `middleware.yaml`이 :80 요청을 https로 리다이렉트합니다.
+- `FRONTEND_URL`은 `https://chinwag.local`입니다 (OAuth 리다이렉트에 사용).
+
+인증서 갱신/재발급:
+
+```bash
+cd infra/k3s
+./tls.sh --force            # CA + 인증서 재생성 (신뢰 갱신)
+./tls.sh --ip 192.168.1.10  # 노드 IP를 SAN에 추가
+```
+
+브라우저 경고 없이 쓰려면 로컬 CA를 OS에 신뢰 CA로 등록합니다 (tls.sh 완료 시 안내됨):
+
+```bash
+sudo cp infra/k3s/.tls/ca.crt /usr/local/share/ca-certificates/chinwag-ca.crt
+sudo update-ca-certificates
+```
 
 ## 4. 검증
 
@@ -102,10 +131,10 @@ kubectl -n chinwag get pods
 kubectl -n chinwag logs -l app=auth
 
 # 게이트웨이를 통해 각 서비스 health 확인
-curl -s http://chinwag.local/health                      # gateway
-curl -s http://chinwag.local/auth/health                 # auth
-curl -s http://chinwag.local/rooms/health                # room
-curl -s http://chinwag.local/chat/health                 # chat-command / chat-query
+curl -sk https://chinwag.local/health                      # gateway
+curl -sk https://chinwag.local/auth/health                 # auth
+curl -sk https://chinwag.local/rooms/health                # room
+curl -sk https://chinwag.local/chat/health                 # chat-command / chat-query
 
 # 내부 DNS/SVC 검증 (파드 안에서)
 kubectl -n chinwag exec deploy/gateway -- wget -qO- http://auth:8081/health

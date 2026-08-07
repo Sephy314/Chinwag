@@ -59,6 +59,12 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 echo "    all checks passed"
 
+# --- TLS secret ------------------------------------------------------------
+# Self-signed cert for chinwag.local (created once; idempotent).
+# Run `./tls.sh --force` to rotate, or `./tls.sh --ip <node-ip>` to add an IP SAN.
+echo "==> Ensuring TLS secret (chinwag-tls)"
+./tls.sh
+
 # --- Build + load images ----------------------------------------------------
 if [ "${NO_BUILD}" -eq 0 ]; then
   ./build-images.sh --load
@@ -93,11 +99,12 @@ ${KUBECTL} -n chinwag rollout status statefulset/nats --timeout=120s >/dev/null 
 echo "==> Pods"
 ${KUBECTL} -n chinwag get pods
 
-echo "==> Health endpoints (via ingress http://chinwag.local)"
+echo "==> Health endpoints (via ingress https://chinwag.local)"
 if grep -q "chinwag.local" /etc/hosts; then
   sleep 5
   for path in / /auth/health /rooms/health /chat/health; do
-    code="$(curl -s -m 5 -o /dev/null -w '%{http_code}' "http://chinwag.local${path}" || true)"
+    # -k: self-signed cert; -L: follow the http->https redirect if any
+    code="$(curl -skL -m 5 -o /dev/null -w '%{http_code}' "https://chinwag.local${path}" || true)"
     echo "  GET ${path} -> ${code}"
   done
 else

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Single Traefik Ingress (k3s default ingress controller).
+# Single Traefik Ingress (k3s default ingress controller), TLS on :443.
 #
 # Path routing mirrors the "edge" role that nginx played in the Docker Compose
 # design and the gateway's own route table:
@@ -7,9 +7,14 @@
 #                                   /chat/rooms/:id/ws)
 #   /                            → frontend
 #
+# HTTPS uses a self-signed certificate from the `chinwag-tls` secret, which is
+# created by `./tls.sh` (idempotent; run it before apply, or deploy.sh does it
+# automatically). Plain HTTP on :80 is handled by ingress-redirect.yaml
+# (redirect to https) — see middleware.yaml.
+#
 # Adjust `host` to your node IP / domain. For local access, map it in /etc/hosts:
 #   echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
-# Then set FRONTEND_URL in configmap.yaml to match (http://chinwag.local).
+# Then set FRONTEND_URL in configmap.yaml to match (https://chinwag.local).
 # ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -17,10 +22,14 @@ metadata:
   name: chinwag
   namespace: chinwag
   annotations:
-    # Traefik listens on the web entrypoint (port 80) in k3s.
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # Traefik listens on the websecure entrypoint (port 443) in k3s.
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
   ingressClassName: traefik
+  tls:
+    - hosts:
+        - chinwag.local
+      secretName: chinwag-tls
   rules:
     - host: chinwag.local
       http:

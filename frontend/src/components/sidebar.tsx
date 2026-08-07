@@ -4,7 +4,6 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  MessageSquare,
   Plus,
   LogOut,
   User,
@@ -23,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { CreateRoomDialog } from "@/features/room/components/create-room-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Logo } from "@/components/logo"
 
 export function Sidebar() {
   const { user, logout, readOnly } = useAuth()
@@ -66,7 +66,7 @@ export function Sidebar() {
       >
         <div className="flex h-14 items-center justify-between border-b border-gray-800 px-4">
           <Link href="/home" className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-blue-500" />
+            <Logo className="h-7 w-7" />
             <span className="font-semibold text-gray-100">Chinwag</span>
           </Link>
         </div>

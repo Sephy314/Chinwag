@@ -1,0 +1,16 @@
+# ---------------------------------------------------------------------------
+# Traefik middleware: redirect HTTP (web, :80) -> HTTPS (websecure, :443).
+#
+# Referenced by ingress-redirect.yaml via the router.middlewares annotation.
+# k3s ships Traefik with the traefik.io/v1alpha1 CRDs installed, so this
+# applies as-is with `kubectl apply -k .`.
+# ---------------------------------------------------------------------------
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: chinwag
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
