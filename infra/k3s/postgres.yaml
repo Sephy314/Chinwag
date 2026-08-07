@@ -48,9 +48,29 @@ spec:
         app: postgres
     spec:
       terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: fix-tls-perms
+          image: postgres:16-alpine
+          command: ["sh", "-c"]
+          args:
+            - "cp /tls/tls.crt /run/tls/tls.crt && cp /tls/tls.key /run/tls/tls.key && chown postgres:postgres /run/tls/tls.crt /run/tls/tls.key && chmod 0644 /run/tls/tls.crt && chmod 0600 /run/tls/tls.key"
+          volumeMounts:
+            - name: postgres-tls
+              mountPath: /tls
+              readOnly: true
+            - name: tls-runtime
+              mountPath: /run/tls
       containers:
         - name: postgres
           image: postgres:16-alpine
+          args:
+            - postgres
+            - -c
+            - ssl=on
+            - -c
+            - ssl_cert_file=/run/tls/tls.crt
+            - -c
+            - ssl_key_file=/run/tls/tls.key
           ports:
             - name: postgres
               containerPort: 5432
@@ -69,6 +89,8 @@ spec:
               mountPath: /var/lib/postgresql/data
             - name: initdb
               mountPath: /docker-entrypoint-initdb.d
+            - name: tls-runtime
+              mountPath: /run/tls
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "chinwag", "-d", "postgres"]
@@ -89,6 +111,11 @@ spec:
         - name: initdb
           configMap:
             name: postgres-initdb
+        - name: postgres-tls
+          secret:
+            secretName: postgres-tls
+        - name: tls-runtime
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data
