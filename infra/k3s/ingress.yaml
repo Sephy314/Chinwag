@@ -7,14 +7,14 @@
 #                                   /chat/rooms/:id/ws)
 #   /                            → frontend
 #
-# HTTPS uses a self-signed certificate from the `chinwag-tls` secret, which is
-# created by `./tls.sh` (idempotent; run it before apply, or deploy.sh does it
-# automatically). Plain HTTP on :80 is handled by ingress-redirect.yaml
+# HTTPS uses the browser-trusted `chinwag-tls` certificate (issued by the
+# `letsencrypt` ClusterIssuer for chinwag.duckdns.org, see clusterissuer.yaml /
+# certificate.yaml). Plain HTTP on :80 is handled by ingress-redirect.yaml
 # (redirect to https) — see middleware.yaml.
 #
 # No `host` in rules: the ingress matches any host, so it also answers for the
-# node IP without an /etc/hosts entry. TLS below still terminates chinwag.local
-# via the chinwag-tls secret; set FRONTEND_URL in configmap.yaml to match.
+# node IP / LAN without an /etc/hosts entry. TLS below terminates
+# chinwag.duckdns.org via the chinwag-tls secret.
 # ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -28,7 +28,7 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - chinwag.local
+        - chinwag.duckdns.org
       secretName: chinwag-tls
   rules:
     - http:

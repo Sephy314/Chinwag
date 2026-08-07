@@ -1,13 +1,14 @@
 # ---------------------------------------------------------------------------
 # cert-manager Certificates.
 #
-#   chinwag-ca   -> self-signed local CA         (secret `chinwag-ca`)
-#   chinwag-tls  -> server cert for the ingress  (secret `chinwag-tls`)
-#   postgres-tls -> cert for in-cluster postgres  (secret `postgres-tls`)
+#   chinwag-ca   -> self-signed local CA           (secret `chinwag-ca`)
+#   chinwag-tls  -> PUBLIC cert for the ingress    (secret `chinwag-tls`)
+#   postgres-tls -> INTERNAL cert for postgres     (secret `postgres-tls`)
 #
-# All leaf certs are issued by the NAMESPACED `Issuer` `chinwag-ca` (see
-# clusterissuer.yaml). cert-manager renews them automatically before expiry
-# (renewBefore = 30 days) and rewrites the secret; Traefik / postgres pick it up.
+# chinwag-tls is issued by the `letsencrypt` ClusterIssuer (browser-trusted,
+# auto-renewed) for chinwag.duckdns.org. postgres-tls stays on the internal
+# NAMESPACED `Issuer` `chinwag-ca` (see clusterissuer.yaml) since postgres is
+# only reachable inside the cluster.
 # ---------------------------------------------------------------------------
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -32,16 +33,11 @@ metadata:
   namespace: chinwag
 spec:
   secretName: chinwag-tls
-  duration: 2160h # 90 days
-  renewBefore: 720h # renew 30 days before expiry
   dnsNames:
-    - chinwag.local
-    - localhost
-  ipAddresses:
-    - 127.0.0.1
+    - chinwag.duckdns.org
   issuerRef:
-    name: chinwag-ca
-    kind: Issuer
+    name: letsencrypt
+    kind: ClusterIssuer
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

@@ -86,35 +86,36 @@ kubectl apply -f clusterissuer.yaml -f certificate.yaml
 
 ## 3. Host setup
 
-The Ingress host is `chinwag.local`. Register your k3s node IP in `/etc/hosts`.
+The service is served on the public domain **chinwag.duckdns.org** (A record → the node's public
+IP; :80/:443 port-forwarded to the k3s node). No `/etc/hosts` entry is required.
 
-```bash
-# Replace with the IP of the node running k3s
-sudo sh -c 'echo "<k3s-node-ip> chinwag.local" >> /etc/hosts'
-```
+- Web UI: https://chinwag.duckdns.org
+- Gateway health: https://chinwag.duckdns.org/health (or internally `gateway:8000/health`)
+- Swagger UI: `https://chinwag.duckdns.org/auth/docs`, `https://chinwag.duckdns.org/rooms/docs`,
+  `https://chinwag.duckdns.org/chat/docs`
 
-- Web UI: https://chinwag.local
-- Gateway health: https://chinwag.local/health (or internally `gateway:8000/health`)
-- Swagger UI: `https://chinwag.local/auth/docs`, `https://chinwag.local/rooms/docs`, `https://chinwag.local/chat/docs`
-
-> To use a different hostname, change the `host` in `ingress.yaml` and `FRONTEND_URL` in
-> `configmap.yaml` together. WebSocket follows the browser origin, so no extra config is needed.
+> The Ingress matches any host, so LAN access also works. If your router doesn't do hairpin NAT,
+> map the domain to the node's LAN IP in `/etc/hosts` on LAN clients (the Let's Encrypt cert still
+> validates, so no warning):
+> `sudo sh -c 'echo "192.168.0.30 chinwag.duckdns.org" >> /etc/hosts'`
 
 ## 3.1 HTTPS (TLS)
 
 TLS is managed by **cert-manager** in-cluster — it issues the `chinwag-tls` secret used by the
 Traefik ingress and **auto-renews it** before expiry (no cron or manual step).
 
-`chinwag.local` is a local-only hostname, so the default issuer is a **self-signed CA**
-(`clusterissuer.yaml` / `certificate.yaml`):
+The public, browser-trusted cert is issued by **Let's Encrypt**:
 
-- `chinwag-selfsigned` ClusterIssuer mints a self-signed CA (`Certificate/chinwag-ca`, secret
-  `chinwag-ca`).
-- `chinwag-ca` ClusterIssuer signs the server cert (`Certificate/chinwag-tls`, secret
-  `chinwag-tls`; 90d validity, renewed 30d before expiry).
+- `letsencrypt` ClusterIssuer (ACME) answers the HTTP-01 challenge through the Traefik ingress on
+  :80 (cert-manager creates the temporary challenge route automatically).
+- `Certificate/chinwag-tls` (secret `chinwag-tls`) covers `chinwag.duckdns.org` and is auto-renewed.
+- `chinwag-selfsigned` ClusterIssuer mints a self-signed CA (`chinwag-ca`) used only for the
+  **internal** `postgres-tls` cert — postgres is only reachable inside the cluster, so it doesn't
+  need a public cert.
 - `ingress.yaml` terminates TLS with `chinwag-tls` on the `websecure` entrypoint (:443).
 - `ingress-redirect.yaml` + `middleware.yaml` redirect :80 requests to https.
-- `FRONTEND_URL` is `https://chinwag.local` (used for OAuth redirects).
+- `FRONTEND_URL` is `https://chinwag.duckdns.org` (used for OAuth redirects); `GOOGLE_REDIRECT_URL`
+  must use the same host.
 
 `deploy.sh` installs cert-manager on first run and waits for the certificate to become Ready.
 
@@ -123,29 +124,19 @@ Check status:
 ```bash
 kubectl -n chinwag get certificate
 kubectl -n chinwag describe certificate/chinwag-tls
+kubectl -n chinwag get clusterissuer letsencrypt
 ```
 
-To avoid browser warnings, trust the local CA (extracted from the `chinwag-ca` secret) in your OS:
+Troubleshooting: if the certificate never becomes Ready, inspect the ACME order/challenge:
 
 ```bash
-kubectl -n chinwag get secret chinwag-ca -o jsonpath='{.data.tls\.crt}' \
-  | base64 -d | sudo tee /usr/local/share/ca-certificates/chinwag-ca.crt >/dev/null
-sudo update-ca-certificates
+kubectl -n chinwag get order,challenge
+kubectl -n chinwag describe certificate/chinwag-tls
 ```
 
-### Switching to Let's Encrypt (public domain)
-
-For a real public domain (e.g. `chat.example.com`), cert-manager can issue **publicly-trusted**
-certs and renew them automatically:
-
-1. Uncomment the `letsencrypt` ClusterIssuer in `clusterissuer.yaml` and set a real email.
-2. Point `Certificate/chinwag-tls` at `issuerRef: letsencrypt` and add your domain to `dnsNames`.
-3. Update `ingress.yaml` `host`/`tls.hosts` and `configmap.yaml` `FRONTEND_URL`.
-4. `kubectl apply -k infra/k3s` — cert-manager issues + auto-renews via Let's Encrypt (HTTP-01
-   through the Traefik ingress).
-
-> The old `tls.sh` script is now legacy — kept only as a manual fallback. cert-manager
-> supersedes it.
+> Prerequisites for Let's Encrypt: `chinwag.duckdns.org` must resolve to the node's public IP and
+> :80/:443 must be reachable from the internet. The old self-signed CA flow remains available in
+> `tls.sh` as a legacy fallback for a local-only deployment.
 
 ## 4. Verification
 
@@ -157,10 +148,10 @@ kubectl -n chinwag get pods
 kubectl -n chinwag logs -l app=auth
 
 # Check each service health via the gateway
-curl -sk https://chinwag.local/health                      # gateway
-curl -sk https://chinwag.local/auth/health                 # auth
-curl -sk https://chinwag.local/rooms/health                # room
-curl -sk https://chinwag.local/chat/health                 # chat-command / chat-query
+curl -sk https://chinwag.duckdns.org/health                # gateway
+curl -sk https://chinwag.duckdns.org/auth/health           # auth
+curl -sk https://chinwag.duckdns.org/rooms/health          # room
+curl -sk https://chinwag.duckdns.org/chat/health           # chat-command / chat-query
 
 # Verify internal DNS/SVC (from inside a pod)
 kubectl -n chinwag exec deploy/gateway -- wget -qO- http://auth:8081/health

@@ -111,17 +111,12 @@ ${KUBECTL} -n chinwag wait --for=condition=Ready certificate/chinwag-tls --timeo
 echo "==> Pods"
 ${KUBECTL} -n chinwag get pods
 
-echo "==> Health endpoints (via ingress https://chinwag.local)"
-if grep -q "chinwag.local" /etc/hosts; then
-  sleep 5
-  for path in / /auth/health /rooms/health /chat/health; do
-    # -k: self-signed cert; -L: follow the http->https redirect if any
-    code="$(curl -skL -m 5 -o /dev/null -w '%{http_code}' "https://chinwag.local${path}" || true)"
-    echo "  GET ${path} -> ${code}"
-  done
-else
-  echo "  WARN: chinwag.local not in /etc/hosts — add:"
-  echo "        127.0.0.1 chinwag.local"
-fi
+echo "==> Health endpoints (via ingress https://chinwag.duckdns.org)"
+sleep 5
+for path in / /auth/health /rooms/health /chat/health; do
+  # -k: tolerate dev certs; -L: follow the http->https redirect if any
+  code="$(curl -skL -m 5 -o /dev/null -w '%{http_code}' "https://chinwag.duckdns.org${path}" || true)"
+  echo "  GET ${path} -> ${code}"
+done
 
 echo "Deployment complete."
