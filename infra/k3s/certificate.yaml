@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------------------
+# cert-manager Certificates.
+#
+#   chinwag-ca   -> self-signed local CA         (secret `chinwag-ca`)
+#   chinwag-tls  -> server cert for the ingress  (secret `chinwag-tls`)
+#
+# cert-manager renews `chinwag-tls` automatically before expiry
+# (renewBefore = 30 days) and rewrites the secret; Traefik picks it up.
+# ---------------------------------------------------------------------------
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: chinwag-ca
+  namespace: chinwag
+spec:
+  isCA: true
+  commonName: Chinwag Local CA
+  secretName: chinwag-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: chinwag-selfsigned
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: chinwag-tls
+  namespace: chinwag
+spec:
+  secretName: chinwag-tls
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # renew 30 days before expiry
+  dnsNames:
+    - chinwag.local
+    - localhost
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    name: chinwag-ca
+    kind: ClusterIssuer
