@@ -9,7 +9,22 @@ interface WsClientOptions {
   onStatusChange?: (status: WsStatus) => void
 }
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"
+/**
+ * Resolves the WebSocket base URL to the same backend address the API uses:
+ * the page's own origin (http→ws, https→wss). src/proxy.ts rewrites the
+ * /chat/rooms/:id/ws path to the gateway, so the browser talks to the same
+ * host for both REST and WebSocket. The SSR fallback is never actually used
+ * to open a socket.
+ */
+function resolveWsBase(): string {
+  if (typeof window === "undefined") {
+    return "ws://localhost:8000"
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+  return `${protocol}//${window.location.host}`
+}
+
+const WS_BASE = resolveWsBase()
 
 export class WsClient {
   private ws: WebSocket | null = null

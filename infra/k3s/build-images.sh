@@ -6,10 +6,8 @@
 #   ./build-images.sh            # build only
 #   ./build-images.sh --load     # build + import into local k3s (containerd)
 #
-# NEXT_PUBLIC_WS_URL is baked into the frontend bundle at build time. Set it to
-# the externally reachable WebSocket origin (the Ingress host):
-#   NEXT_PUBLIC_WS_URL=ws://192.168.1.50 ./build-images.sh
-# Defaults to ws://chinwag.local (matches infra/k3s/ingress.yaml).
+# The WebSocket base is derived at runtime from the browser origin
+# (src/services/websocket-client.ts), so no build-time WS arg is needed.
 # =============================================================================
 set -euo pipefail
 
@@ -18,7 +16,6 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 
-WS_URL="${NEXT_PUBLIC_WS_URL:-ws://chinwag.local}"
 LOAD="${1:-}"
 
 build_go() {
@@ -39,9 +36,8 @@ build_go chat-command services/chat/command
 build_go chat-query services/chat/query
 
 # --- Frontend -----------------------------------------------------------
-echo "==> Building chinwag/frontend:latest (NEXT_PUBLIC_WS_URL=${WS_URL})"
+echo "==> Building chinwag/frontend:latest"
 docker build \
-  --build-arg NEXT_PUBLIC_WS_URL="${WS_URL}" \
   -t "chinwag/frontend:latest" \
   -f "${FRONTEND_DIR}/Dockerfile" \
   "${FRONTEND_DIR}"
