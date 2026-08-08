@@ -1,16 +1,19 @@
+<p align="right"><b>🌐 Language:</b> <a href="README.md">English</a> · <a href="README.ko.md">한국어</a></p>
+
 <div align="center">
 
 # 💬 Chinwag
 
-**A real-time streaming chat service built with a small microservice architecture.**
+**A real-time streaming chat service · Go microservice architecture**
 
-Backend in **Go (Echo)** · Frontend in **Next.js (React 19)**
+🔗 **Live service: [https://chinwag.duckdns.org](https://chinwag.duckdns.org)**
 
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Echo](https://img.shields.io/badge/Echo-v5-00ADD8?logo=go&logoColor=white)](https://echo.labstack.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![NATS](https://img.shields.io/badge/NATS-JetStream-27AAE1?logo=natsdotio&logoColor=white)](https://nats.io/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![k3s](https://img.shields.io/badge/k3s-deployed-326CE5?logo=kubernetes&logoColor=white)](https://k3s.io/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 </div>
@@ -19,9 +22,11 @@ Backend in **Go (Echo)** · Frontend in **Next.js (React 19)**
 
 ## 📋 Table of Contents
 
-- Features
-- System Layout
-- Backend Architecture
+- Overview
+- MSA Architecture
+- Security: DPoP (RFC 9449)
+- CQRS (Command / Query Separation)
+- Reliability & Incident Response
 - Tech Stack
 - API Docs
 - Deployment (k3s)
@@ -30,122 +35,165 @@ Backend in **Go (Echo)** · Frontend in **Next.js (React 19)**
 
 ---
 
-## ✨ Features
+## 🚀 Overview
+
+A real-time chat service that applies DPoP (RFC 9449) authentication, CQRS, and microservice principles in production.
+
+**Core design principles**
 
 | | |
 |---|---|
-| ⚡ **Real-time chat** | WebSocket-based 1:N streaming of chat messages (create/update/delete, system messages) |
-| 🔐 **DPoP (RFC 9449) authentication** | Sender-constrained bearer tokens with nonce and replay protection, JWKS-based token verification |
-| 🧩 **CQRS** | Separate Command and Query services with eventual consistency via NATS JetStream + the outbox pattern |
-| 🏠 **Room management** | Room creation, member management, invite links |
-| 💥 **"Pop" rooms** | At a configured time (`pop_at`) a room "pops" and becomes read-only |
-| 👤 **User authentication** | Signup/login/logout, refresh-token rotation with lineage tracking, optional Google OAuth |
-| 🔑 **JWK key rotation** | Automatic signing-key rotation scheduler |
-| 🌐 **API gateway** | Path/method based reverse proxy |
+| 🔐 **DPoP (RFC 9449)** | Sender-constrained tokens with nonce/jti replay protection, JWKS-based verification |
+| 🧩 **CQRS** | Command/Query service separation, outbox pattern + NATS JetStream for eventual consistency |
+| 🏗️ **MSA** | Gateway-based service decomposition over shared infrastructure (Postgres/Redis/NATS) |
+| 🛡️ **Incident response** | Token-reuse detection & lineage revocation, outbox retry/backoff, single-use WS tickets, self-healing schedulers |
 
 ---
 
-## 🗺️ System Layout
+## 🗺️ MSA Architecture
 
 ```
-Frontend (Next.js)
-        │  HTTP / WebSocket
-        ▼
-API Gateway (Echo reverse proxy)
-        │
-        ├── /auth/*   ──▶ Auth Service
-        ├── /rooms/*  ──▶ Room Service
-        ├── /users/*  ──▶ Room Service
-        └── /chat/*   ──▶ Chat Command Service   [POST/PUT/DELETE + WS]
-                    └──▶ Chat Query  Service   [GET]
+Client (browser)
+    │  HTTP / WebSocket
+    ▼
+API Gateway (Echo reverse proxy)                            :8000
+    │
+    ├── /auth/*                 ──▶ Auth Service             :8081
+    ├── /rooms/*, /users/*      ──▶ Room Service             :8082
+    ├── /chat (POST/PUT/DELETE) ──▶ Chat Command             :8083
+    ├── /chat/rooms/:id/ws (GET)──▶ Chat Command (WebSocket) :8083
+    └── /chat (GET)             ──▶ Chat Query               :8084
 ```
 
-<div align="center">
-
-| Component | Path | Role |
+| Service | Path | Role |
 |:---|:---|:---|
-| 🌐 **API Gateway** | `backend/gateway` | Auth, CORS, routing reverse proxy |
-| 🔐 **Auth Service** | `backend/services/auth` | Users, JWT/DPoP, JWKS, OAuth, refresh tokens |
-| 🏠 **Room Service** | `backend/services/room` | Room/member/invite-link management |
+| 🌐 **API Gateway** | `backend/gateway` | Path/method-based routing, CORS, reverse proxy |
+| 🔐 **Auth Service** | `backend/services/auth` | Users, JWT/DPoP, JWKS, OAuth, refresh-token rotation |
+| 🏠 **Room Service** | `backend/services/room` | Room/member/invite-link management, pop scheduler |
 | ✍️ **Chat Command** | `backend/services/chat/command` | Message writes + WebSocket hub |
 | 📖 **Chat Query** | `backend/services/chat/query` | Message reads (CQRS projection) |
 | 🔗 **Shared Auth** | `backend/shared/auth` | Shared DPoP validator, JWT/JWKS middleware |
-| 💻 **Frontend** | `frontend` | Next.js web client |
 
-</div>
+### Shared Infrastructure
 
-### 🧱 Shared Infrastructure
+- 🐘 **PostgreSQL** — per-service schemas (`chinwag_auth`, `chinwag_room`, `chinwag_chat`, `chinwag_chat_projection`)
+- 🟥 **Redis** — refresh tokens, DPoP nonce/jti, WS tickets, caching (atomic ops via Lua scripts)
+- 📡 **NATS JetStream** — event stream (`CHAT_EVENTS`), outbox publishing & CQRS consumption
 
-- 🐘 **PostgreSQL** — per-service schemas (projections/messages/rooms, etc.)
-- 🟥 **Redis** — refresh tokens, DPoP nonce/jti, WS tickets, caching, distributed locks
-- 📡 **NATS JetStream** — event stream (`CHAT_EVENTS`), outbox publishing and CQRS consumption
+### Inter-service Communication
+
+- **Synchronous**: gateway → REST reverse proxy
+- **Asynchronous**: NATS JetStream events (`chat.room.>` / `chat.system`)
 
 ---
 
-## ⚙️ Backend Architecture
+## 🔐 Security: DPoP Authentication (RFC 9449)
 
-### 🔐 DPoP Authentication (RFC 9449)
+Every service uses the shared validator in `backend/shared/auth/dpop`. Key prefixes are shared so the nonce space stays consistent across services.
 
-The shared validator in `backend/shared/auth/dpop` is used by every service. Key prefixes are shared so the nonce space stays consistent across services.
+### Proof verification (sender-constrained)
 
-- Clients attach an ES256-signed DPoP proof to every request via the `DPoP` header
-- Authentication succeeds only if the proof's `jkt` (RFC 7638 thumbprint) matches the `cnf.jkt` claim of the access token
-- Redis Lua scripts atomically enforce nonce reuse protection (`dpop:nonce:*`) and jti replay protection (`dpop:jti:*`)
-- On a `use_dpop_nonce` challenge, the client reads the `DPoP-Nonce` response header and retries at most once
-- `htu` is reconstructed from the gateway-set `X-Forwarded-*` headers (`RequestHTU`)
+- Clients attach an **ES256-signed DPoP proof** to every request via the `DPoP` header (`typ=dpop+jwt`, P-256)
+- Authentication succeeds only if the proof key's **`jkt` (RFC 7638 thumbprint)** matches the access token's **`cnf.jkt`** — a stolen token cannot be replayed from another device
+- `htm`/`htu` binding: `htu` is reconstructed from the gateway-set `X-Forwarded-*` headers (`RequestHTU`)
 
-### 👤 Authentication (Auth Service)
+### Nonce & replay defense (atomic Redis Lua)
 
-- JWT generation/verification, JWK issuance (`/.well-known/jwks.json`), and a key-rotation scheduler that runs at midnight
-- Refresh-token rotation: a Redis Lua script consumes tokens and tracks a lineage ID to detect replay and theft — upon a detected reuse, the entire lineage is revoked
-- Optional Google OAuth login
+- **Single-use nonce** (`dpop:nonce:*`) — a fresh nonce is issued via the `DPoP-Nonce` response header; reuse triggers a `use_dpop_nonce` challenge
+- **jti replay prevention** (`dpop:jti:*`) — a proof's `jti` is allowed only once within its TTL (default 2 min); reuse returns `invalid_dpop_proof`
+- The client retries at most once on a nonce challenge
 
-### 🧩 Chat CQRS
+### JWK & key rotation
 
-- **Command** — On write, the transaction persists the message to the DB and inserts an outbox event (`message_created`/`updated`/`deleted`). The outbox publisher publishes to NATS (`chat.room.*`), and the WebSocket hub broadcasts in real time
-- **Query** — The NATS consumer (`chat-projection`) builds the projection table and reads with Redis caching (`chat:*`), using cursor-based pagination
-- **WebSocket** — To avoid leaking the access token in the URL, a **single-use WS ticket** is issued with DPoP auth (`/ws-ticket`) and consumed atomically at the upgrade. Heartbeats (ping/pong) and exponential reconnection are supported
+- Public keys are published at `/.well-known/jwks.json`
+- A **midnight-based automatic key-rotation scheduler** swaps signing keys
 
-### 🏠 Room
+---
 
-- Room/member management, token-based invite links, and a `pop_at` scheduler that turns a room read-only
+## 🧩 CQRS (Command / Query Separation)
+
+### Flow
+
+```
+[WRITE PATH]                                       [READ PATH]
+Chat Command ──single tx──▶ DB(chat) + outbox_events
+      │
+      │ outbox publisher (100ms poll · batch 50)
+      │ exponential backoff retry on failure (max 30s)
+      ▼
+NATS JetStream (CHAT_EVENTS) ──▶ consumer (chat-projection) ──▶ projection table
+      │                                                            │
+      └─▶ WebSocket hub (1:N broadcast)                            ▼
+                                                       Redis cache + cursor pagination
+```
+
+### Command (writes)
+
+- Message persistence and outbox event insertion (`message_created`/`updated`/`deleted`) happen in **a single DB transaction**, so a committed event is always present in the publish queue
+- The outbox publisher polls pending events and publishes to NATS, then `MarkPublished`
+
+### Query (reads)
+
+- The NATS consumer (`chat-projection`, AckExplicit) builds the projection table
+- Reads are optimized with Redis caching (`chat:*`) and cursor-based pagination
+
+### WebSocket
+
+- To avoid leaking the access token in the URL, a **single-use WS ticket** (TTL 30s) is issued via DPoP auth (`/ws-ticket`) and consumed atomically at upgrade
+- Heartbeats (ping/pong) and exponential-backoff reconnection
+
+---
+
+## 🛡️ Reliability & Incident Response
+
+### 1. Token theft / reuse response (Auth)
+
+- Refresh tokens are **single-use** — rotated on every refresh
+- Atomic consumption via **Redis Lua** + `lineage ID` tracking (`rt:lineage:*`)
+- On **reuse detection, the entire lineage is revoked** (`RevokeLineage`) — a stolen token is neutralized immediately
+
+### 2. Request replay prevention (DPoP)
+
+- Both single-use nonces and jti duplicate checks run as **atomic Redis Lua operations** — replayed requests are rejected at the source
+
+### 3. No access token in URLs
+
+- WebSocket upgrades use only a **30s-TTL, single-use ticket**; re-issuance is required once it is consumed or expired
+
+### 4. Event loss prevention (Outbox + JetStream)
+
+- **Transactional outbox**: DB commit and event recording are atomic — events cannot be lost before publishing
+- On publish failure: **exponential backoff retries** (max 30s) with retry count persisted in the DB
+- JetStream **FileStorage** persistence survives service restarts (at-least-once)
+
+### 5. Self-healing schedulers
+
+- **JWK key rotation** (auth, midnight) — periodic signing-key swap
+- **pop scheduler** (room, 1-min interval) — flips a room to read-only when `pop_at` is reached
+
+### 6. Deployment stability (k3s)
+
+- `update.sh`: rebuild images → import into k3s → apply → **rollout restart** → digest verification
+- Per-service health checks + rollout waits for zero-downtime deploys
 
 ---
 
 ## 🛠️ Tech Stack
 
-<table>
-<tr>
-<td valign="top" width="50%">
+**Backend (core)**
 
-**Backend**
-- Go 1.26+
-- Echo v5
-- golang-jwt
-- lestrrat-go/jwx
+- Go 1.26+ / Echo v5
+- golang-jwt · lestrrat-go/jwx (JWK/DPoP)
 - gorilla/websocket
 - NATS JetStream
-- go-redis
-- godotenv
+- go-redis (Lua scripts)
+- PostgreSQL (sqlx)
 - Swagger (per-service `/docs`)
 
-</td>
-<td valign="top" width="50%">
+**Frontend (minimal)**
 
-**Frontend**
-- Next.js 16
-- React 19
-- TypeScript
-- Tailwind CSS v4
-- TanStack Query
-- react-hook-form
-- zod
-- shadcn/ui-style components
-- Vitest
-
-</td>
-</tr>
-</table>
+- Next.js 16 · React 19 · TypeScript
+- WebSocket client
 
 ---
 
@@ -154,72 +202,47 @@ The shared validator in `backend/shared/auth/dpop` is used by every service. Key
 Each service exposes a **Swagger UI** at `/docs`, reachable through the gateway's `/auth`, `/rooms`, and `/chat` paths.
 
 ---
-� Deployment (k3s)
 
-The project ships with a pure-manifest Kubernetes deployment for **k3s** (no Helm required).
-All deployment artifacts live in [`infra/k3s`](infra/k3s), with a Dockerfile per component:
+## ☸️ Deployment (k3s)
+
+Live service: **https://chinwag.duckdns.org**
+
+A pure-manifest Kubernetes deployment for **k3s** (no Helm required). All deployment artifacts live in [`infra/k3s`](infra/k3s).
 
 | Artifact | Purpose |
-|---|---|
+|:---|:---|
 | [`backend/Dockerfile`](backend/Dockerfile) | Parameterized multi-stage builder for every Go service (`--build-arg SERVICE=...`) |
-| [`frontend/Dockerfile`](frontend/Dockerfile) | Next.js standalone image (requires `output: "standalone"` in `next.config.ts`) |
 | [`infra/k3s/*.yaml`](infra/k3s) | Namespace, ConfigMap, Secret, Postgres/Redis/NATS, all service Deployments + Services, Traefik Ingress |
-| [`infra/k3s/build-images.sh`](infra/k3s/build-images.sh) | Builds all images and optionally imports them into local k3s |
-| [`infra/k3s/deploy.sh`](infra/k3s/deploy.sh) | One-click deploy: build, import into k3s, apply manifests, wait for rollouts, verify health |
-| [`infra/k3s/tls.sh`](infra/k3s/tls.sh) | Generates a self-signed HTTPS cert and the `chinwag-tls` secret for the ingress |
-
-Quick start (see [`infra/k3s/README.md`](infra/k3s/README.md) for details):
-
-```bash
-# 1. Map the ingress host to your k3s node IP (one-time)
-echo "<k3s-node-ip> chinwag.local" | sudo tee -a /etc/hosts
-
-# 2. One-click deploy: build images, import into k3s, apply manifests,
-#    generate the HTTPS cert (tls.sh), wait for rollouts, verify health.
-cd infra/k3s
-./deploy.sh
-
-# 3. Verify
-curl -sk https://chinwag.local/health
-```
+| [`infra/k3s/build-images.sh`](infra/k3s/build-images.sh) | Builds images and optionally imports them into local k3s |
+| [`infra/k3s/deploy.sh`](infra/k3s/deploy.sh) | One-click deploy (build → import → apply → rollout wait → health verify) |
+| [`infra/k3s/update.sh`](infra/k3s/update.sh) | Redeploy (rebuild → import → apply → rollout restart → digest verify) |
 
 Key deployment facts:
 
-- **PostgreSQL** runs as a single StatefulSet holding all four service schemas
-  (`chinwag_auth`, `chinwag_room`, `chinwag_chat`, `chinwag_chat_projection`).
-- **Redis** (AOF) and **NATS JetStream** are deployed alongside; the `CHAT_EVENTS`
-  stream is created automatically by the chat-command service.
-- A single **Traefik Ingress** routes `/auth`, `/rooms`, `/users`, `/chat` to the
-  gateway (including WebSocket upgrade) and `/` to the frontend.
-- Secrets (DB/Redis passwords, optional Google OAuth) live in `infra/k3s/secret.yaml`;
-  rotate them before any non-local deployment.
+- A single **PostgreSQL** StatefulSet serves all four service schemas (`chinwag_auth`, `chinwag_room`, `chinwag_chat`, `chinwag_chat_projection`)
+- **Redis** (AOF) and **NATS JetStream** are deployed alongside; the `CHAT_EVENTS` stream is created automatically by the chat-command service
+- A single **Traefik Ingress** routes `/auth`, `/rooms`, `/users`, `/chat` to the gateway (including WebSocket upgrade) and `/` to the frontend
+- **HTTPS**: Let's Encrypt certificates are issued via the duckdns **DNS-01 webhook** (for environments where HTTP-01 is not possible)
+- Secrets (DB/Redis passwords, optional Google OAuth) live in `infra/k3s/secret.yaml`; rotate them before any non-local deployment
 
 ---
 
-## �
 ## 📁 Directory Structure
 
 ```
 backend/
 ├── gateway/                 # API gateway (reverse proxy)
 ├── go.work                  # Go workspace
-├── shared/auth/             # Shared auth: DPoP, JWT/JWKS middleware
+├── shared/auth/             # Shared auth: DPoP validator, JWT/JWKS middleware
 └── services/
-    ├── auth/                # User authentication service
-    ├── room/                # Room/member/invite service
+    ├── auth/                # User auth (JWT/DPoP/JWKS/OAuth/refresh rotation)
+    ├── room/                # Rooms/members/invites, pop scheduler
     └── chat/
-        ├── command/         # Message writes + WS hub (CQRS command)
-        └── query/           # Message reads + projections (CQRS query)
+        ├── command/         # Message writes + WebSocket hub (CQRS command)
+        └── query/           # Message reads + projection (CQRS query)
 
-frontend/
-├── src/
-│   ├── app/                 # Next.js App Router pages
-│   ├── components/          # Shared UI components
-│   ├── features/            # Domain features (auth/room/chat)
-│   ├── lib/                 # API client, DPoP helpers
-│   ├── services/            # WebSocket client
-│   └── types/               # Shared types
-└── package.json
+frontend/                    # Next.js web client (minimal)
+infra/k3s/                   # k3s deployment manifests + scripts
 ```
 
 ---
