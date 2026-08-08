@@ -43,7 +43,11 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	if err != nil {
 		return respondDPoPError(c, nonce, err)
 	}
-	defer setDPoPNonce(c, nonce)
+	// Issue the fresh nonce BEFORE writing the response: headers set after
+	// c.JSON has committed the response are silently dropped, so the client
+	// would keep re-using the just-consumed nonce ("invalid or expired DPoP
+	// nonce" on the next call).
+	setDPoPNonce(c, nonce)
 
 	jkt, err := proof.Thumbprint()
 	if err != nil {
@@ -105,7 +109,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	c.SetCookie(&http.Cookie{
 		Name:     "refresh",
 		Value:    refreshToken,
-		Path:     "/auth",
+		Path:     "/api/auth",
 		Secure:   false,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
