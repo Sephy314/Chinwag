@@ -173,7 +173,7 @@ func (h *GoogleOAuthHandler) HandleCallback(c *echo.Context) error {
 	c.SetCookie(&http.Cookie{
 		Name:     "refresh",
 		Value:    tokens.RefreshToken,
-		Path:     "/auth",
+		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,

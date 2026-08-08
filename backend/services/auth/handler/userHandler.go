@@ -143,7 +143,7 @@ func (h *UserHandler) Login(c *echo.Context) error {
 	c.SetCookie(&http.Cookie{
 		Name:     "refresh",
 		Value:    tokens.RefreshToken,
-		Path:     "/auth",
+		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
@@ -160,7 +160,7 @@ func (h *UserHandler) Logout(c *echo.Context) error {
 	c.SetCookie(&http.Cookie{
 		Name:     "refresh",
 		Value:    "",
-		Path:     "/auth",
+		Path:     "/api/auth",
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteLaxMode,

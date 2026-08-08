@@ -105,7 +105,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	c.SetCookie(&http.Cookie{
 		Name:     "refresh",
 		Value:    refreshToken,
-		Path:     "/auth",
+		Path:     "/api/auth",
 		Secure:   false,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
