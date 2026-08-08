@@ -91,8 +91,8 @@ IP; :80/:443 port-forwarded to the k3s node). No `/etc/hosts` entry is required.
 
 - Web UI: https://chinwag.duckdns.org
 - Gateway health: https://chinwag.duckdns.org/health (or internally `gateway:8000/health`)
-- Swagger UI: `https://chinwag.duckdns.org/auth/docs`, `https://chinwag.duckdns.org/rooms/docs`,
-  `https://chinwag.duckdns.org/chat/docs`
+- Swagger UI: `https://chinwag.duckdns.org/api/auth/docs`, `https://chinwag.duckdns.org/api/rooms/docs`,
+  `https://chinwag.duckdns.org/api/chat/docs`
 
 > The Ingress matches any host, so LAN access also works. If your router doesn't do hairpin NAT,
 > map the domain to the node's LAN IP in `/etc/hosts` on LAN clients (the Let's Encrypt cert still
@@ -160,9 +160,9 @@ kubectl -n chinwag logs -l app=auth
 
 # Check each service health via the gateway
 curl -sk https://chinwag.duckdns.org/health                # gateway
-curl -sk https://chinwag.duckdns.org/auth/health           # auth
-curl -sk https://chinwag.duckdns.org/rooms/health          # room
-curl -sk https://chinwag.duckdns.org/chat/health           # chat-command / chat-query
+curl -sk https://chinwag.duckdns.org/api/auth/health           # auth
+curl -sk https://chinwag.duckdns.org/api/rooms/health          # room
+curl -sk https://chinwag.duckdns.org/api/chat/health           # chat-command / chat-query
 
 # Verify internal DNS/SVC (from inside a pod)
 kubectl -n chinwag exec deploy/gateway -- wget -qO- http://auth:8081/health

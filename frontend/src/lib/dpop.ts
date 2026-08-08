@@ -113,7 +113,12 @@ function normalizeHtu(url: string): string {
   const base = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
   try {
     const u = new URL(url, base)
-    return `${u.origin}${u.pathname}`
+    let path = u.pathname
+    // The /api prefix is a reverse-proxy routing veneer (stripped by the
+    // ingress/gateway before the backend), so the DPoP htu must match what the
+    // backend sees — i.e. without the /api prefix.
+    if (path.startsWith("/api")) path = path.slice(4) || "/"
+    return `${u.origin}${path}`
   } catch {
     return url
   }

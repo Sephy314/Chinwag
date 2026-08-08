@@ -12,14 +12,13 @@ export function proxy(request: NextRequest) {
   const url = request.nextUrl.clone()
   url.protocol = gateway.protocol
   url.host = gateway.host
+  // Strip the /api routing prefix — the gateway/backends don't see it.
+  if (url.pathname.startsWith("/api")) {
+    url.pathname = url.pathname.slice(4) || "/"
+  }
   return NextResponse.rewrite(url)
 }
 
 export const config = {
-  matcher: [
-    "/auth/:path*",
-    "/chat/rooms/:path*",
-    "/rooms/:path*",
-    "/users/:path*",
-  ],
+  matcher: ["/api/:path*"],
 }

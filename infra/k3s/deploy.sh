@@ -113,7 +113,7 @@ ${KUBECTL} -n chinwag get pods
 
 echo "==> Health endpoints (via ingress https://chinwag.duckdns.org)"
 sleep 5
-for path in / /auth/health /rooms/health /chat/health; do
+for path in / /api/auth/health /api/rooms/health /api/chat/health; do
   # -k: tolerate dev certs; -L: follow the http->https redirect if any
   code="$(curl -skL -m 5 -o /dev/null -w '%{http_code}' "https://chinwag.duckdns.org${path}" || true)"
   echo "  GET ${path} -> ${code}"

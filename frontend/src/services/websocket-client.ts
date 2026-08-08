@@ -100,7 +100,7 @@ export class WsClient {
         return
       }
 
-      const url = `${WS_BASE}/chat/rooms/${this.roomId}/ws?ticket=${encodeURIComponent(ticket)}`
+      const url = `${WS_BASE}/api/chat/rooms/${this.roomId}/ws?ticket=${encodeURIComponent(ticket)}`
       this.ws = new WebSocket(url)
       this.connectInFlight = false
 

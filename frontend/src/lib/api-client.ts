@@ -1,7 +1,7 @@
 import type { ApiResponse } from "@/types"
 import { createDPoPProof } from "./dpop"
 
-const API_BASE = ""
+const API_BASE = "/api"
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null

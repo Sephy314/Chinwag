@@ -20,6 +20,7 @@ resources:
   - frontend.yaml
   - middleware.yaml
   - ingress.yaml
+  - ingress-api.yaml
   - ingress-redirect.yaml
   - clusterissuer.yaml
   - certificate.yaml
