@@ -1,0 +1,50 @@
+name: CD
+
+# Deploys the latest `main` to the home k3s server using a SELF-HOSTED runner
+# installed on the k3s node. The runner runs infra/k3s/update.sh natively
+# (rebuild images -> import into k3s -> apply -> rollout restart -> verify),
+# so docker/k3s/kubectl are all available locally — no inbound SSH, no keys,
+# no repo secrets.
+#
+# The runner operates on a persistent checkout at /home/sephy/Chinwag, which
+# must contain the gitignored infra/k3s/secret.yaml (created once from
+# secret.yaml.example). See .github/workflows/README.md for runner
+# registration and one-time node setup.
+#
+# Recommended: enable branch protection on `main` requiring the CI workflow
+# to pass, so CD only ever ships tested code.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Only one deploy at a time; a queued run waits (don't cancel a live rollout).
+concurrency:
+  group: cd-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to home server (k3s)
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Sync repo checkout to origin/main
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="/home/sephy/Chinwag"
+          cd "${DEPLOY_DIR}"
+          echo "==> Syncing ${DEPLOY_DIR} to origin/main"
+          git fetch origin main
+          git checkout -f main
+          git reset --hard origin/main
+          git status --short
+
+      - name: Run infra/k3s/update.sh
+        run: |
+          set -euo pipefail
+          cd "/home/sephy/Chinwag/infra/k3s"
+          ./update.sh

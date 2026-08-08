@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.work
+          cache: true
+
+      # Runs `go test` for every module in the Go workspace that has tests.
+      # (The only live-DB test, projectionRepo_test.go, self-skips when no DB.)
+      - name: Run tests (make test)
+        run: make test
+
+      - name: Run go vet (make vet)
+        run: make vet
+
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests (vitest)
+        run: npm test
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Build (next build)
+        run: npm run build
