@@ -127,7 +127,10 @@ func (h *UserHandler) Login(c *echo.Context) error {
 	if err != nil {
 		return respondDPoPError(c, nonce, err)
 	}
-	defer setDPoPNonce(c, nonce)
+	// Issue the fresh nonce BEFORE writing the response: headers set after
+	// c.JSON has committed the response are silently dropped, so the client
+	// would keep re-using the just-consumed nonce on the next call.
+	setDPoPNonce(c, nonce)
 
 	jkt, err := proof.Thumbprint()
 	if err != nil {
