@@ -39,6 +39,13 @@ func newReverseProxy(targetURL string, stripPrefix bool, prefix string) *httputi
 			if req.URL.Path == "" {
 				req.URL.Path = "/"
 			}
+		} else {
+			// The ingress stripPrefix middleware set X-Forwarded-Prefix=/api.
+			// For routes we don't strip, that prefix would leak into the
+			// backend's DPoP htu reconstruction (RequestHTU) and make it
+			// disagree with the htu the frontend signs (which strips /api).
+			// Drop it so the backend reconstructs the plain path.
+			req.Header.Del("X-Forwarded-Prefix")
 		}
 	}
 
