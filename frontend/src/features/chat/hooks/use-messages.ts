@@ -37,6 +37,10 @@ export function useMessages(roomId: string) {
   const queryClient = useQueryClient()
   const wsRef = useRef<WsClient | null>(null)
   const lastMessageCursorRef = useRef<Cursor | null>(null)
+  // Latest messages query data, read via a ref so the WsClient effect does not
+  // re-run (and tear down/re-create the socket) every time the message list
+  // changes (optimistic update, refetch, or a WS event).
+  const messagesDataRef = useRef<InfiniteData<MessagePage, unknown> | undefined>(undefined)
   const [wsConnected, setWsConnected] = useState(false)
 
   const queryKey = useMemo(() => ["messages", roomId] as const, [roomId])
@@ -54,6 +58,11 @@ export function useMessages(roomId: string) {
     initialPageParam: undefined as string | undefined,
     enabled: !!roomId && !readOnly,
   })
+
+  // Keep the ref in sync without re-creating the WebSocket client below.
+  useEffect(() => {
+    messagesDataRef.current = messagesQuery.data
+  }, [messagesQuery.data])
 
   const handleWsMessage = useCallback(
     (event: ServerEvent) => {
@@ -133,7 +142,7 @@ export function useMessages(roomId: string) {
         if (status === "connected") {
           toast.dismiss("ws-reconnect")
           // Refetch messages after the last known message to fill any reconnection gap
-          if (lastMessageCursorRef.current && messagesQuery.data?.pages[0]?.data.length) {
+          if (lastMessageCursorRef.current && messagesDataRef.current?.pages[0]?.data.length) {
             try {
               const lastMsg = lastMessageCursorRef.current
               const afterCursor = btoa(JSON.stringify({ created_at: lastMsg.created_at, id: lastMsg.id }))
@@ -141,7 +150,7 @@ export function useMessages(roomId: string) {
 
               if (resyncedMessages.data && resyncedMessages.data.length > 0) {
                 // Merge resynced messages with existing data, deduplicating by id
-queryClient.setQueryData<MessageQueryData>(queryKey, (old): MessageQueryData | undefined => {
+                queryClient.setQueryData<MessageQueryData>(queryKey, (old): MessageQueryData | undefined => {
                   if (!old || old.pages.length === 0 || !Array.isArray(old.pages[0]?.data)) return old
                   const pages = [...old.pages]
                   const existingIds = new Set(pages[0].data.map((m) => m.id))
@@ -168,7 +177,7 @@ queryClient.setQueryData<MessageQueryData>(queryKey, (old): MessageQueryData | u
       wsRef.current?.disconnect()
       wsRef.current = null
     }
-  }, [roomId, user?.id, readOnly, handleWsMessage, messagesQuery.data, queryClient, queryKey])
+  }, [roomId, user?.id, readOnly, handleWsMessage, queryClient, queryKey])
 
   // Track the newest message's cursor for reconnect gap fill
   const allMessages = useMemo(
