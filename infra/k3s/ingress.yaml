@@ -1,11 +1,14 @@
 # ---------------------------------------------------------------------------
-# Single Traefik Ingress (k3s default ingress controller), TLS on :443.
+# Traefik Ingress (k3s default ingress controller), TLS on :443 — FRONTEND
+# pages only.
 #
-# Path routing mirrors the "edge" role that nginx played in the Docker Compose
-# design and the gateway's own route table:
-#   /auth, /rooms, /users, /chat  → gateway (includes WebSocket upgrade for
-#                                   /chat/rooms/:id/ws)
-#   /                            → frontend
+# API/WebSocket traffic goes through the separate `chinwag-api` ingress under
+# the `/api` prefix (see ingress-api.yaml), which strips `/api` and forwards
+# to the gateway. Keeping the page paths (/chat/<roomId>, /settings, ...) on
+# this ingress to the frontend avoids the /chat prefix clash with the gateway.
+#
+#   /chat, /  → frontend
+#   /api      → gateway (ingress-api.yaml, prefix stripped)
 #
 # HTTPS uses the browser-trusted `chinwag-tls` certificate (issued by the
 # `letsencrypt` ClusterIssuer for chinwag.duckdns.org, see clusterissuer.yaml /
@@ -13,8 +16,7 @@
 # (redirect to https) — see middleware.yaml.
 #
 # No `host` in rules: the ingress matches any host, so it also answers for the
-# node IP / LAN without an /etc/hosts entry. TLS below terminates
-# chinwag.duckdns.org via the chinwag-tls secret.
+# node IP / LAN without an /etc/hosts entry.
 # ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -33,34 +35,13 @@ spec:
   rules:
     - http:
         paths:
-          - path: /auth
-            pathType: Prefix
-            backend:
-              service:
-                name: gateway
-                port:
-                  number: 8000
-          - path: /rooms
-            pathType: Prefix
-            backend:
-              service:
-                name: gateway
-                port:
-                  number: 8000
-          - path: /users
-            pathType: Prefix
-            backend:
-              service:
-                name: gateway
-                port:
-                  number: 8000
           - path: /chat
             pathType: Prefix
             backend:
               service:
-                name: gateway
+                name: frontend
                 port:
-                  number: 8000
+                  number: 3000
           - path: /
             pathType: Prefix
             backend:

@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------------------
+# API/WebSocket ingress — everything under the `/api` prefix goes to the
+# gateway, with the `/api` prefix stripped (middleware `strip-api-prefix`).
+#
+# This keeps the gateway/backends on their plain paths (/auth, /rooms, /users,
+# /chat) and, because the frontend computes the DPoP htu without /api, the htu
+# matches what the backend sees.
+#
+#   /api/auth/...            → gateway → auth
+#   /api/rooms/..., /api/users/... → gateway → room
+#   /api/chat/...            → gateway → chat (incl. /api/chat/rooms/:id/ws
+#                                                WebSocket upgrade)
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chinwag-api
+  namespace: chinwag
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.middlewares: chinwag-strip-api-prefix@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - chinwag.duckdns.org
+      secretName: chinwag-tls
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8000

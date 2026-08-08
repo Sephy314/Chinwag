@@ -14,3 +14,17 @@ spec:
   redirectScheme:
     scheme: https
     permanent: true
+---
+# Strips the `/api` routing prefix before forwarding to the gateway, so the
+# gateway/backends keep their plain `/auth`, `/rooms`, `/users`, `/chat`
+# paths (and DPoP htu matches what the backend sees). Referenced by
+# ingress-api.yaml.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-api-prefix
+  namespace: chinwag
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
