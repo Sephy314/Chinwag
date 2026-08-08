@@ -141,7 +141,9 @@ ${KUBECTL} -n chinwag get pods
 if [[ "${APPLY_ONLY}" -eq 0 ]]; then
   echo "==> Verifying running image digests match the imported ones"
   for img in "${IMAGES[@]}"; do
-    imported="$(sudo ctr -n k8s.io images ls 2>/dev/null | awk -v t="chinwag/${img}:latest" '$1==t || $1=="docker.io/chinwag/'"${img}"':latest" {print $3; exit}')"
+    # k3s ctr (not plain ctr) so we read the k3s containerd, matching the
+    # import step. REF may be bare or docker.io/-prefixed, so grep for the tag.
+    imported="$(sudo k3s ctr -n k8s.io images ls 2>/dev/null | grep -E "chinwag/${img}:latest" | grep -oE 'sha256:[a-f0-9]{64}' | head -1)"
     running="$(${KUBECTL} -n chinwag get pod -l "app=${img}" -o jsonpath='{.items[0].status.containerStatuses[0].imageID}' 2>/dev/null | sed 's|containerd://||')"
     if [[ -n "${imported}" && "${running}" == "${imported}" ]]; then
       echo "  ✔ ${img}: ${running}"
@@ -155,7 +157,7 @@ fi
 if [[ "${FRONTEND}" -eq 1 ]]; then
   echo "==> Frontend bundle sanity check (expect /api/chat/rooms WS path)"
   ${KUBECTL} -n chinwag exec "deploy/frontend" -- sh -c \
-    "grep -rl 'api/chat/rooms' .next/static .next/server 2>/dev/null | head -1 || echo NO_MATCH (check branch/build)" \
+    "grep -rl 'api/chat/rooms' .next 2>/dev/null | head -1 || echo 'NO_MATCH (check branch/build)'" \
     || true
 fi
 
