@@ -46,7 +46,7 @@ export default function InvitePage() {
         }
       },
     })
-  }, [authLoading, isAuthenticated, readOnly, params.token])
+  }, [authLoading, isAuthenticated, readOnly, params.token, joinInvite, router])
 
   if (authLoading) {
     return (

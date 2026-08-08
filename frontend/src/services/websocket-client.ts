@@ -1,5 +1,5 @@
 import { apiPost } from "@/lib/api-client"
-import type { ApiResponse, ServerEvent, WsMessageHandler } from "@/types"
+import type { ServerEvent, WsMessageHandler } from "@/types"
 
 type WsStatus = "disconnected" | "connecting" | "connected"
 

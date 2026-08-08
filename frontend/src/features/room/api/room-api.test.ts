@@ -33,7 +33,7 @@ describe("room-api", () => {
   describe("fetchRooms", () => {
     it("should call apiGet with correct path", async () => {
       const response = { success: true, data: [], message: "ok", code: "OK" }
-      mock.apiGet.mockResolvedValue(response as any)
+      mock.apiGet.mockResolvedValue(response)
 
       const result = await fetchRooms("user-1")
 
@@ -45,7 +45,7 @@ describe("room-api", () => {
   describe("fetchRoom", () => {
     it("should call apiGet with room id", async () => {
       const room = { id: "room-1", name: "Test Room" }
-      mock.apiGet.mockResolvedValue({ success: true, data: room, message: "ok", code: "OK" } as any)
+      mock.apiGet.mockResolvedValue({ success: true, data: room, message: "ok", code: "OK" })
 
       const result = await fetchRoom("room-1")
 
@@ -58,7 +58,7 @@ describe("room-api", () => {
     it("should call apiPost with room data", async () => {
       const data = { name: "New Room", description: "A room" }
       const room = { id: "room-2", ...data }
-      mock.apiPost.mockResolvedValue({ success: true, data: room, message: "ok", code: "OK" } as any)
+      mock.apiPost.mockResolvedValue({ success: true, data: room, message: "ok", code: "OK" })
 
       const result = await createRoom(data)
 
@@ -70,7 +70,7 @@ describe("room-api", () => {
   describe("updateRoom", () => {
     it("should call apiPut with id and data", async () => {
       const data = { name: "Updated" }
-      mock.apiPut.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiPut.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await updateRoom("room-1", data)
 
@@ -80,7 +80,7 @@ describe("room-api", () => {
 
   describe("deleteRoom", () => {
     it("should call apiDelete with room id", async () => {
-      mock.apiDelete.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiDelete.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await deleteRoom("room-1")
 
@@ -94,7 +94,7 @@ describe("room-api", () => {
         { user_id: "u1", user_name: "Alice", role: 0 },
         { user_id: "u2", user_name: "Bob", role: 1 },
       ]
-      mock.apiGet.mockResolvedValue({ success: true, data: members, message: "ok", code: "OK" } as any)
+      mock.apiGet.mockResolvedValue({ success: true, data: members, message: "ok", code: "OK" })
 
       const result = await fetchRoomMembers("room-1")
 
@@ -106,7 +106,7 @@ describe("room-api", () => {
   describe("fetchRoomMember", () => {
     it("should call apiGet with member path", async () => {
       const member = { user_id: "u1", user_name: "Alice", role: 0 }
-      mock.apiGet.mockResolvedValue({ success: true, data: member, message: "ok", code: "OK" } as any)
+      mock.apiGet.mockResolvedValue({ success: true, data: member, message: "ok", code: "OK" })
 
       const result = await fetchRoomMember("room-1", "u1")
 
@@ -117,7 +117,7 @@ describe("room-api", () => {
 
   describe("addRoomMember", () => {
     it("should call apiPost with member data", async () => {
-      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await addRoomMember("room-1", "u1", 0)
 
@@ -128,7 +128,7 @@ describe("room-api", () => {
     })
 
     it("should handle missing role", async () => {
-      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await addRoomMember("room-1", "u1")
 
@@ -141,7 +141,7 @@ describe("room-api", () => {
 
   describe("removeRoomMember", () => {
     it("should call apiDelete with member path", async () => {
-      mock.apiDelete.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiDelete.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await removeRoomMember("room-1", "u1")
 
@@ -151,7 +151,7 @@ describe("room-api", () => {
 
   describe("updateRoomMember", () => {
     it("should call apiPut with member path and role data", async () => {
-      mock.apiPut.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiPut.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await updateRoomMember("room-1", "u1", { role: 1 })
 
@@ -163,7 +163,7 @@ describe("room-api", () => {
     it("should call apiPost with invite data", async () => {
       const data = { single_use: true, ttl_hours: 24 }
       const link = { token: "tok", room_id: "room-1", expires_at: "2026-01-01" }
-      mock.apiPost.mockResolvedValue({ success: true, data: link, message: "ok", code: "OK" } as any)
+      mock.apiPost.mockResolvedValue({ success: true, data: link, message: "ok", code: "OK" })
 
       const result = await createInviteLink("room-1", data)
 
@@ -172,7 +172,7 @@ describe("room-api", () => {
     })
 
     it("should default to empty object when no data", async () => {
-      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await createInviteLink("room-1")
 
@@ -187,7 +187,7 @@ describe("room-api", () => {
         data: { room_id: "room-1" },
         message: "ok",
         code: "OK",
-      } as any)
+      })
 
       const result = await joinRoomViaInvite("token-abc")
 
@@ -198,7 +198,7 @@ describe("room-api", () => {
 
   describe("popRoom", () => {
     it("should call apiPost with pop path", async () => {
-      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" } as any)
+      mock.apiPost.mockResolvedValue({ success: true, data: null, message: "ok", code: "OK" })
 
       await popRoom("room-1")
 

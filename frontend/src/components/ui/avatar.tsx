@@ -16,7 +16,7 @@ Avatar.displayName = "Avatar"
 
 const AvatarImage = forwardRef<HTMLImageElement, HTMLAttributes<HTMLImageElement>>(
   ({ className, ...props }, ref) => (
-    <img ref={ref} className={cn("aspect-square h-full w-full object-cover", className)} {...props} />
+    <img ref={ref} alt="" className={cn("aspect-square h-full w-full object-cover", className)} {...props} />
   ),
 )
 AvatarImage.displayName = "AvatarImage"

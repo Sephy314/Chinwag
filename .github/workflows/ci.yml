@@ -20,13 +20,16 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.work
           cache: true
+          cache-dependency-path: |
+            backend/go.work.sum
+            backend/**/go.sum
 
       # Runs `go test` for every module in the Go workspace that has tests.
       # (The only live-DB test, projectionRepo_test.go, self-skips when no DB.)
@@ -43,10 +46,10 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm

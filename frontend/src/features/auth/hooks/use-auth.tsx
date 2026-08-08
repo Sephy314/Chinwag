@@ -11,7 +11,7 @@ import {
 import { useRouter } from "next/navigation"
 import { apiPost, apiGet, apiRequest, setAccessToken, ApiError } from "@/lib/api-client"
 import { API_PATHS } from "@/lib/api-paths"
-import type { ApiResponse, User, LoginRequest, RegisterRequest } from "@/types"
+import type { User, LoginRequest, RegisterRequest } from "@/types"
 
 const USER_CACHE_KEY = "chinwag.cached_user"
 
@@ -94,6 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    // restoreSession() is async: its setState calls run after the first await,
+    // so this is not a synchronous setState-in-effect (rule false positive).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     restoreSession()
   }, [restoreSession])
 

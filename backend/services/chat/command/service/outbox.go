@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"log/slog"
-	"math"
 	"sync"
 	"time"
 
@@ -45,7 +44,17 @@ func NewOutboxPublisher(outboxRepo OutboxRepoInterface, nats RawNatsPublisher, l
 }
 
 func (p *OutboxPublisher) backoffDuration(retryCount int) time.Duration {
-	d := time.Duration(float64(p.interval) * math.Pow(2, float64(retryCount)))
+	// Exponential backoff with an overflow-safe cap. Doubling in a loop keeps
+	// the value within int64 range and stops early once maxBackoff is reached.
+	// (The previous float math.Pow form overflowed int64 for large retry counts
+	// and yielded a negative duration on amd64, causing immediate retries.)
+	d := p.interval
+	for i := 0; i < retryCount; i++ {
+		if d >= maxBackoff/2 {
+			return maxBackoff
+		}
+		d *= 2
+	}
 	if d > maxBackoff {
 		return maxBackoff
 	}

@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { User, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useAuth } from "@/features/auth/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { setAccessToken } from "@/lib/api-client"
 import { useAuth } from "@/features/auth/hooks/use-auth"
@@ -10,7 +10,6 @@ function CallbackHandler() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { checkSession } = useAuth()
-  const [processing, setProcessing] = useState(true)
 
   useEffect(() => {
     const token = searchParams.get("token")
@@ -34,7 +33,7 @@ function CallbackHandler() {
     }
 
     router.replace("/login?error=no_token")
-  }, [searchParams, router, checkSession, processing])
+  }, [searchParams, router, checkSession])
 
   return (
     <div className="flex flex-col items-center gap-4">
