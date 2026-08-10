@@ -1,0 +1,120 @@
+# =============================================================================
+# Loki — Grafana Loki Helm chart 7.2.0 (Loki 3.6.11)
+# Monolithic (single-binary) deployment · filesystem storage · 1 replica.
+# Installed into the `monitoring` namespace:
+#   helm upgrade --install loki grafana/loki -n monitoring -f loki-values.yaml
+#
+# This is deliberately a small single-node setup — no HA, no multi-replica,
+# no SimpleScalable/Distributed mode. Storage is a local-path PVC.
+# =============================================================================
+
+# "Monolithic" single-instance mode. The current Loki Helm chart names this
+# `SingleBinary` (one binary running all modules: distributor/ingester/querier/
+# compactor/...). SingleBinary == the chart's name for the monolithic mode.
+deploymentMode: SingleBinary
+
+# --- Loki runtime configuration ----------------------------------------------
+loki:
+  # No authentication: Alloy and Grafana reach Loki only over the internal
+  # cluster network via Kubernetes Service DNS. Loki is never exposed publicly.
+  auth_enabled: false
+
+  # HTTP API port. The chart's Service exposes this port, so Loki is reachable
+  # in-cluster at http://loki.monitoring.svc.cluster.local:3100
+  server:
+    http_listen_port: 3100
+    grpc_listen_port: 9095
+    http_server_read_timeout: 600s
+    http_server_write_timeout: 600s
+
+  # TSDB schema (v13) on filesystem object storage.
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  commonConfig:
+    path_prefix: /var/loki
+    # Single replica → replication factor 1 (no HA).
+    replication_factor: 1
+
+  # Filesystem object storage (single-node default). To move to S3-compatible
+  # object storage later, replace this whole block (see README "Object storage").
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+
+  limits_config:
+    # Keep 30 days of logs on this small single node (10Gi PVC).
+    retention_period: 720h
+    # Allowed because Alloy can attach structured metadata to entries.
+    allow_structured_metadata: true
+    volume_enabled: true
+
+# --- Single-binary deployment settings ---------------------------------------
+singleBinary:
+  # Exactly one replica (no HA).
+  replicas: 1
+
+  # Persistent volume so logs survive pod restarts.
+  # `local-path` is the k3s default provisioner (same as postgres/nats/redis).
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# --- Zero out the SimpleScalable/Distributed targets --------------------------
+# The chart ships with these >0 by default; SingleBinary mode requires them 0.
+write:
+  replicas: 0
+read:
+  replicas: 0
+backend:
+  replicas: 0
+ingester:
+  replicas: 0
+distributor:
+  replicas: 0
+querier:
+  replicas: 0
+queryFrontend:
+  replicas: 0
+queryScheduler:
+  replicas: 0
+indexGateway:
+  replicas: 0
+compactor:
+  replicas: 0
+
+# --- Turn off components we don't need at this scale --------------------------
+lokiCanary:
+  enabled: false
+
+monitoring:
+  selfMonitoring:
+    enabled: false
+
+test:
+  enabled: false
+
+# Memcached caches are unnecessary for a small filesystem-backed install.
+memcached:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
