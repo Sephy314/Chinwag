@@ -37,14 +37,14 @@ infra/k3s/observability/
   on PATH can't reach the cluster) into `/usr/local/bin` (root/sudo) or
   `~/.local/bin` (normal user).
 - A working kubeconfig for the cluster.
-  - If k3s runs as root and `sephy` cannot read the kubeconfig (permission denied),
-    run this once:
+  - If k3s runs as root and the node user cannot read the kubeconfig (permission
+    denied), run this once:
 
   ```bash
-  sudo mkdir -p /home/sephy/.kube \
-    && sudo cp /etc/rancher/k3s/k3s.yaml /home/sephy/.kube/config \
-    && sudo chown -R sephy:sephy /home/sephy/.kube \
-    && sudo chmod 600 /home/sephy/.kube/config
+  sudo mkdir -p ~/.kube \
+    && sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config \
+    && sudo chown -R $(whoami):$(whoami) ~/.kube \
+    && sudo chmod 600 ~/.kube/config
   ```
 
   > On k3s nodes, `/usr/local/bin/kubectl` is often a symlink to the `k3s` wrapper
