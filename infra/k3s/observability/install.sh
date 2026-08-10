@@ -82,13 +82,21 @@ if ! command -v helm >/dev/null 2>&1; then
 fi
 HELM="$(command -v helm)"
 
-# kubectl: make a working client available.
-# The standalone client honours $KUBECONFIG / ~/.kube/config; the k3s wrapper
-# (/usr/local/bin/kubectl -> k3s) only reads /etc/rancher/k3s/k3s.yaml, which
-# non-root users can't read — so fall back to the standalone binary.
-if [ -z "${KUBECONFIG:-}" ] && [ -r "${HOME}/.kube/config" ]; then
+# Resolve a kubeconfig that BOTH kubectl and helm can use.
+# (helm does not go through the k3s wrapper, so it needs an explicit
+#  KUBECONFIG. Under `sudo`, HOME=/root, so also fall back to the k3s admin
+#  kubeconfig at /etc/rancher/k3s/k3s.yaml, which root can read.)
+if [ -n "${KUBECONFIG:-}" ] && [ -r "${KUBECONFIG}" ]; then
+  : # user-provided KUBECONFIG is already set and readable
+elif [ -r "${HOME}/.kube/config" ]; then
   export KUBECONFIG="${HOME}/.kube/config"
+elif [ -r /etc/rancher/k3s/k3s.yaml ]; then
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fi
+
+# kubectl: make a working client available. Both the standalone client and the
+# k3s wrapper honour $KUBECONFIG; fall back to the standalone binary only if the
+# resolved client still cannot reach the cluster.
 if ! command -v kubectl >/dev/null 2>&1; then
   install_kubectl
 elif ! kubectl cluster-info >/dev/null 2>&1; then
