@@ -21,6 +21,13 @@
 #   ./update.sh --backends      # refresh only the Go backend services
 #   ./update.sh --apply-only    # skip build/load; just apply + restart + verify
 #                               #   (use when images are already imported)
+#   ./update.sh --no-obs        # skip the observability stack (Loki/Alloy/Grafana)
+#
+# The observability stack (infra/k3s/observability) is installed/updated too
+# (Loki + Grafana Alloy + Prometheus + Grafana via Helm + cert-manager
+# grafana-tls), unless --no-obs is given. This is what runs on the CD
+# self-hosted runner (see .github/workflows/cd.yml), so a push to main also
+# updates the monitoring stack on the production node.
 # =============================================================================
 set -euo pipefail
 
@@ -35,15 +42,17 @@ NO_CACHE=0
 FRONTEND=0
 BACKENDS=0
 APPLY_ONLY=0
+SKIP_OBS=0
 for arg in "$@"; do
   case "${arg}" in
     --no-cache)   NO_CACHE=1 ;;
     --frontend)   FRONTEND=1 ;;
     --backends)   BACKENDS=1 ;;
     --apply-only) APPLY_ONLY=1 ;;
+    --no-obs)     SKIP_OBS=1 ;;
     *)
       echo "Unknown option: ${arg}" >&2
-      echo "Usage: $0 [--no-cache] [--frontend|--backends] [--apply-only]" >&2
+      echo "Usage: $0 [--no-cache] [--frontend|--backends] [--apply-only] [--no-obs]" >&2
       exit 1
       ;;
   esac
@@ -134,6 +143,23 @@ for d in "${DEPLOYS[@]}"; do
     { echo "ERROR: ${d} failed to roll out" >&2; exit 1; }
 done
 
+# --- Observability stack (Loki + Grafana Alloy + Prometheus + Grafana) ---------
+# Deployed from infra/k3s/observability via Helm (see observability/install.sh),
+# which also creates the monitoring namespace, the grafana-admin Secret and the
+# grafana-dashboards ConfigMap, and issues the grafana-tls certificate (needs
+# cert-manager + letsencrypt ClusterIssuer + duckdns webhook, all applied by the
+# kustomize step above). Idempotent — safe to run on every deploy.
+if [[ "${SKIP_OBS}" -eq 0 ]]; then
+  echo "==> Installing/updating observability stack (Loki + Alloy + Prometheus + Grafana)"
+  ./observability/install.sh
+
+  echo "==> Waiting for Grafana TLS certificate (grafana-tls) to be Ready"
+  ${KUBECTL} -n monitoring wait --for=condition=Ready certificate/grafana-tls --timeout=300s >/dev/null ||
+    { echo "ERROR: grafana-tls not ready — see 'kubectl -n monitoring describe certificate/grafana-tls'" >&2; exit 1; }
+else
+  echo "==> Skipping observability stack (--no-obs)"
+fi
+
 # --- Verify -------------------------------------------------------------------
 echo "==> Pods"
 ${KUBECTL} -n chinwag get pods
@@ -163,7 +189,7 @@ fi
 
 echo "==> Health endpoints (via ingress https://chinwag.duckdns.org)"
 sleep 3
-for path in / /api/auth/health /api/rooms/health /api/chat/health; do
+for path in / /api/auth/health /api/rooms/health /api/chat/health /grafana/api/health; do
   code="$(curl -skL -m 5 -o /dev/null -w '%{http_code}' "https://chinwag.duckdns.org${path}" || true)"
   echo "  GET ${path} -> ${code}"
 done

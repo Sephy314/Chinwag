@@ -64,6 +64,25 @@ cd infra/k3s/observability
 ./install.sh
 ```
 
+### Production (CD) deployment
+
+The observability stack is **not** part of the GitOps `infra/k3s` kustomize
+resources — it is installed with Helm via `install.sh`. It is deployed
+automatically:
+
+- **Dev** — `infra/k3s/deploy.sh` calls `./observability/install.sh` (skip with
+  `--no-obs`).
+- **Production** — the CD workflow (`.github/workflows/cd.yml`) runs
+  `infra/k3s/update.sh` on the self-hosted runner on the k3s node, which now
+  also calls `./observability/install.sh` (skip with `--no-obs`). So every push
+  to `main` also updates Loki/Alloy/Prometheus/Grafana on production.
+
+Both entry points are idempotent: the `grafana-admin` Secret is only created
+once (existing password is kept), dashboards ConfigMap is re-applied, and the
+`grafana-tls` Certificate auto-renews via cert-manager. You don't need to run
+`install.sh` manually on the server — a push to `main` (or a manual CD
+dispatch) takes care of it.
+
 What `install.sh` does (equivalent to doing it manually):
 
 ```bash
