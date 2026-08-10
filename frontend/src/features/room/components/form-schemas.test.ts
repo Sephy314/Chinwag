@@ -16,15 +16,27 @@ const createRoomSchema = z
   .object({
     name: z.string().min(1, "Room name is required").max(100),
     description: z.string().max(500).optional(),
+    auto_pop: z.boolean(),
     pop_at: z.string().optional(),
   })
-  .refine(
-    (data) => {
-      if (!data.pop_at) return true
-      return new Date(data.pop_at) > new Date()
-    },
-    { message: "Pop time must be in the future", path: ["pop_at"] },
-  )
+  .superRefine((data, ctx) => {
+    if (!data.auto_pop) return
+    if (!data.pop_at) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Auto-pop time is required",
+        path: ["pop_at"],
+      })
+      return
+    }
+    if (new Date(data.pop_at) <= new Date()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Pop time must be in the future",
+        path: ["pop_at"],
+      })
+    }
+  })
 
 describe("roomSettingsSchema", () => {
   it("should accept valid data", () => {
@@ -85,8 +97,8 @@ describe("roomSettingsSchema", () => {
 })
 
 describe("createRoomSchema", () => {
-  it("should accept valid room with name only", () => {
-    const result = createRoomSchema.safeParse({ name: "New Room" })
+  it("should accept room with name only when auto_pop is disabled", () => {
+    const result = createRoomSchema.safeParse({ name: "New Room", auto_pop: false })
     expect(result.success).toBe(true)
   })
 
@@ -95,10 +107,11 @@ describe("createRoomSchema", () => {
     expect(result.success).toBe(false)
   })
 
-  it("should reject pop_at in the past", () => {
+  it("should reject pop_at in the past when auto_pop is enabled", () => {
     const pastDate = new Date(Date.now() - 86400000).toISOString().slice(0, 16)
     const result = createRoomSchema.safeParse({
       name: "Room",
+      auto_pop: true,
       pop_at: pastDate,
     })
     expect(result.success).toBe(false)
@@ -107,17 +120,42 @@ describe("createRoomSchema", () => {
     }
   })
 
-  it("should accept pop_at in the future", () => {
+  it("should accept pop_at in the future when auto_pop is enabled", () => {
     const futureDate = new Date(Date.now() + 86400000).toISOString().slice(0, 16)
     const result = createRoomSchema.safeParse({
       name: "Room",
+      auto_pop: true,
       pop_at: futureDate,
     })
     expect(result.success).toBe(true)
   })
 
-  it("should accept missing pop_at", () => {
-    const result = createRoomSchema.safeParse({ name: "Room" })
+  it("should reject missing pop_at when auto_pop is enabled", () => {
+    const result = createRoomSchema.safeParse({
+      name: "Room",
+      auto_pop: true,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("Auto-pop time is required")
+    }
+  })
+
+  it("should accept missing pop_at when auto_pop is disabled", () => {
+    const result = createRoomSchema.safeParse({
+      name: "Room",
+      auto_pop: false,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("should accept a past pop_at when auto_pop is disabled", () => {
+    const pastDate = new Date(Date.now() - 86400000).toISOString().slice(0, 16)
+    const result = createRoomSchema.safeParse({
+      name: "Room",
+      auto_pop: false,
+      pop_at: pastDate,
+    })
     expect(result.success).toBe(true)
   })
 })

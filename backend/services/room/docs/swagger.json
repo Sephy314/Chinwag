@@ -621,7 +621,7 @@
         "description": { "type": "string" },
         "max_members": { "type": "integer" },
         "owner_id": { "type": "string" },
-        "pop_at": { "type": "string", "format": "date-time" },
+        "pop_at": { "type": "string", "format": "date-time", "nullable": true },
         "popped_at": { "type": "string", "format": "date-time" },
         "created_at": { "type": "string", "format": "date-time" },
         "updated_at": { "type": "string", "format": "date-time" },
@@ -645,7 +645,7 @@
         "name": { "type": "string" },
         "description": { "type": "string" },
         "max_members": { "type": "integer" },
-        "pop_at": { "type": "string", "format": "date-time" }
+        "pop_at": { "type": "string", "format": "date-time", "nullable": true }
       }
     },
     "structs.UpdateRoomRequest": {
