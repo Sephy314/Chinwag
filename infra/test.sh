@@ -59,6 +59,27 @@ skip()  { echo "  [SKIP] $*"; SKIPPED=$((SKIPPED + 1)); }
 die()   { echo "ERROR: $*" >&2; exit 1; }
 section() { if [ "${section_fail}" -eq 0 ]; then pass "$1"; else fail "$1"; fi; section_fail=0; }
 
+# --- kubectl resolution -------------------------------------------------------
+# Same kubeconfig order as install.sh: $KUBECONFIG, then ~/.kube/config, then the
+# k3s admin kubeconfig (/etc/rancher/k3s/k3s.yaml). If a plain kubectl cannot
+# reach the cluster — e.g. the k3s wrapper needs root, or ~/.kube/config is
+# missing for the CI runner user — fall back to `sudo k3s kubectl`, the same
+# approach deploy.sh / update.sh use on the k3s node. A shell function shadows
+# the bare `kubectl` calls below, so no call sites need to change.
+if [ -z "${KUBECONFIG:-}" ] && [ -r "${HOME}/.kube/config" ]; then
+  export KUBECONFIG="${HOME}/.kube/config"
+elif [ -r /etc/rancher/k3s/k3s.yaml ]; then
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+fi
+if command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
+  KUBECTL="$(command -v kubectl)"
+else
+  KUBECTL="sudo k3s kubectl"
+  echo "    (plain kubectl cannot reach the cluster — using '${KUBECTL}')"
+fi
+export KUBECTL
+kubectl() { "${KUBECTL}" "$@"; }
+
 echo
 echo "========================================"
 echo " K3s Infrastructure Test"
