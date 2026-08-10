@@ -1,6 +1,6 @@
 # =============================================================================
 # Grafana — Grafana Helm chart 10.5.15 (Grafana 12.3.1)
-# Loki datasource auto-provisioned (default datasource).
+# Data sources: Loki (logs, default) + Prometheus (metrics).
 # Served publicly at https://chinwag.duckdns.org/grafana (Traefik ingress + TLS).
 # Installed into the `monitoring` namespace:
 #   helm upgrade --install grafana grafana/grafana -n monitoring -f grafana-values.yaml
@@ -16,12 +16,16 @@ admin:
   userKey: admin-user
   passwordKey: admin-password
 
-# Auto-provision the Loki datasource and make it the default (so Explore opens
-# against Loki). URL uses Kubernetes internal Service DNS.
+# Auto-provision datasources: Loki (default, logs) + Prometheus (metrics).
+# URLs use Kubernetes internal Service DNS.
 datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
+      # No explicit uid — Grafana matches provisioned datasources by name and
+      # updates the existing (readOnly) entry in place. Explicit uids would
+      # clash with the already-provisioned readOnly datasource and crash the
+      # datasource provisioning with "data source not found".
       - name: Loki
         type: loki
         access: proxy
@@ -29,6 +33,39 @@ datasources:
         isDefault: true
         jsonData:
           maxLines: 1000
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-server.monitoring.svc.cluster.local:80
+        isDefault: false
+        jsonData:
+          timeInterval: 15s
+
+# Provisioned dashboards (loaded from the `grafana-dashboards` ConfigMap, which
+# is created by install.sh from ./dashboards/*.json). Chart format for this key
+# is a map of folderName -> configMapName (the template mounts the configMap
+# named by the VALUE into the folder named by the KEY). The folder name must be
+# lowercase — it becomes part of a Kubernetes volume name.
+dashboardsConfigMaps:
+  chinwag: grafana-dashboards
+
+# File provider that scans the mounted dashboard ConfigMaps
+# (/var/lib/grafana/dashboards/<folder>). Without a provider, Grafana mounts
+# the ConfigMaps but never loads the dashboards.
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: chinwag
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        allowUiUpdates: false
+        options:
+          foldersFromFilesStructure: true
+          path: /var/lib/grafana/dashboards
 
 # ClusterIP Service — the ingress routes https://chinwag.duckdns.org/grafana
 # to this service. Not exposed directly (no NodePort/LoadBalancer).

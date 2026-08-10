@@ -23,11 +23,15 @@ Grafana (Loki datasource auto-provisioned, namespace: monitoring)
 
 ```
 infra/k3s/observability/
-├── README.md            # this document
-├── loki-values.yaml     # Loki Helm values (monolithic / filesystem / 1 replica)
-├── alloy-values.yaml    # Alloy Helm values (DaemonSet + River config)
-├── grafana-values.yaml  # Grafana Helm values (Loki datasource provisioning)
-└── install.sh           # Helm install script (creates namespace + secret)
+├── README.md                    # this document
+├── loki-values.yaml             # Loki Helm values (monolithic / filesystem / 1 replica)
+├── alloy-values.yaml            # Alloy Helm values (DaemonSet + River config)
+├── prometheus-values.yaml       # Prometheus Helm values (cAdvisor + kube-state-metrics)
+├── grafana-values.yaml          # Grafana Helm values (Loki+Prometheus datasources, dashboards)
+├── grafana-certificate.yaml     # cert-manager Certificate for the /grafana ingress (TLS)
+├── set-grafana-password.sh      # set a fixed Grafana admin user/password (incl. custom users)
+├── dashboards/                  # provisioned Grafana dashboards (chinwag-overview.json)
+└── install.sh                   # Helm install script (creates namespace + secret + dashboards)
 ```
 
 ## Prerequisites
@@ -273,6 +277,31 @@ And in Grafana Explore the same logs are visible with:
 ```
 {namespace="chinwag"}
 ```
+
+---
+
+## Metrics (Prometheus) & dashboards
+
+Prometheus (`prometheus-community/prometheus`) collects metrics from the
+**kubelet cAdvisor** (per-container CPU/RAM) and **kube-state-metrics**
+(pod/deployment counts). App-level request counts and error rates are derived
+from the **Loki** logs in Grafana (the Go services are not instrumented with
+`/metrics`).
+
+- Datasources in Grafana: **Loki** (default) + **Prometheus**
+  (`http://prometheus-server.monitoring.svc.cluster.local:80`).
+- Provisioned dashboard: **Chinwag Overview** (folder `chinwag`), loaded from
+  `dashboards/chinwag-overview.json` via the `grafana-dashboards` ConfigMap
+  (`dashboardsConfigMaps` + `dashboardProviders` in grafana-values.yaml).
+- Panels: CPU usage per service, memory usage per service, pod count per
+  service, request count per service (Loki), error rate per service (Loki),
+  recent error logs (Loki).
+- On **WSL2**, `prometheus-node-exporter` is disabled (host `/` mount is not
+  shared/slave); container metrics come from cAdvisor, so this is fine.
+
+> `install.sh` creates the `grafana-dashboards` ConfigMap before installing
+> Grafana, so dashboards provision automatically. Re-running it after changing
+> `dashboards/*.json` updates the dashboard.
 
 ---
 

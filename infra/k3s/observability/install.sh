@@ -28,6 +28,7 @@ cd "${SCRIPT_DIR}"
 LOKI_CHART_VERSION="7.2.0"
 ALLOY_CHART_VERSION="1.11.1"
 GRAFANA_CHART_VERSION="10.5.15"
+PROMETHEUS_CHART_VERSION="29.23.0"
 # Optional override, e.g. KUBECTL_VERSION=v1.36.3 ./install.sh
 KUBECTL_VERSION="${KUBECTL_VERSION:-}"
 
@@ -115,6 +116,10 @@ echo "==> Adding Grafana Helm repo"
 "${HELM}" repo add grafana https://grafana.github.io/helm-charts >/dev/null 2>&1 || true
 "${HELM}" repo update grafana >/dev/null
 
+echo "==> Adding prometheus-community Helm repo"
+"${HELM}" repo add prometheus-community https://prometheus-community.github.io/helm-charts >/dev/null 2>&1 || true
+"${HELM}" repo update prometheus-community >/dev/null
+
 echo "==> Installing Loki (monolithic / filesystem / single replica)"
 "${HELM}" upgrade --install loki grafana/loki \
   --namespace monitoring \
@@ -127,6 +132,13 @@ echo "==> Installing Grafana Alloy (DaemonSet log collector)"
   --namespace monitoring \
   --version "${ALLOY_CHART_VERSION}" \
   --values alloy-values.yaml \
+  --wait
+
+echo "==> Installing Prometheus (metrics: CPU/RAM via cAdvisor, pod counts via kube-state-metrics)"
+"${HELM}" upgrade --install prometheus prometheus-community/prometheus \
+  --namespace monitoring \
+  --version "${PROMETHEUS_CHART_VERSION}" \
+  --values prometheus-values.yaml \
   --wait
 
 echo "==> Creating Grafana admin Secret (random password, not committed to Git)"
@@ -146,7 +158,12 @@ fi
 echo "==> Issuing Grafana ingress TLS certificate (grafana-tls / letsencrypt)"
 "${KUBECTL}" apply -f grafana-certificate.yaml
 
-echo "==> Installing Grafana (Loki datasource auto-provisioned)"
+echo "==> Creating grafana-dashboards ConfigMap (provisioned dashboards)"
+"${KUBECTL}" create configmap grafana-dashboards \
+  --from-file=dashboards/ \
+  --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+
+echo "==> Installing Grafana (Loki + Prometheus datasources, provisioned dashboards)"
 "${HELM}" upgrade --install grafana grafana/grafana \
   --namespace monitoring \
   --version "${GRAFANA_CHART_VERSION}" \
@@ -160,8 +177,10 @@ echo "    ${KUBECTL} get pods -n monitoring"
 echo "    ${KUBECTL} get svc -n monitoring"
 echo "    ${KUBECTL} get daemonset -n monitoring"
 echo "    ${KUBECTL} -n monitoring get certificate grafana-tls"
+echo "    ${KUBECTL} -n monitoring get configmap grafana-dashboards"
 echo
 echo "    # Grafana UI (public, HTTPS): https://chinwag.duckdns.org/grafana"
+echo "    # Dashboard: Dashboards -> chinwag -> Chinwag Overview"
 echo "    # Grafana UI (port-forward, then open http://localhost:3001):"
 echo "    # (3000 is the frontend's port, so Grafana uses local 3001)"
 echo "    ${KUBECTL} -n monitoring port-forward svc/grafana 3001:80"
