@@ -22,22 +22,21 @@ a K3s cluster, waits for readiness, and runs runtime checks (Service DNS/TCP,
 health endpoints, gateway proxy, Traefik Ingress). It is **not** a YAML-only test.
 
 GitHub-hosted runners have **no access to a K3s cluster**, so the `k3s-infra` job
-is **manual-only** (`workflow_dispatch`) and runs on a self-hosted runner with the
-`k3s` label. The normal `ubuntu-latest` CI does not run it — we never fake a K3s
-test without a cluster.
+never runs on `ubuntu-latest`. It runs on the **same self-hosted runner as CD**
+(the one on the k3s node, which has kubectl/helm access) on **every merge to
+`main`** and on manual dispatch (`workflow_dispatch`) — i.e. it verifies the
+deployed **production** cluster after each deploy. It is intentionally **not** run
+on pull requests (the runner points at production and `test.sh` applies the
+manifests).
 
-To enable it:
+Because `infra/k3s/secret.yaml` is gitignored, a fresh `actions/checkout` does not
+contain it; the job copies it from the runner's **persistent CD checkout**
+(`~/Chinwag`, see `cd.yml` `DEPLOY_DIR`) before running the test. If that path
+differs on your runner, adjust the copy step in `ci.yml`.
 
-1. Register a self-hosted runner and give it the **`k3s`** label (Settings →
-   Actions → Runners → edit the runner → add label `k3s`).
-2. The runner must have `kubectl` pointing at a **K3s cluster** — preferably a
-   dedicated **dev/test** cluster, **not** the production node used by `cd.yml`
-   (the test applies manifests and is intentionally non-destructive, but you
-   don't want it pointed at prod).
-3. The runner's checkout must contain `infra/k3s/secret.yaml` (gitignored — copy
-   from `secret.yaml.example`) since kustomize requires it.
-4. Trigger the `K3s Infrastructure` job from the Actions tab
-   (`Run workflow` → workflow_dispatch).
+> To test a **non-production** cluster instead, register a separate self-hosted
+> runner with a `k3s` label pointing at a dev/test cluster and change the
+> `k3s-infra` job's `runs-on` + `if` accordingly.
 
 ## CD — self-hosted runner (no SSH needed)
 
