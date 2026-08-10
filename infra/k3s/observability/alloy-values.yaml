@@ -1,0 +1,102 @@
+# =============================================================================
+# Grafana Alloy — Grafana Alloy Helm chart 1.11.1 (Alloy v1.18.1)
+# DaemonSet collector: tails every node's Kubernetes container stdout/stderr
+# via the Kubernetes API and ships them to Loki.
+# Installed into the `monitoring` namespace:
+#   helm upgrade --install alloy grafana/alloy -n monitoring -f alloy-values.yaml
+# =============================================================================
+
+controller:
+  # One Alloy pod per node (single-node k3s → 1 pod).
+  type: daemonset
+
+alloy:
+  # The River config that does the actual work.
+  configMap:
+    create: true
+    content: |
+      // Keep Alloy's own logs quiet (warn and above only).
+      logging {
+        level  = "warn"
+        format = "logfmt"
+      }
+
+      // Discover all Pods (and their containers) via the Kubernetes API.
+      // Logs are read from the Kubelet API, so we do NOT need hostPath mounts
+      // and we never write log files onto the node's filesystem.
+      discovery.kubernetes "pod" {
+        role = "pod"
+      }
+
+      // Add the labels we want on every log line:
+      //   namespace, pod, container, node, plus app/service derived from the
+      //   pod's `app` label (Chinwag pods are labeled
+      //   app: gateway|auth|room|chat-command|chat-query).
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pod.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "service"
+        }
+      }
+
+      // Tail stdout/stderr of every container in every discovered Pod.
+      // Single node → exactly one Alloy pod, so no duplicate collection.
+      // (If you later run multiple nodes, enable clustering to shard targets:
+      //   clustering { enabled = true }
+      //  and set alloy.clustering.enabled=true in this file.)
+      loki.source.kubernetes "pod_logs" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.write.local.receiver]
+      }
+
+      // Ship everything to Loki via its internal Service DNS (no auth).
+      loki.write "local" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+  # Don't send anonymous usage statistics to Grafana Labs.
+  enableReporting: false
+
+# RBAC so Alloy can list pods and tail pod logs through the Kubernetes API.
+rbac:
+  create: true
+
+# Alloy's debug UI is only useful via port-forward; a ClusterIP Service is enough.
+service:
+  enabled: true
+  type: ClusterIP
+
+# We don't use PodLogs/ServiceMonitor CRDs in this setup — skip installing them.
+crds:
+  create: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

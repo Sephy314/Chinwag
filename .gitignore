@@ -8,6 +8,8 @@
 infra/k3s/secret.yaml
 infra/k3s/*.secret.yaml
 infra/k3s/.tls/
+# Observability — Grafana admin password if install.sh's optional dump is used
+infra/k3s/observability/.grafana-admin.txt
 .vscode
 
 # Go debugger artifacts (VS Code Delve)

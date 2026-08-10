@@ -146,6 +146,23 @@ kubectl -n cert-manager logs deploy/cert-manager-webhook-duckdns --tail=50
 kubectl -n cert-manager get apiservice v1alpha1.acme.duckdns.org
 ```
 
+> **Known issue on this WSL host**: the DNS-01 challenge can hang with
+> `SOA record ... SERVFAIL` because CoreDNS forwards external queries to the WSL
+> DNS proxy (`/etc/resolv.conf` → `10.255.255.254`), which fails SOA lookups.
+> Fix (applied to the live cluster on 2026-08-09): point cert-manager's DNS-01
+> lookups at a public recursive resolver by adding these args to the
+> `cert-manager` controller Deployment:
+>
+> ```
+> --dns01-recursive-nameservers=8.8.8.8:53
+> --dns01-recursive-nameservers-only
+> ```
+>
+> ⚠️ `deploy.sh` re-applies the static cert-manager manifest, which would drop
+> these args — re-apply them after any cert-manager reinstall. (Alternative,
+> more global fix: set CoreDNS `forward .` to a public resolver instead of
+> `/etc/resolv.conf`.)
+
 > The old self-signed CA flow remains available in `tls.sh` as a legacy fallback for a local-only
 > deployment.
 

@@ -1,0 +1,61 @@
+# =============================================================================
+# Grafana — Grafana Helm chart 10.5.15 (Grafana 12.3.1)
+# Loki datasource auto-provisioned (default datasource). Internal-only by default.
+# Installed into the `monitoring` namespace:
+#   helm upgrade --install grafana grafana/grafana -n monitoring -f grafana-values.yaml
+# =============================================================================
+
+# Admin credentials come from a Secret created at install time (never committed
+# to Git). See install.sh / README:
+#   kubectl -n monitoring create secret generic grafana-admin \
+#     --from-literal=admin-user=admin \
+#     --from-literal=admin-password='<strong-password>'
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+
+# Auto-provision the Loki datasource and make it the default (so Explore opens
+# against Loki). URL uses Kubernetes internal Service DNS.
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        isDefault: true
+        jsonData:
+          maxLines: 1000
+
+# Internal only by default — ClusterIP Service (no public exposure).
+service:
+  type: ClusterIP
+  port: 80
+
+# Optional external access — intentionally OFF by default so the existing
+# Traefik ingress / cert-manager setup is left untouched. See README
+# ("Optional: expose Grafana") for how to enable it safely.
+ingress:
+  enabled: false
+
+# Persist Grafana config/dashboards/plugins on the node (local-path).
+persistence:
+  enabled: true
+  storageClassName: local-path
+  size: 5Gi
+
+# Security: keep anonymous access off, default org role for new users = Viewer.
+grafana.ini:
+  auth.anonymous:
+    enabled: false
+  users:
+    auto_assign_org_role: Viewer
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
