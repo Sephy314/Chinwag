@@ -89,12 +89,18 @@ helm upgrade --install grafana grafana/grafana -n monitoring \
 > Forgot the Grafana password after install?
 > `kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d`
 
-### Change the Grafana admin password
+### Change the Grafana admin credentials
 
 The `grafana-admin` Secret is only read at **first** startup, so editing the
-Secret alone does not change an already-provisioned admin password. Use the
-bundled script — it resets the password inside Grafana (`grafana-cli`) **and**
-updates the Secret so a future reinstall keeps the same value:
+Secret alone does not change an already-provisioned admin. Use the bundled
+script — it:
+
+1. Resets the built-in `admin` login via `grafana-cli` (takes effect
+   immediately).
+2. If a **custom username** is given, creates/updates that user via the Grafana
+   HTTP Admin API and grants it the org **Admin** role (`grafana-cli` cannot
+   create users — this was the "user not applied" pitfall).
+3. Updates the Secret so a future reinstall keeps the same values.
 
 ```bash
 ./set-grafana-password.sh                          # prompts for user + password
@@ -103,9 +109,9 @@ GRAFANA_ADMIN_USER='admin' GRAFANA_PASSWORD='...' ./set-grafana-password.sh
 sudo ./set-grafana-password.sh                   # works too (kubeconfig fallback)
 ```
 
-The password is never passed on argv or echoed. On the **production server**,
-copy the script over and run it there (it only talks to whatever cluster the
-local `kubectl` points at):
+The credentials are never passed on argv or echoed. On the **production
+server**, copy the script over and run it there (it only talks to whatever
+cluster the local `kubectl` points at):
 
 ```bash
 scp infra/k3s/observability/set-grafana-password.sh sephy314@server:/tmp/
