@@ -13,8 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var defaultPopDuration = 24 * time.Hour
-
 type RoomServiceInterface interface {
 	CreateRoom(ctx context.Context, request structs.CreateRoomRequest) (*domain.Room, error)
 	GetRoomById(ctx context.Context, roomId uuid.UUID) (*domain.Room, error)
@@ -42,7 +40,9 @@ func (r *RoomService) CreateRoom(ctx context.Context, request structs.CreateRoom
 		}
 	}
 
-	popAt := now.Add(defaultPopDuration)
+	// pop_at is optional. When omitted, PopAt stays nil and the room has no
+	// auto-pop schedule (the scheduler skips NULL pop_at).
+	var popAt *time.Time
 	if request.PopAt != nil {
 		if request.PopAt.Before(now) {
 			return nil, &errs.AppError{
@@ -50,7 +50,7 @@ func (r *RoomService) CreateRoom(ctx context.Context, request structs.CreateRoom
 				Message: "pop_at must be in the future",
 			}
 		}
-		popAt = *request.PopAt
+		popAt = request.PopAt
 	}
 
 	room := domain.Room{

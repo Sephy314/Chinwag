@@ -25,7 +25,7 @@ func TestRoomService_CreateRoom_Success_NoUow(t *testing.T) {
 	req := structs.CreateRoomRequest{Name: "General", MaxMembers: 10}
 
 	mockRepo.On("CreateRoom", mock.Anything, mock.MatchedBy(func(r domain.Room) bool {
-		return r.Name == "General" && r.MaxMembers == 10 && r.OwnerId == ownerId && !r.PopAt.IsZero()
+		return r.Name == "General" && r.MaxMembers == 10 && r.OwnerId == ownerId && r.PopAt == nil
 	})).Return(nil).Once()
 
 	room, err := svc.CreateRoom(ctx, req)
@@ -34,7 +34,8 @@ func TestRoomService_CreateRoom_Success_NoUow(t *testing.T) {
 	assert.NotNil(t, room)
 	assert.Equal(t, "General", room.Name)
 	assert.Equal(t, ownerId, room.OwnerId)
-	assert.True(t, room.PopAt.After(time.Now().Add(-time.Minute)))
+	// No pop_at in the request => no auto-pop schedule.
+	assert.Nil(t, room.PopAt)
 	mockRepo.AssertExpectations(t)
 }
 
@@ -105,13 +106,14 @@ func TestRoomService_CreateRoom_PopAtInFuture(t *testing.T) {
 	req := structs.CreateRoomRequest{Name: "General", PopAt: &future}
 
 	mockRepo.On("CreateRoom", mock.Anything, mock.MatchedBy(func(r domain.Room) bool {
-		return r.PopAt.Equal(future)
+		return r.PopAt != nil && r.PopAt.Equal(future)
 	})).Return(nil).Once()
 
 	room, err := svc.CreateRoom(ctx, req)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, room)
+	assert.NotNil(t, room.PopAt)
 	assert.True(t, room.PopAt.Equal(future))
 	mockRepo.AssertExpectations(t)
 }

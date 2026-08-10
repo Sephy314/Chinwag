@@ -22,17 +22,31 @@ import { useCreateRoom } from "@/features/room/hooks/use-rooms"
 import { getErrorMessage } from "@/lib/api-client"
 import { Loader2 } from "lucide-react"
 
-const createRoomSchema = z.object({
-  name: z.string().min(1, "Room name is required").max(100),
-  description: z.string().max(500).optional(),
-  pop_at: z.string().optional(),
-}).refine(
-  (data) => {
-    if (!data.pop_at) return true
-    return new Date(data.pop_at) > new Date()
-  },
-  { message: "Pop time must be in the future", path: ["pop_at"] }
-)
+const createRoomSchema = z
+  .object({
+    name: z.string().min(1, "Room name is required").max(100),
+    description: z.string().max(500).optional(),
+    auto_pop: z.boolean(),
+    pop_at: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.auto_pop) return
+    if (!data.pop_at) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Auto-pop time is required",
+        path: ["pop_at"],
+      })
+      return
+    }
+    if (new Date(data.pop_at) <= new Date()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Pop time must be in the future",
+        path: ["pop_at"],
+      })
+    }
+  })
 
 type CreateRoomForm = z.infer<typeof createRoomSchema>
 
@@ -55,17 +69,31 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
     register,
     handleSubmit,
     reset,
+    watch,
+    getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateRoomForm>({
     resolver: zodResolver(createRoomSchema),
+    defaultValues: { auto_pop: true },
   })
+
+  const autoPopEnabled = watch("auto_pop")
+
+  const handleToggleAutoPop = () => {
+    const next = !autoPopEnabled
+    setValue("auto_pop", next, { shouldValidate: true })
+    if (next && !getValues("pop_at")) {
+      setValue("pop_at", defaultPopAt)
+    }
+  }
 
   const onSubmit = async (data: CreateRoomForm) => {
     try {
       const res = await createRoom.mutateAsync({
         name: data.name,
         description: data.description || undefined,
-        pop_at: data.pop_at ? new Date(data.pop_at).toISOString() : undefined,
+        pop_at: data.auto_pop && data.pop_at ? new Date(data.pop_at).toISOString() : undefined,
       })
       if (res.data?.id) {
         router.push(`/chat/${res.data.id}`)
@@ -112,18 +140,48 @@ export function CreateRoomDialog({ open, onOpenChange }: CreateRoomDialogProps) 
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="pop_at">Auto-pop time (optional)</Label>
-            <Input
-              id="pop_at"
-              type="datetime-local"
-              defaultValue={defaultPopAt}
-              {...register("pop_at")}
-            />
-            <p className="text-xs text-gray-500">
-              Room becomes read-only after this time
-            </p>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="auto_pop">Auto Pop</Label>
+              <p className="text-xs text-gray-500 mt-1">
+                Room automatically becomes read-only at the scheduled time
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoPopEnabled}
+              aria-label="Toggle auto pop"
+              onClick={handleToggleAutoPop}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                autoPopEnabled ? "bg-blue-600" : "bg-gray-600"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  autoPopEnabled ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
+
+          {autoPopEnabled && (
+            <div className="space-y-2">
+              <Label htmlFor="pop_at">Auto-pop time</Label>
+              <Input
+                id="pop_at"
+                type="datetime-local"
+                defaultValue={defaultPopAt}
+                {...register("pop_at")}
+              />
+              {errors.pop_at && (
+                <p className="text-xs text-red-400">{errors.pop_at.message}</p>
+              )}
+              <p className="text-xs text-gray-500">
+                Room becomes read-only after this time
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <Button
