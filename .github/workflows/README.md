@@ -2,7 +2,7 @@
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ci.yml` | push (any branch), pull_request | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` |
+| `ci.yml` | push (any branch), pull_request, manual (`workflow_dispatch`) | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` · K3s infra: `infra/test.sh` (manual only, self-hosted `k3s` runner) |
 | `cd.yml` | push to `main`, manual (`workflow_dispatch`) | Self-hosted runner on the k3s node syncs `~/Chinwag` to `origin/main` and runs `infra/k3s/update.sh` |
 
 ## CI
@@ -14,6 +14,30 @@ required — backend tests are unit tests with mocks, and the only live-DB test
 > Note: the frontend lockfile is `package-lock.json` (`npm`). The stale
 > `frontend/pnpm-lock.yaml` in the repo is **not** used — keep `package-lock.json`
 > in sync when changing dependencies.
+
+### K3s infrastructure test (`infra/test.sh`)
+
+`infra/test.sh` is a real integration test: it applies the kustomize manifests to
+a K3s cluster, waits for readiness, and runs runtime checks (Service DNS/TCP,
+health endpoints, gateway proxy, Traefik Ingress). It is **not** a YAML-only test.
+
+GitHub-hosted runners have **no access to a K3s cluster**, so the `k3s-infra` job
+is **manual-only** (`workflow_dispatch`) and runs on a self-hosted runner with the
+`k3s` label. The normal `ubuntu-latest` CI does not run it — we never fake a K3s
+test without a cluster.
+
+To enable it:
+
+1. Register a self-hosted runner and give it the **`k3s`** label (Settings →
+   Actions → Runners → edit the runner → add label `k3s`).
+2. The runner must have `kubectl` pointing at a **K3s cluster** — preferably a
+   dedicated **dev/test** cluster, **not** the production node used by `cd.yml`
+   (the test applies manifests and is intentionally non-destructive, but you
+   don't want it pointed at prod).
+3. The runner's checkout must contain `infra/k3s/secret.yaml` (gitignored — copy
+   from `secret.yaml.example`) since kustomize requires it.
+4. Trigger the `K3s Infrastructure` job from the Actions tab
+   (`Run workflow` → workflow_dispatch).
 
 ## CD — self-hosted runner (no SSH needed)
 
