@@ -4,6 +4,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -66,3 +67,25 @@ jobs:
 
       - name: Build (next build)
         run: npm run build
+
+  # Real K3s infrastructure integration test (infra/test.sh): applies the
+  # kustomize manifests to a real cluster, waits for readiness and runs runtime
+  # checks (Service DNS, health endpoints, gateway proxy, Traefik Ingress).
+  #
+  # GitHub-hosted runners have NO access to a K3s cluster, so we do not run (or
+  # fake) this on ubuntu-latest. Instead it is manual-only (workflow_dispatch)
+  # and requires a SELF-HOSTED runner registered with the `k3s` label that has
+  # kubectl pointing at a K3s cluster — preferably the dev cluster, NOT the
+  # production node used by cd.yml. Until such a runner exists this job simply
+  # won't run; it never blocks push/PR CI.
+  k3s-infra:
+    name: K3s Infrastructure
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, k3s]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run K3s infrastructure test
+        run: |
+          chmod +x infra/test.sh
+          ./infra/test.sh
