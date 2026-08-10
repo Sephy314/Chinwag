@@ -143,6 +143,9 @@ else
   echo "    grafana-admin Secret already exists — keeping existing password."
 fi
 
+echo "==> Issuing Grafana ingress TLS certificate (grafana-tls / letsencrypt)"
+"${KUBECTL}" apply -f grafana-certificate.yaml
+
 echo "==> Installing Grafana (Loki datasource auto-provisioned)"
 "${HELM}" upgrade --install grafana grafana/grafana \
   --namespace monitoring \
@@ -156,7 +159,9 @@ echo "    ${HELM} list -n monitoring"
 echo "    ${KUBECTL} get pods -n monitoring"
 echo "    ${KUBECTL} get svc -n monitoring"
 echo "    ${KUBECTL} get daemonset -n monitoring"
+echo "    ${KUBECTL} -n monitoring get certificate grafana-tls"
 echo
+echo "    # Grafana UI (public, HTTPS): https://chinwag.duckdns.org/grafana"
 echo "    # Grafana UI (port-forward, then open http://localhost:3001):"
 echo "    # (3000 is the frontend's port, so Grafana uses local 3001)"
 echo "    ${KUBECTL} -n monitoring port-forward svc/grafana 3001:80"
