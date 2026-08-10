@@ -3,7 +3,7 @@
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | push (any branch), pull_request | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` |
-| `cd.yml` | push to `main`, manual (`workflow_dispatch`) | Self-hosted runner on the k3s node syncs `/home/sephy314/Chinwag` to `origin/main` and runs `infra/k3s/update.sh` |
+| `cd.yml` | push to `main`, manual (`workflow_dispatch`) | Self-hosted runner on the k3s node syncs `~/Chinwag` to `origin/main` and runs `infra/k3s/update.sh` |
 
 ## CI
 
@@ -42,11 +42,11 @@ repo secrets.
 
 ### 2. Node prerequisites (one time)
 
-1. **Persistent checkout** at `/home/sephy314/Chinwag` (change `DEPLOY_DIR` in
+1. **Persistent checkout** at `~/Chinwag` (change `DEPLOY_DIR` in
    `cd.yml` if different). It must contain `infra/k3s/secret.yaml` (gitignored,
    so `git reset --hard` won't delete it):
    ```bash
-   git clone git@github.com:Sephy314/Chinwag.git /home/sephy314/Chinwag
+   git clone git@github.com:Sephy314/Chinwag.git ~/Chinwag
    cp infra/k3s/secret.yaml.example infra/k3s/secret.yaml
    # …fill in real values…
    ```
