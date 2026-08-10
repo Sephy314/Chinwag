@@ -1,6 +1,7 @@
 # =============================================================================
 # Grafana — Grafana Helm chart 10.5.15 (Grafana 12.3.1)
-# Loki datasource auto-provisioned (default datasource). Internal-only by default.
+# Loki datasource auto-provisioned (default datasource).
+# Served publicly at https://chinwag.duckdns.org/grafana (Traefik ingress + TLS).
 # Installed into the `monitoring` namespace:
 #   helm upgrade --install grafana grafana/grafana -n monitoring -f grafana-values.yaml
 # =============================================================================
@@ -29,16 +30,33 @@ datasources:
         jsonData:
           maxLines: 1000
 
-# Internal only by default — ClusterIP Service (no public exposure).
+# ClusterIP Service — the ingress routes https://chinwag.duckdns.org/grafana
+# to this service. Not exposed directly (no NodePort/LoadBalancer).
 service:
   type: ClusterIP
   port: 80
 
-# Optional external access — intentionally OFF by default so the existing
-# Traefik ingress / cert-manager setup is left untouched. See README
-# ("Optional: expose Grafana") for how to enable it safely.
+# Public access — served at https://chinwag.duckdns.org/grafana via the k3s
+# Traefik ingress + cert-manager (TLS). The `grafana-tls` Certificate (see
+# grafana-certificate.yaml) is issued by the `letsencrypt` ClusterIssuer for
+# the same domain, so the browser shows a valid cert. Plain HTTP :80 /grafana
+# is redirected to HTTPS by the existing chinwag-redirect ingress. The path
+# prefix is NOT stripped — Grafana serves itself from the /grafana subpath
+# (see grafana.ini -> server below). Chart format: hosts = list of strings,
+# single `path` (see chart values.yaml).
 ingress:
-  enabled: false
+  enabled: true
+  ingressClassName: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  hosts:
+    - chinwag.duckdns.org
+  path: /grafana
+  pathType: Prefix
+  tls:
+    - hosts:
+        - chinwag.duckdns.org
+      secretName: grafana-tls
 
 # Persist Grafana config/dashboards/plugins on the node (local-path).
 persistence:
@@ -46,8 +64,22 @@ persistence:
   storageClassName: local-path
   size: 5Gi
 
+# Skip the init-chown-data container. The chart's init container runs as
+# uid 0 with ONLY the CHOWN capability (no CAP_DAC_OVERRIDE) and the pod
+# fsGroup 472, so once the PVC already holds data dirs (csv/png/pdf are
+# mode 700 owned by 472:472) it cannot recurse into them and fails with
+# "chown: ... Permission denied". Ownership is already 472:472 (the grafana
+# process runs as 472 and writes fine), so the chown is unnecessary.
+initChownData:
+  enabled: false
+
 # Security: keep anonymous access off, default org role for new users = Viewer.
+# server.root_url + serve_from_sub_path make Grafana correctly serve its UI,
+# assets and API under the /grafana subpath behind the Traefik ingress.
 grafana.ini:
+  server:
+    root_url: https://chinwag.duckdns.org/grafana
+    serve_from_sub_path: true
   auth.anonymous:
     enabled: false
   users:

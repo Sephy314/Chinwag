@@ -1,0 +1,24 @@
+# ---------------------------------------------------------------------------
+# cert-manager Certificate for the Grafana ingress (monitoring namespace).
+#
+# The k8s Ingress TLS secret must live in the SAME namespace as the Ingress
+# (monitoring), so this issues a dedicated, browser-trusted cert for
+# chinwag.duckdns.org via the shared `letsencrypt` ClusterIssuer (DNS-01 /
+# duckdns webhook — same as the app's chinwag-tls in the chinwag namespace).
+# It auto-renews before expiry, just like the app certificate.
+#
+#   kubectl apply -f grafana-certificate.yaml
+#   kubectl -n monitoring get certificate grafana-tls   # -> Ready=True
+# ---------------------------------------------------------------------------
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  namespace: monitoring
+spec:
+  secretName: grafana-tls
+  dnsNames:
+    - chinwag.duckdns.org
+  issuerRef:
+    name: letsencrypt
+    kind: ClusterIssuer

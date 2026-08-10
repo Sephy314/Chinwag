@@ -209,14 +209,25 @@ kubectl -n chinwag exec deploy/gateway -- wget -qO- \
 
 ### 6. Grafana → Loki datasource connection
 
+Grafana is served by the k3s Traefik ingress at **https://chinwag.duckdns.org/grafana**
+(HTTPS, cert-manager `grafana-tls` — see `grafana-certificate.yaml`; the path is
+**not** stripped, Grafana serves itself from the `/grafana` subpath via
+`server.serve_from_sub_path`). A `port-forward` also works for local access:
+
 ```bash
-# Port-forward, then open http://localhost:3001 in a browser
+# Local access (alternative to the public URL)
 # (local 3000 is the frontend's port — next dev / k8s frontend:3000 — so Grafana uses 3001)
 kubectl -n monitoring port-forward svc/grafana 3001:80
+# then open http://localhost:3001 in a browser
 
 # Login (admin / password from the Secret above)
 # Connections → Data sources → Loki → Save & test  → "Success"
 ```
+
+> The public URL answers only if the DNS for `chinwag.duckdns.org` points at the
+> cluster serving this ingress (this dev cluster). For local dev, add a hosts
+> entry mapping `chinwag.duckdns.org` → the node IP (e.g. `127.0.0.1`) if the
+> public A record points at another host.
 
 Check the datasource over the Grafana API:
 
@@ -316,8 +327,10 @@ sum by (pod) (count_over_time({namespace="chinwag"} | json | level="ERROR" [1h])
   - Make sure API tokens, JWTs, refresh tokens, DPoP proofs, etc. are masked or
     removed in application logging. Everything in Loki is readable by Grafana
     (admin). (No Chinwag code was changed here — the logs are already structured JSON.)
-- **Minimize external exposure**: Loki/Alloy are ClusterIP-only, and Grafana is
-  ClusterIP + `port-forward` by default. Nothing is exposed directly to the internet.
+- **Minimize external exposure**: Loki/Alloy are ClusterIP-only (no ingress).
+  Grafana is exposed at `/grafana` on the existing HTTPS ingress (TLS via
+  `grafana-tls`, login required, anonymous auth off) — it is never bound to a
+  NodePort/LoadBalancer directly.
 - Even though Loki has no auth, it is only reachable from inside the cluster network.
 
 ---
