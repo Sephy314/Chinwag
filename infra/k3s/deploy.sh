@@ -6,6 +6,11 @@
 #   ./deploy.sh             # build images, load into k3s, apply, wait, verify
 #   ./deploy.sh --no-build  # skip image build/load (use already-loaded images)
 #   ./deploy.sh --apply     # only apply manifests (no rollout wait / verify)
+#   ./deploy.sh --no-obs    # skip the observability stack (Loki/Alloy/Grafana)
+#
+# The observability stack (infra/k3s/observability) is installed/updated too
+# (Loki + Grafana Alloy + Grafana via Helm + cert-manager grafana-tls), unless
+# --no-obs is given.
 #
 # Requirements:
 #   - k3s running on this host (systemd service "k3s")
@@ -20,13 +25,15 @@ cd "${SCRIPT_DIR}"
 
 NO_BUILD=0
 ONLY_APPLY=0
+SKIP_OBS=0
 for arg in "$@"; do
   case "${arg}" in
     --no-build) NO_BUILD=1 ;;
     --apply)    ONLY_APPLY=1 ;;
+    --no-obs)   SKIP_OBS=1 ;;
     *)
       echo "Unknown option: ${arg}" >&2
-      echo "Usage: $0 [--no-build] [--apply]" >&2
+      echo "Usage: $0 [--no-build] [--apply] [--no-obs]" >&2
       exit 1
       ;;
   esac
@@ -107,13 +114,30 @@ echo "==> Waiting for TLS certificate (chinwag-tls) to be Ready"
 ${KUBECTL} -n chinwag wait --for=condition=Ready certificate/chinwag-tls --timeout=120s >/dev/null ||
   { echo "ERROR: TLS certificate not ready — see 'kubectl -n chinwag describe certificate/chinwag-tls'" >&2; exit 1; }
 
+# --- Observability stack (Loki + Grafana Alloy + Grafana) ----------------------
+# Deployed from infra/k3s/observability via Helm (see observability/install.sh),
+# which also creates the monitoring namespace and the grafana-admin Secret and
+# issues the grafana-tls certificate (needs cert-manager + letsencrypt
+# ClusterIssuer + duckdns webhook, all applied by the kustomize step above).
+# Idempotent — safe to run on every deploy.
+if [ "${SKIP_OBS}" -eq 0 ]; then
+  echo "==> Installing/updating observability stack (Loki + Alloy + Grafana)"
+  ./observability/install.sh
+
+  echo "==> Waiting for Grafana TLS certificate (grafana-tls) to be Ready"
+  ${KUBECTL} -n monitoring wait --for=condition=Ready certificate/grafana-tls --timeout=300s >/dev/null ||
+    { echo "ERROR: grafana-tls not ready — see 'kubectl -n monitoring describe certificate/grafana-tls'" >&2; exit 1; }
+else
+  echo "==> Skipping observability stack (--no-obs)"
+fi
+
 # --- Verify -------------------------------------------------------------------
 echo "==> Pods"
 ${KUBECTL} -n chinwag get pods
 
 echo "==> Health endpoints (via ingress https://chinwag.duckdns.org)"
 sleep 5
-for path in / /api/auth/health /api/rooms/health /api/chat/health; do
+for path in / /api/auth/health /api/rooms/health /api/chat/health /grafana/api/health; do
   # -k: tolerate dev certs; -L: follow the http->https redirect if any
   code="$(curl -skL -m 5 -o /dev/null -w '%{http_code}' "https://chinwag.duckdns.org${path}" || true)"
   echo "  GET ${path} -> ${code}"
