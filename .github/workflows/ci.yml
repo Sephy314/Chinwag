@@ -72,18 +72,31 @@ jobs:
   # kustomize manifests to a real cluster, waits for readiness and runs runtime
   # checks (Service DNS, health endpoints, gateway proxy, Traefik Ingress).
   #
-  # GitHub-hosted runners have NO access to a K3s cluster, so we do not run (or
-  # fake) this on ubuntu-latest. Instead it is manual-only (workflow_dispatch)
-  # and requires a SELF-HOSTED runner registered with the `k3s` label that has
-  # kubectl pointing at a K3s cluster — preferably the dev cluster, NOT the
-  # production node used by cd.yml. Until such a runner exists this job simply
-  # won't run; it never blocks push/PR CI.
+  # GitHub-hosted runners have NO access to a K3s cluster, so this never runs on
+  # ubuntu-latest. It runs on the existing SELF-HOSTED runner (the same one used
+  # by cd.yml, which sits on the k3s node and has kubectl + helm access) after
+  # every merge to main and on manual dispatch — i.e. it verifies the deployed
+  # production cluster. It is intentionally NOT run on PRs (the runner points at
+  # the production cluster and test.sh applies the manifests).
+  #
+  # infra/k3s/secret.yaml is gitignored, so a fresh actions/checkout does not
+  # contain it; it is copied from the runner's persistent CD checkout
+  # (~/Chinwag — see cd.yml DEPLOY_DIR) which preserves it across resets.
   k3s-infra:
     name: K3s Infrastructure
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, linux, k3s]
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v5
+
+      - name: Copy gitignored secret.yaml (from persistent CD checkout)
+        run: |
+          if [ -f "$HOME/Chinwag/infra/k3s/secret.yaml" ]; then
+            cp "$HOME/Chinwag/infra/k3s/secret.yaml" infra/k3s/secret.yaml
+            echo "secret.yaml copied from \$HOME/Chinwag"
+          else
+            echo "::warning::infra/k3s/secret.yaml not found in \$HOME/Chinwag — the test will fail its prerequisite check"
+          fi
 
       - name: Run K3s infrastructure test
         run: |
