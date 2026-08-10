@@ -1,0 +1,62 @@
+# =============================================================================
+# Prometheus — prometheus-community/prometheus (single server, small footprint)
+# Metrics source for Grafana: CPU / RAM (cAdvisor via kubelet), pod counts
+# (kube-state-metrics). App-level request counts & error rates are derived from
+# Loki logs in Grafana (the Go services are not instrumented with /metrics).
+# Installed into the `monitoring` namespace:
+#   helm upgrade --install prometheus prometheus-community/prometheus \
+#     -n monitoring -f prometheus-values.yaml
+# Datasource in Grafana:
+#   http://prometheus-server.monitoring.svc.cluster.local:9090
+# =============================================================================
+
+server:
+  enabled: true
+  # Scrape interval matches the small single-node setup.
+  global:
+    scrape_interval: 15s
+    evaluation_interval: 15s
+
+  # Keep 7 days of metrics on a small local-path PVC.
+  retention: 7d
+  persistentVolume:
+    enabled: true
+    storageClass: local-path
+    size: 5Gi
+  # The chart only mounts the PVC when the server runs as a StatefulSet.
+  statefulSet:
+    enabled: true
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# Node OS metrics (node-exporter) — DISABLED: on WSL2 the host "/" mount is not
+# a shared/slave mount, so node-exporter fails with "path / is not a shared or
+# slave mount". Per-service CPU/RAM comes from cAdvisor (kubelet) instead, so
+# node-exporter is unnecessary for the requested graphs. On a real Linux node
+# you can re-enable it (enabled: true) for node-level graphs.
+prometheus-node-exporter:
+  enabled: false
+
+# Cluster state (pod/deployment counts, labels) — needed for per-service pod counts.
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+# Not needed for this single-node stack — turn off alerting + pushgateway.
+alertmanager:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+
+# Default scrape configs already include the kubelet (cAdvisor) job, node-exporter
+# and kube-state-metrics jobs — no extra ServiceMonitor CRDs required.
