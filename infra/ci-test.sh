@@ -179,9 +179,16 @@ fi
 
 # Wait for the parallel builds to finish, then import everything in ONE call
 # (k3d only spins up its tools node once, instead of once per image).
+# Build the tag list explicitly: `${IMAGES[@]/#/chinwag/:latest}` does NOT work
+# — bash treats the replacement as `/chinwag/` + pattern and mangles the tags
+# into `chinwag/:latestgateway`, so k3d can't find any of them.
 wait_for_builds
+TAGGED_IMAGES=()
+for img in "${IMAGES[@]}"; do
+  TAGGED_IMAGES+=("chinwag/${img}:latest")
+done
 say "Importing all images into k3d (single call)"
-k3d image import -c "${CLUSTER}" "${IMAGES[@]/#/chinwag/:latest}"
+k3d image import -c "${CLUSTER}" "${TAGGED_IMAGES[@]}"
 
 # --- 6. Pre-apply + wait for internal certs ------------------------------------
 # Postgres mounts the `postgres-tls` secret (issued by cert-manager from the
