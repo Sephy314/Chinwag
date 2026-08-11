@@ -101,8 +101,16 @@ ingress:
 # down after the new pod is Ready -> "Pending termination: 1 / context deadline
 # exceeded". Recreate terminates the old pod first, which is fine here (brief
 # Grafana downtime during upgrades).
+#
+# rollingUpdate: null is REQUIRED alongside Recreate: server-side apply keeps
+# fields it previously owned unless they are explicitly removed. An upgrade
+# that only flips type to Recreate leaves the old `strategy.rollingUpdate`
+# block on the live Deployment, which the API server rejects with
+# "rollingUpdate: Forbidden: may not be specified when strategy 'type' is
+# 'Recreate'". Setting it to null tells SSA to drop the field.
 deploymentStrategy:
   type: Recreate
+  rollingUpdate: null
 
 # Persist Grafana config/dashboards/plugins on the node (local-path).
 persistence:
