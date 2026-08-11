@@ -1,13 +1,26 @@
 name: CI
 
+# Triggers:
+#   - push on main        -> runs CI for every merge to main
+#   - pull_request        -> runs CI for every PR (including pushes to its branch)
+#   - workflow_dispatch   -> manual run
+#
+# NOTE: `push` is intentionally limited to `main`. If it matched all branches
+# ("**"), a push to an open PR's branch would fire BOTH a `push` run and a
+# `pull_request` run at the same time, and with cancel-in-progress the later
+# run would cancel the earlier one (killing long jobs like K3s Infrastructure).
+# Limiting push to main avoids that double-trigger entirely.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
+# Group by event + ref so a `push` run and a `pull_request` run on the same
+# branch never cancel each other. Same event+ref still cancels in-progress runs
+# (e.g. a second push to the same branch supersedes the first).
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
