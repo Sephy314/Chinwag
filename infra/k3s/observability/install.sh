@@ -125,21 +125,21 @@ echo "==> Installing Loki (monolithic / filesystem / single replica)"
   --namespace monitoring \
   --version "${LOKI_CHART_VERSION}" \
   --values loki-values.yaml \
-  --wait
+  --wait --timeout 10m
 
 echo "==> Installing Grafana Alloy (DaemonSet log collector)"
 "${HELM}" upgrade --install alloy grafana/alloy \
   --namespace monitoring \
   --version "${ALLOY_CHART_VERSION}" \
   --values alloy-values.yaml \
-  --wait
+  --wait --timeout 10m
 
 echo "==> Installing Prometheus (metrics: CPU/RAM via cAdvisor, pod counts via kube-state-metrics)"
 "${HELM}" upgrade --install prometheus prometheus-community/prometheus \
   --namespace monitoring \
   --version "${PROMETHEUS_CHART_VERSION}" \
   --values prometheus-values.yaml \
-  --wait
+  --wait --timeout 10m
 
 echo "==> Creating Grafana admin Secret (random password, not committed to Git)"
 if ! "${KUBECTL}" -n monitoring get secret grafana-admin >/dev/null 2>&1; then
@@ -168,7 +168,7 @@ echo "==> Installing Grafana (Loki + Prometheus datasources, provisioned dashboa
   --namespace monitoring \
   --version "${GRAFANA_CHART_VERSION}" \
   --values grafana-values.yaml \
-  --wait
+  --wait --timeout 10m
 
 echo
 echo "==> Done. Verify with:"
