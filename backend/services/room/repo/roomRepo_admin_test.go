@@ -120,7 +120,7 @@ func TestRoomRepo_ListRooms_SearchNoCursor(t *testing.T) {
 
 func TestRoomRepo_ListRooms_WithCursor(t *testing.T) {
 	repo, mock := newTestRoomRepo(t)
-	now := time.Now().Truncate(0) // strip monotonic clock so encode/decode round-trips exactly
+	now := time.Now().Truncate(0).UTC() // strip monotonic + force UTC so the JSON round-trip DeepEqual matches on any TZ
 	id := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	cursor := encodeRoomCursor(now, id)
 	rows := sqlmock.NewRows([]string{"id", "name", "description", "max_members", "owner_id", "pop_at", "popped_at", "created_at", "updated_at", "deleted_at"}).
