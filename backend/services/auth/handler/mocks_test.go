@@ -15,7 +15,10 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v5"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -62,6 +65,46 @@ func (m *MockUserRepo) GetUserByEmail(ctx context.Context, email string) (*domai
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *MockUserRepo) GetUserIncludingDeleted(ctx context.Context, id string) (*domain.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *MockUserRepo) RestoreUser(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockUserRepo) SetRole(ctx context.Context, id string, role domain.Role) error {
+	args := m.Called(ctx, id, role)
+	return args.Error(0)
+}
+
+func (m *MockUserRepo) CountUsers(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepo) CountAdmins(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepo) ListUsers(ctx context.Context, cursor string, limit int, role, deleted, search string) ([]domain.User, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursor, limit, role, deleted, search)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	var meta *structs.CursorMeta
+	if args.Get(1) != nil {
+		meta = args.Get(1).(*structs.CursorMeta)
+	}
+	return args.Get(0).([]domain.User), meta, args.Error(2)
 }
 
 // ---- JWKS service ----
@@ -229,6 +272,42 @@ func (m *MockCache) SMembers(ctx context.Context, key string) ([]string, error) 
 	return args.Get(0).([]string), args.Error(1)
 }
 
+func (m *MockCache) SRem(ctx context.Context, key string, members ...string) error {
+	args := m.Called(ctx, key, members)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZAdd(ctx context.Context, key string, score int64, member string) error {
+	args := m.Called(ctx, key, score, member)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZRem(ctx context.Context, key string, members ...string) error {
+	args := m.Called(ctx, key, members)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZCard(ctx context.Context, key string) (int64, error) {
+	args := m.Called(ctx, key)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockCache) ZRangeByScore(ctx context.Context, key, min, max string, offset, count int64) ([]string, error) {
+	args := m.Called(ctx, key, min, max, offset, count)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockCache) ZRevRangeByScore(ctx context.Context, key, max, min string, offset, count int64) ([]string, error) {
+	args := m.Called(ctx, key, max, min, offset, count)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *MockCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
 	mArgs := m.Called(ctx, script, keys, args)
 	return mArgs.Get(0), mArgs.Error(1)
@@ -310,4 +389,46 @@ func (noopLogger) Warn(msg string, args ...any)  {}
 func (noopLogger) Fatal(msg string, args ...any) {}
 func (l noopLogger) With(args ...any) logger.Logger {
 	return l
+}
+
+// ---- Audit repo ----
+
+type MockAuditRepo struct {
+	mock.Mock
+}
+
+func (m *MockAuditRepo) Insert(ctx context.Context, ev domain.AuditEvent) error {
+	args := m.Called(ctx, ev)
+	return args.Error(0)
+}
+
+func (m *MockAuditRepo) List(ctx context.Context, cursor string, limit int, adminID, action, targetType string) ([]domain.AuditEvent, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursor, limit, adminID, action, targetType)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	var meta *structs.CursorMeta
+	if args.Get(1) != nil {
+		meta = args.Get(1).(*structs.CursorMeta)
+	}
+	return args.Get(0).([]domain.AuditEvent), meta, args.Error(2)
+}
+
+// setAdminClaims sets the verified ADMIN claims expected by adminID().
+func setAdminClaims(c *echo.Context) {
+	claims := &sharedauth.Claims{Role: sharedauth.RoleAdmin, RegisteredClaims: jwt.RegisteredClaims{Subject: "admin1"}}
+	c.Set(sharedauth.ClaimsContextKey, claims)
+}
+
+func newAdminUserHandler(userRepo repo.UserRepository, cache cache.Cache, audit repo.AuditRepoInterface) *AdminUserHandler {
+	userSvc := service.NewUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService), &noopLogger{})
+	refreshSvc := service.NewRefreshTokenService(cache, "refresh:", time.Hour)
+	auditSvc := service.NewAuditService(audit)
+	return NewAdminUserHandler(userSvc, refreshSvc, auditSvc, &noopLogger{})
+}
+
+func newAdminSessionHandler(cache cache.Cache, audit repo.AuditRepoInterface) *AdminSessionHandler {
+	refreshSvc := service.NewRefreshTokenService(cache, "refresh:", time.Hour)
+	auditSvc := service.NewAuditService(audit)
+	return NewAdminSessionHandler(refreshSvc, auditSvc, &noopLogger{})
 }

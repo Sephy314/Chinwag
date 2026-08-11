@@ -14,6 +14,36 @@ const ClaimsContextKey = "auth_claims"
 
 const dpopNonceHeader = "DPoP-Nonce"
 
+// Global user roles, mirroring services/auth/domain (User.Role). Kept here so
+// shared middleware can enforce role checks without importing the auth module.
+const (
+	RoleUser    = "USER"
+	RoleManager = "MANAGER"
+	RoleAdmin   = "ADMIN"
+)
+
+// RequireRole returns a middleware that rejects requests whose authenticated
+// user does not hold one of the given roles. It must be composed AFTER
+// NewMiddleware (which stores the verified Claims in the echo context).
+//   - no verified claims  -> 401 Unauthorized
+//   - valid claims, wrong role -> 403 Forbidden
+func RequireRole(roles ...string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			claims, err := ClaimsFromContext(c)
+			if err != nil {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			}
+			for _, r := range roles {
+				if claims.Role == r {
+					return next(c)
+				}
+			}
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+		}
+	}
+}
+
 // NewMiddleware validates the DPoP bearer access token and requires a
 // sender-constrained DPoP proof bound to the token's cnf.jkt claim (RFC 9449).
 // The shared validator applies the same proof/nonce/replay checks used by the

@@ -17,6 +17,11 @@ type Cache interface {
 	HGetAll(ctx context.Context, key string) (map[string]string, error)
 	SAdd(ctx context.Context, key string, ttl time.Duration, members ...string) error
 	SMembers(ctx context.Context, key string) ([]string, error)
+	ZAdd(ctx context.Context, key string, score int64, member string) error
+	ZRem(ctx context.Context, key string, members ...string) error
+	ZCard(ctx context.Context, key string) (int64, error)
+	ZRangeByScore(ctx context.Context, key, min, max string, offset, count int64) ([]string, error)
+	ZRevRangeByScore(ctx context.Context, key, max, min string, offset, count int64) ([]string, error)
 	Eval(ctx context.Context, script string, keys []string, args ...any) (any, error)
 	AcquireLock(ctx context.Context, key string, token string, ttl time.Duration) (bool, error)
 	ReleaseLock(ctx context.Context, key string, token string) error
@@ -78,6 +83,30 @@ func (rc *RedisCache) SAdd(ctx context.Context, key string, ttl time.Duration, m
 
 func (rc *RedisCache) SMembers(ctx context.Context, key string) ([]string, error) {
 	return rc.client.SMembers(ctx, key).Result()
+}
+
+func (rc *RedisCache) ZAdd(ctx context.Context, key string, score int64, member string) error {
+	return rc.client.ZAdd(ctx, key, redis.Z{Score: float64(score), Member: member}).Err()
+}
+
+func (rc *RedisCache) ZRem(ctx context.Context, key string, members ...string) error {
+	args := make([]interface{}, len(members))
+	for i, m := range members {
+		args[i] = m
+	}
+	return rc.client.ZRem(ctx, key, args...).Err()
+}
+
+func (rc *RedisCache) ZCard(ctx context.Context, key string) (int64, error) {
+	return rc.client.ZCard(ctx, key).Result()
+}
+
+func (rc *RedisCache) ZRangeByScore(ctx context.Context, key, min, max string, offset, count int64) ([]string, error) {
+	return rc.client.ZRangeByScore(ctx, key, &redis.ZRangeBy{Min: min, Max: max, Offset: offset, Count: count}).Result()
+}
+
+func (rc *RedisCache) ZRevRangeByScore(ctx context.Context, key, max, min string, offset, count int64) ([]string, error) {
+	return rc.client.ZRevRangeByScore(ctx, key, &redis.ZRangeBy{Min: min, Max: max, Offset: offset, Count: count}).Result()
 }
 
 func (rc *RedisCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {

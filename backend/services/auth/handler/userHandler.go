@@ -123,6 +123,7 @@ func (h *UserHandler) WhoAmI(c *echo.Context) error {
 
 	return c.JSON(http.StatusOK, response.OK(map[string]any{
 		"user": i.ToProjection(),
+		"role": i.Role,
 	}))
 }
 

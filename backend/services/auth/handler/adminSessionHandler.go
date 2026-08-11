@@ -1,0 +1,67 @@
+package handler
+
+import (
+	"net/http"
+
+	"github.com/Sephy314/chinwag/backend/services/auth/service"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
+	"github.com/Sephy314/chinwag/backend/services/auth/structs"
+	"github.com/labstack/echo/v5"
+)
+
+type AdminSessionHandler struct {
+	sessions *service.RefreshTokenService
+	audit    service.AuditServiceInterface
+	log      logger.Logger
+}
+
+func NewAdminSessionHandler(sessions *service.RefreshTokenService, audit service.AuditServiceInterface, log logger.Logger) *AdminSessionHandler {
+	return &AdminSessionHandler{sessions: sessions, audit: audit, log: log}
+}
+
+// ListSessions returns a cursor-paginated page of all sessions, newest first,
+// backed by the global `refresh:sessions` Sorted Set index.
+func (h *AdminSessionHandler) ListSessions(c *echo.Context) error {
+	var req structs.ListSessionsRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
+	}
+
+	page, meta, err := h.sessions.ListAllSessions(c.Request().Context(), req.Cursor, req.Limit)
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+	resp := response.OK(page)
+	resp.Meta = meta
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *AdminSessionHandler) GetSession(c *echo.Context) error {
+	s, err := h.sessions.GetLineage(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+	if s == nil {
+		return c.JSON(http.StatusNotFound, response.Error("session not found"))
+	}
+	return c.JSON(http.StatusOK, response.OK(s))
+}
+
+func (h *AdminSessionHandler) RevokeSession(c *echo.Context) error {
+	id := c.Param("id")
+	if err := h.sessions.RevokeLineage(c.Request().Context(), id); err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+	_ = h.audit.Record(c.Request().Context(), adminID(c), "session.revoke", "session", id, nil)
+	return c.JSON(http.StatusOK, response.OK[any](nil))
+}
+
+func (h *AdminSessionHandler) StatsSessions(c *echo.Context) error {
+	n, err := h.sessions.CountSessions(c.Request().Context())
+	if err != nil {
+		return c.JSON(errs.ParseError(err))
+	}
+	return c.JSON(http.StatusOK, response.OK(structs.StatsResponse{Count: n}))
+}

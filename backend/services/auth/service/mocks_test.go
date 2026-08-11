@@ -56,6 +56,46 @@ func (m *MockUserRepo) GetUserByEmail(ctx context.Context, email string) (*domai
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
+func (m *MockUserRepo) GetUserIncludingDeleted(ctx context.Context, id string) (*domain.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *MockUserRepo) RestoreUser(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockUserRepo) SetRole(ctx context.Context, id string, role domain.Role) error {
+	args := m.Called(ctx, id, role)
+	return args.Error(0)
+}
+
+func (m *MockUserRepo) CountUsers(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepo) CountAdmins(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepo) ListUsers(ctx context.Context, cursor string, limit int, role, deleted, search string) ([]domain.User, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursor, limit, role, deleted, search)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	var meta *structs.CursorMeta
+	if args.Get(1) != nil {
+		meta = args.Get(1).(*structs.CursorMeta)
+	}
+	return args.Get(0).([]domain.User), meta, args.Error(2)
+}
+
 // ---- JWKS repo ----
 
 type MockJwksRepo struct {
@@ -263,6 +303,42 @@ func (m *MockCache) SAdd(ctx context.Context, key string, ttl time.Duration, mem
 
 func (m *MockCache) SMembers(ctx context.Context, key string) ([]string, error) {
 	args := m.Called(ctx, key)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockCache) SRem(ctx context.Context, key string, members ...string) error {
+	args := m.Called(ctx, key, members)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZAdd(ctx context.Context, key string, score int64, member string) error {
+	args := m.Called(ctx, key, score, member)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZRem(ctx context.Context, key string, members ...string) error {
+	args := m.Called(ctx, key, members)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZCard(ctx context.Context, key string) (int64, error) {
+	args := m.Called(ctx, key)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockCache) ZRangeByScore(ctx context.Context, key, min, max string, offset, count int64) ([]string, error) {
+	args := m.Called(ctx, key, min, max, offset, count)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockCache) ZRevRangeByScore(ctx context.Context, key, max, min string, offset, count int64) ([]string, error) {
+	args := m.Called(ctx, key, max, min, offset, count)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

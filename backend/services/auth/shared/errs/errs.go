@@ -66,6 +66,21 @@ var (
 		Status:  http.StatusUnauthorized,
 		Message: "Refresh token revoked",
 	}
+
+	ErrInvalidRole = &AppError{
+		Status:  http.StatusBadRequest,
+		Message: "Invalid role",
+	}
+
+	ErrSelfDemotion = &AppError{
+		Status:  http.StatusBadRequest,
+		Message: "Cannot demote yourself",
+	}
+
+	ErrLastAdmin = &AppError{
+		Status:  http.StatusConflict,
+		Message: "Cannot remove the last administrator",
+	}
 )
 
 func ParseError(err error) (int, *response.Response[any]) {

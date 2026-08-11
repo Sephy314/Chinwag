@@ -11,6 +11,8 @@ infra/k3s/.tls/
 # Observability — Grafana admin password if install.sh's optional dump is used
 infra/k3s/observability/.grafana-admin.txt
 .vscode
+# Dev mTLS material for service-to-service internal endpoints (scripts/gen-dev-mtls.sh)
+**/.mtls/
 
 # Go debugger artifacts (VS Code Delve)
 __debug_bin*

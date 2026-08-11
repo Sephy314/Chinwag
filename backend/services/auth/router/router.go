@@ -16,12 +16,16 @@ import (
 )
 
 type Router struct {
-	Echo           *echo.Echo
-	UserHandler    *handler.UserHandler
-	JwksHandler    *handler.JwksHandler
-	RefreshHandler *handler.RefreshHandlerImpl
-	JwksService    *service.JwksService
-	log            logger.Logger
+	Echo                *echo.Echo
+	InternalEcho        *echo.Echo
+	UserHandler         *handler.UserHandler
+	JwksHandler         *handler.JwksHandler
+	RefreshHandler      *handler.RefreshHandlerImpl
+	JwksService         *service.JwksService
+	AdminUserHandler    *handler.AdminUserHandler
+	AdminSessionHandler *handler.AdminSessionHandler
+	AdminAuditHandler   *handler.AdminAuditHandler
+	log                 logger.Logger
 }
 
 func NewRouter(
@@ -29,16 +33,38 @@ func NewRouter(
 	jwksHandler *handler.JwksHandler,
 	refreshHandler *handler.RefreshHandlerImpl,
 	jwksService *service.JwksService,
+	adminUserHandler *handler.AdminUserHandler,
+	adminSessionHandler *handler.AdminSessionHandler,
+	adminAuditHandler *handler.AdminAuditHandler,
 	log logger.Logger,
 ) *Router {
 	return &Router{
-		Echo:           echo.New(),
-		UserHandler:    userHandler,
-		JwksHandler:    jwksHandler,
-		RefreshHandler: refreshHandler,
-		JwksService:    jwksService,
-		log:            log,
+		Echo:                echo.New(),
+		InternalEcho:        echo.New(),
+		UserHandler:         userHandler,
+		JwksHandler:         jwksHandler,
+		RefreshHandler:      refreshHandler,
+		JwksService:         jwksService,
+		AdminUserHandler:    adminUserHandler,
+		AdminSessionHandler: adminSessionHandler,
+		AdminAuditHandler:   adminAuditHandler,
+		log:                 log,
 	}
+}
+
+// SetupInternal registers the service-to-service endpoints on a dedicated Echo
+// that main starts behind a mutual-TLS (mTLS) listener. Only clients presenting
+// a certificate signed by the configured CA can reach these routes.
+func (r *Router) SetupInternal() {
+	e := r.InternalEcho
+	e.Use(middleware.RequestID())
+	e.Use(middleware.Recover())
+	e.Use(r.requestLogger())
+
+	e.POST("/internal/audit", r.AdminAuditHandler.RecordAudit)
+	e.GET("/internal/health", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
 }
 
 func (r *Router) requestLogger() echo.MiddlewareFunc {
@@ -136,6 +162,30 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		priv.GET("/whoami", r.UserHandler.WhoAmI)
 		priv.PUT("/user/:id", r.UserHandler.UpdateUser)
 		priv.DELETE("/user/:id", r.UserHandler.DeleteUser)
+	}
+
+	admin := e.Group("")
+	admin.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
+	admin.Use(sharedauth.RequireRole(sharedauth.RoleAdmin))
+	{
+		admin.GET("/admin/users", r.AdminUserHandler.ListUsers)
+		admin.POST("/admin/users", r.AdminUserHandler.CreateUser)
+		admin.GET("/admin/users/:id", r.AdminUserHandler.GetUser)
+		admin.PUT("/admin/users/:id", r.AdminUserHandler.UpdateUser)
+		admin.PUT("/admin/users/:id/role", r.AdminUserHandler.UpdateRole)
+		admin.DELETE("/admin/users/:id", r.AdminUserHandler.DisableUser)
+		admin.POST("/admin/users/:id/restore", r.AdminUserHandler.RestoreUser)
+		admin.GET("/admin/users/:id/sessions", r.AdminUserHandler.ListUserSessions)
+		admin.DELETE("/admin/users/:id/sessions", r.AdminUserHandler.RevokeUserSessions)
+
+		admin.GET("/admin/sessions", r.AdminSessionHandler.ListSessions)
+		admin.GET("/admin/sessions/:id", r.AdminSessionHandler.GetSession)
+		admin.DELETE("/admin/sessions/:id", r.AdminSessionHandler.RevokeSession)
+
+		admin.GET("/admin/audit", r.AdminAuditHandler.ListAudit)
+
+		admin.GET("/admin/stats/users", r.AdminUserHandler.StatsUsers)
+		admin.GET("/admin/stats/sessions", r.AdminSessionHandler.StatsSessions)
 	}
 
 	SetUpSwaggerRoutes(e)

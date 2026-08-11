@@ -3,11 +3,15 @@ package main
 import "os"
 
 type Config struct {
-	Port          string
-	DBUrl         string
-	RedisAddr     string
-	RedisPassword string
-	FrontendURL   string
+	Port            string
+	DBUrl           string
+	RedisAddr       string
+	RedisPassword   string
+	FrontendURL     string
+	InternalPort    string
+	InternalTLSCert string
+	InternalTLSKey  string
+	InternalTLSCA   string
 }
 
 func LoadConfig() *Config {
@@ -33,11 +37,20 @@ func LoadConfig() *Config {
 		frontendURL = "http://localhost:3000"
 	}
 
+	internalPort := os.Getenv("INTERNAL_PORT")
+	if internalPort == "" {
+		internalPort = "8085"
+	}
+
 	return &Config{
-		Port:          port,
-		DBUrl:         dbUrl,
-		RedisAddr:     redisAddr,
-		RedisPassword: redisPassword,
-		FrontendURL:   frontendURL,
+		Port:            port,
+		DBUrl:           dbUrl,
+		RedisAddr:       redisAddr,
+		RedisPassword:   redisPassword,
+		FrontendURL:     frontendURL,
+		InternalPort:    internalPort,
+		InternalTLSCert: os.Getenv("INTERNAL_TLS_CERT"),
+		InternalTLSKey:  os.Getenv("INTERNAL_TLS_KEY"),
+		InternalTLSCA:   os.Getenv("INTERNAL_TLS_CA"),
 	}
 }
