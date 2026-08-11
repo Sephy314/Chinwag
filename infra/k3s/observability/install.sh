@@ -159,9 +159,14 @@ echo "==> Issuing Grafana ingress TLS certificate (grafana-tls / letsencrypt)"
 "${KUBECTL}" apply -f grafana-certificate.yaml
 
 echo "==> Creating grafana-dashboards ConfigMap (provisioned dashboards)"
-"${KUBECTL}" create configmap grafana-dashboards \
+# NOTE: must specify -n monitoring on BOTH sides. Without it, kubectl uses the
+# current kubeconfig context's default namespace (e.g. `default` on the CD
+# runner), so the ConfigMap lands in the wrong namespace and the Grafana pod
+# fails to mount it -> "configmap \"grafana-dashboards\" not found",
+# ContainerCreating, Deployment not Available.
+"${KUBECTL}" -n monitoring create configmap grafana-dashboards \
   --from-file=dashboards/ \
-  --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+  --dry-run=client -o yaml | "${KUBECTL}" -n monitoring apply -f -
 
 echo "==> Installing Grafana (Loki + Prometheus datasources, provisioned dashboards)"
 "${HELM}" upgrade --install grafana grafana/grafana \
