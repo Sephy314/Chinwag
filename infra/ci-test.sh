@@ -12,10 +12,13 @@
 #
 # What it does:
 #   1. installs k3d + kubectl if missing
-#   2. creates a throwaway k3d cluster (Traefik ingress + local-path storage)
-#   3. installs cert-manager (needed by clusterissuer/certificate/duckdns CRs)
+#   2. builds all 6 Chinwag images IN PARALLEL (background jobs — single runner,
+#      no extra Actions minutes; GHA layer cache speeds up repeat runs)
+#   3. while the builds run, creates a throwaway k3d cluster (Traefik ingress +
+#      local-path storage) and installs cert-manager (needed by
+#      clusterissuer/certificate/duckdns CRs)
 #   4. ensures infra/k3s/secret.yaml exists (uses the local one, else a dummy)
-#   5. builds the 6 Chinwag images and imports them into the cluster
+#   5. imports all images into k3d in ONE call (single tools-node spin-up)
 #   6. pre-applies kustomize and waits for the internal certs (chinwag-ca,
 #      postgres-tls) so the StatefulSets don't hit a missing-secret race
 #   7. runs infra/test.sh (which re-applies idempotently and verifies runtime)
@@ -61,10 +64,33 @@ docker_build() {
 }
 
 cleanup() {
+  # Kill any still-running background builds, then tear down the cluster.
+  for pid in "${BUILD_PIDS[@]:-}"; do kill "${pid}" >/dev/null 2>&1 || true; done
   say "Tearing down k3d cluster '${CLUSTER}'"
   k3d cluster delete "${CLUSTER}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+
+# --- Parallel build helpers -------------------------------------------------
+# Build all images concurrently (single runner — no extra Actions minutes):
+# each `docker build` is CPU/network-bound, so wall-clock drops from the sum of
+# 6 sequential builds to roughly the slowest one. GHA layer cache (buildx
+# type=gha, see CACHE_ARGS) makes repeat runs even faster.
+BUILD_PIDS=()
+build_in_bg() {
+  local tag="$1" dockerfile="$2" context="$3"; shift 3
+  say "Building ${tag} (background)"
+  docker_build "${tag}" "${dockerfile}" "${context}" "$@" &
+  BUILD_PIDS+=("$!")
+}
+wait_for_builds() {
+  local p rc=0
+  for p in "${BUILD_PIDS[@]}"; do
+    wait "${p}" || rc=1
+  done
+  BUILD_PIDS=()
+  [ "${rc}" -eq 0 ] || die "one or more parallel image builds failed"
+}
 
 export PATH="${HOME}/.local/bin:${PATH}"
 
@@ -97,7 +123,19 @@ need k3d
 need kubectl
 need docker
 
-# --- 2. Ephemeral cluster ---------------------------------------------------
+# --- 2. Build images (PARALLEL) -----------------------------------------------
+# Kick off all 6 image builds in the background, then do the cluster + cert
+# setup while they run, then import once. This overlaps the ~30-60s of builds
+# with cluster creation instead of serializing them.
+for entry in "${SERVICE_ARGS[@]}"; do
+  name="${entry%%:*}"; svc="${entry##*:}"
+  build_in_bg "chinwag/${name}:latest" "${ROOT_DIR}/backend/Dockerfile" "${ROOT_DIR}/backend" \
+    --build-arg SERVICE="${svc}"
+done
+build_in_bg "chinwag/frontend:latest" "${ROOT_DIR}/frontend/Dockerfile" "${ROOT_DIR}/frontend"
+
+# --- 3. Ephemeral cluster ---------------------------------------------------
+# (Runs while the image builds are still going in the background.)
 say "Creating k3d cluster '${CLUSTER}'"
 k3d cluster create "${CLUSTER}" --servers 1 --agents 0 --wait
 KUBECONFIG_FILE="$(mktemp)"
@@ -105,13 +143,14 @@ k3d kubeconfig write "${CLUSTER}" -o "${KUBECONFIG_FILE}"
 export KUBECONFIG="${KUBECONFIG_FILE}"
 kubectl cluster-info >/dev/null 2>&1 || die "cannot reach the ephemeral cluster"
 
-# --- 3. cert-manager ----------------------------------------------------------
+# --- 4. cert-manager ----------------------------------------------------------
+# (Also runs while the image builds are still going in the background.)
 say "Installing cert-manager ${CERT_MANAGER_VERSION}"
 kubectl apply -f \
   "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
 kubectl -n cert-manager rollout status deploy/cert-manager deploy/cert-manager-webhook deploy/cert-manager-cainjector --timeout=180s
 
-# --- 4. secret.yaml (gitignored) ----------------------------------------------
+# --- 5. secret.yaml (gitignored) ----------------------------------------------
 # Prefer the existing local secret (a dev checkout already has real values that
 # work on any cluster since postgres/redis are recreated inside k3d). In CI the
 # checkout has no secret.yaml, so generate a self-consistent dummy one.
@@ -138,20 +177,18 @@ stringData:
 EOF
 fi
 
-# --- 5. Build + import images --------------------------------------------------
-for entry in "${SERVICE_ARGS[@]}"; do
-  name="${entry%%:*}"; svc="${entry##*:}"
-  say "Building chinwag/${name}:latest (SERVICE=${svc})"
-  docker_build "chinwag/${name}:latest" "${ROOT_DIR}/backend/Dockerfile" "${ROOT_DIR}/backend" \
-    --build-arg SERVICE="${svc}"
-done
-say "Building chinwag/frontend:latest"
-docker_build "chinwag/frontend:latest" "${ROOT_DIR}/frontend/Dockerfile" "${ROOT_DIR}/frontend"
-
+# Wait for the parallel builds to finish, then import everything in ONE call
+# (k3d only spins up its tools node once, instead of once per image).
+# Build the tag list explicitly: `${IMAGES[@]/#/chinwag/:latest}` does NOT work
+# — bash treats the replacement as `/chinwag/` + pattern and mangles the tags
+# into `chinwag/:latestgateway`, so k3d can't find any of them.
+wait_for_builds
+TAGGED_IMAGES=()
 for img in "${IMAGES[@]}"; do
-  say "Importing chinwag/${img}:latest into k3d"
-  k3d image import -c "${CLUSTER}" "chinwag/${img}:latest"
+  TAGGED_IMAGES+=("chinwag/${img}:latest")
 done
+say "Importing all images into k3d (single call)"
+k3d image import -c "${CLUSTER}" "${TAGGED_IMAGES[@]}"
 
 # --- 6. Pre-apply + wait for internal certs ------------------------------------
 # Postgres mounts the `postgres-tls` secret (issued by cert-manager from the
