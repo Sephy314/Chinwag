@@ -6,9 +6,9 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/room/domain"
 	"github.com/Sephy314/chinwag/backend/services/room/repo"
-	"github.com/Sephy314/chinwag/backend/services/room/structs"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/patch"
+	"github.com/Sephy314/chinwag/backend/services/room/structs"
 	"github.com/google/uuid"
 )
 
@@ -199,4 +199,45 @@ func NewRoomMemberService(roomMemberRepo repo.RoomMemberRepoInterface, roomRepo 
 		User:     user,
 		uow:      unitOfWork,
 	}
+}
+
+// --- Admin operations (bypass the ordinary user permission checks) ---
+
+func (s *RoomMemberService) AdminInviteUser(ctx context.Context, member structs.RoomUser) error {
+	role := domain.MEMBER
+	if member.Role != nil {
+		role = *member.Role
+	}
+	return s.repo.AdminAddMember(ctx, domain.RoomMember{
+		RoomId:   member.RoomId,
+		UserId:   member.UserId,
+		Role:     role,
+		JoinedAt: time.Now(),
+		LeftAt:   nil,
+	})
+}
+
+func (s *RoomMemberService) AdminKickUser(ctx context.Context, member structs.RoomUser) error {
+	return s.repo.AdminRemoveMember(ctx, member.UserId, member.RoomId)
+}
+
+func (s *RoomMemberService) AdminSetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error {
+	return s.repo.AdminSetUserRole(ctx, userId, roomId, role)
+}
+
+func (s *RoomMemberService) AdminUpdateRoomMember(ctx context.Context, userId, roomId uuid.UUID, req structs.UpdateRoomMemberRequest) (*domain.RoomMember, error) {
+	member, err := s.repo.GetMemberByRoomIdAndMemberId(ctx, roomId, userId)
+	if err != nil {
+		return nil, err
+	}
+	_, err = patch.Patch(&member, req,
+		patch.WithIgnore("RoomId", "UserId", "JoinedAt", "LeftAt"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.AdminUpdateMember(ctx, member); err != nil {
+		return nil, err
+	}
+	return &member, nil
 }

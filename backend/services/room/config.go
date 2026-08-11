@@ -3,13 +3,17 @@ package main
 import "os"
 
 type Config struct {
-	Port          string
-	DBUrl         string
-	RedisAddr     string
-	RedisPassword string
-	AuthServiceURL string
-	JWKSURL       string
-	FrontendURL   string
+	Port               string
+	DBUrl              string
+	RedisAddr          string
+	RedisPassword      string
+	AuthServiceURL     string
+	JWKSURL            string
+	FrontendURL        string
+	InternalAuditURL   string
+	InternalClientCert string
+	InternalClientKey  string
+	InternalCA         string
 }
 
 func LoadConfig() *Config {
@@ -45,13 +49,22 @@ func LoadConfig() *Config {
 		frontendURL = "http://localhost:3000"
 	}
 
+	internalAuditURL := os.Getenv("INTERNAL_AUDIT_URL")
+	internalClientCert := os.Getenv("INTERNAL_CLIENT_CERT")
+	internalClientKey := os.Getenv("INTERNAL_CLIENT_KEY")
+	internalCA := os.Getenv("INTERNAL_CA")
+
 	return &Config{
-		Port:           port,
-		DBUrl:          dbUrl,
-		RedisAddr:      redisAddr,
-		RedisPassword:  redisPassword,
-		AuthServiceURL: authServiceURL,
-		JWKSURL:        jwksURL,
-		FrontendURL:    frontendURL,
+		Port:               port,
+		DBUrl:              dbUrl,
+		RedisAddr:          redisAddr,
+		RedisPassword:      redisPassword,
+		AuthServiceURL:     authServiceURL,
+		JWKSURL:            jwksURL,
+		FrontendURL:        frontendURL,
+		InternalAuditURL:   internalAuditURL,
+		InternalClientCert: internalClientCert,
+		InternalClientKey:  internalClientKey,
+		InternalCA:         internalCA,
 	}
 }

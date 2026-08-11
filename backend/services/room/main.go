@@ -180,10 +180,19 @@ func main() {
 	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService, userAdapter, log)
 	inviteLinkHandler := handler.NewInviteLinkHandler(inviteLinkService, log)
 
+	auditClient := service.NewAuditClient(
+		cfg.InternalAuditURL,
+		cfg.InternalClientCert,
+		cfg.InternalClientKey,
+		cfg.InternalCA,
+		log,
+	)
+	adminRoomHandler := handler.NewAdminRoomHandler(roomService, roomMemberService, auditClient, log)
+
 	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute, log)
 	go popScheduler.Start(context.Background())
 
-	r := router.NewRouter(roomHandler, roomMemberHandler, inviteLinkHandler, log)
+	r := router.NewRouter(roomHandler, roomMemberHandler, inviteLinkHandler, adminRoomHandler, log)
 
 	r.Setup(&router.RouterConfig{
 		Port:          cfg.Port,
