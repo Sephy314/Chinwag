@@ -201,10 +201,11 @@ func (s *UserService) Login(ctx context.Context, email string, pw string, jkt st
 		return nil, err
 	}
 
-	s.log.Info("login successful", "email", email, "userId", user.Id)
+	s.log.Info("login successful", "email", email, "user_id", user.Id)
 
 	return &structs.TokenSet{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		UserId:       user.Id,
 	}, nil
 }

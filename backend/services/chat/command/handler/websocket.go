@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/ws"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v5"
@@ -86,6 +86,7 @@ func (h *WebSocketHandler) IssueWsTicket(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to issue ticket"})
 	}
 
+	h.log.Info("ws: ticket issued", "user_id", userID, "room_id", roomID.String())
 	return c.JSON(http.StatusOK, response.OK(map[string]any{
 		"ticket":     ticket,
 		"expires_in": int(wsTicketTTL.Seconds()),
@@ -127,6 +128,7 @@ func (h *WebSocketHandler) ServeWS(c *echo.Context) error {
 	}
 
 	h.hub.HandleConnection(conn, roomID, uid)
+	h.log.Info("ws: connected", "user_id", payload.UserID, "room_id", roomID.String())
 	return nil
 }
 

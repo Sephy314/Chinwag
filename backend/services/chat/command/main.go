@@ -255,7 +255,7 @@ func (a *roomMemberAdapter) GetRoomById(ctx context.Context, roomId string) (*se
 func main() {
 	_ = godotenv.Load()
 
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	log := slog.New(newJSONHandler())
 	cfg := LoadConfig()
 
 	if err := chatmigrations.RunAll(cfg.DBUrl, log); err != nil {
@@ -311,7 +311,7 @@ func main() {
 	}
 
 	chatSvc := service.NewChatService(chatRepoImpl, unitOfWork, userAdapter, roomMemberProv)
-	chatHandler := handler.NewChatHandler(chatSvc)
+	chatHandler := handler.NewChatHandler(chatSvc, log)
 	wsHandler := handler.NewWebSocketHandler(hub, conns.Rds, log)
 
 	r := router.NewRouter(chatHandler, wsHandler, log)

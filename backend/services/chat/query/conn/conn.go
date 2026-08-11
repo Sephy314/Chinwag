@@ -10,9 +10,9 @@ import (
 	natslib "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/redis/go-redis/v9"
-)
 
-import _ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
 
 type Connection struct {
 	DB  *sqlx.DB
@@ -31,7 +31,7 @@ type ConnectionConfig struct {
 }
 
 func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
-	db, err := sqlx.Connect("pgx", cfg.DBUrl)
+	db, err := newDB(cfg.DBUrl, cfg.Log)
 	if err != nil {
 		return nil, fmt.Errorf("db connect: %w", err)
 	}
@@ -43,6 +43,9 @@ func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
 		Password: cfg.RedisPassword,
 		DB:       0,
 	})
+	if cfg.Log != nil {
+		rds.AddHook(&redisLogHook{log: cfg.Log})
+	}
 
 	if err := rds.Ping(context.Background()).Err(); err != nil {
 		return nil, fmt.Errorf("redis ping: %w", err)

@@ -11,6 +11,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/domain"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
 	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
@@ -32,7 +33,7 @@ func refreshRequest(t *testing.T, withCookie bool) (*echo.Context, *httptest.Res
 }
 
 func newRefreshHandler(refresh *MockRefreshTokenService, jwtSvc *MockJwtService, locker *MockCache, dpopSvc *MockDPoPService) *RefreshHandlerImpl {
-	return NewRefreshHandler(refresh, jwtSvc, locker, dpopSvc)
+	return NewRefreshHandler(refresh, jwtSvc, locker, dpopSvc, logger.New())
 }
 
 func TestRefreshHandler_Refresh_Success(t *testing.T) {

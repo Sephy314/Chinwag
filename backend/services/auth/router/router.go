@@ -9,8 +9,8 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
-	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -51,8 +51,13 @@ func (r *Router) requestLogger() echo.MiddlewareFunc {
 			if resp, rErr := echo.UnwrapResponse(c.Response()); rErr == nil {
 				status = resp.Status
 			}
+			userID := ""
+			if claims, cerr := sharedauth.ClaimsFromContext(c); cerr == nil {
+				userID = claims.Subject
+			}
 			r.log.Info("request",
 				"request_id", rid,
+				"user_id", userID,
 				"method", c.Request().Method,
 				"path", c.Request().URL.Path,
 				"status", status,

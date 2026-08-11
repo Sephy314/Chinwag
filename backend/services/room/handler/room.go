@@ -2,14 +2,15 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/room/domain"
 	"github.com/Sephy314/chinwag/backend/services/room/service"
-	"github.com/Sephy314/chinwag/backend/services/room/structs"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/utils"
+	"github.com/Sephy314/chinwag/backend/services/room/structs"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
@@ -29,12 +30,18 @@ type RoomHandler interface {
 type RoomHandlerImpl struct {
 	service       service.RoomServiceInterface
 	memberService service.RoomMemberServiceInterface
+	log           *slog.Logger
 }
 
-func NewRoomHandler(s service.RoomServiceInterface, memberService service.RoomMemberServiceInterface) *RoomHandlerImpl {
+func NewRoomHandler(s service.RoomServiceInterface, memberService service.RoomMemberServiceInterface, log ...*slog.Logger) *RoomHandlerImpl {
+	l := slog.Default()
+	if len(log) > 0 && log[0] != nil {
+		l = log[0]
+	}
 	return &RoomHandlerImpl{
 		service:       s,
 		memberService: memberService,
+		log:           l,
 	}
 }
 
@@ -64,9 +71,11 @@ func (h *RoomHandlerImpl) CreateRoom(c *echo.Context) error {
 
 	room, err := h.service.CreateRoom(ctx, req)
 	if err != nil {
+		h.log.Warn("room: create failed", "owner_id", ownerId.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: created", "room_id", room.Id.String(), "owner_id", ownerId.String(), "name", room.Name)
 	return c.JSON(http.StatusCreated, response.Created(room))
 }
 
@@ -158,9 +167,11 @@ func (h *RoomHandlerImpl) UpdateRoom(c *echo.Context) error {
 
 	room, err := h.service.UpdateRoom(c.Request().Context(), roomId, req)
 	if err != nil {
+		h.log.Warn("room: update failed", "room_id", roomId.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: updated", "room_id", roomId.String())
 	return c.JSON(http.StatusOK, response.OK(room))
 }
 
@@ -171,9 +182,11 @@ func (h *RoomHandlerImpl) DeleteRoom(c *echo.Context) error {
 	}
 
 	if err := h.service.DeleteRoom(c.Request().Context(), roomId); err != nil {
+		h.log.Warn("room: delete failed", "room_id", roomId.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: deleted", "room_id", roomId.String())
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
@@ -202,9 +215,11 @@ func (h *RoomHandlerImpl) PopRoom(c *echo.Context) error {
 	}
 
 	if err := h.service.PopRoom(c.Request().Context(), roomId); err != nil {
+		h.log.Warn("room: pop failed", "room_id", roomId.String(), "user_id", userId.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: popped", "room_id", roomId.String(), "user_id", userId.String())
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 

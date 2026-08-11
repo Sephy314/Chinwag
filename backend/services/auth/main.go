@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/auth/conn"
 	"github.com/Sephy314/chinwag/backend/services/auth/handler"
-	"github.com/Sephy314/chinwag/backend/services/auth/oauth"
 	authmigrations "github.com/Sephy314/chinwag/backend/services/auth/migrations"
+	"github.com/Sephy314/chinwag/backend/services/auth/oauth"
 	"github.com/Sephy314/chinwag/backend/services/auth/repo"
 	"github.com/Sephy314/chinwag/backend/services/auth/router"
 	"github.com/Sephy314/chinwag/backend/services/auth/scheduler"
@@ -24,7 +25,8 @@ func main() {
 	envPath := filepath.Join(filepath.Dir(src), ".env")
 	_ = godotenv.Load(envPath)
 
-	log := logger.New()
+	slogLog := slog.New(logger.NewHandler())
+	log := logger.NewWith(slogLog)
 	cfg := LoadConfig()
 
 	if err := authmigrations.RunAll(cfg.DBUrl, log); err != nil {
@@ -35,6 +37,7 @@ func main() {
 		DBUrl:         cfg.DBUrl,
 		RedisAddr:     cfg.RedisAddr,
 		RedisPassword: cfg.RedisPassword,
+		Log:           slogLog,
 	})
 	if err != nil {
 		log.Fatal("failed to connect to database", "error", err)
@@ -56,7 +59,7 @@ func main() {
 	keyRotationScheduler := scheduler.NewKeyRotationScheduler(jwksService, scheduler.NextMidnight(), log)
 	go keyRotationScheduler.Start(context.Background())
 
-	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService, cacheRedis, dpopService)
+	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService, cacheRedis, dpopService, log)
 	userHandler := handler.NewUserHandler(userService, log, dpopService)
 	jwksHandler := handler.NewJwksHandler(jwksService)
 
