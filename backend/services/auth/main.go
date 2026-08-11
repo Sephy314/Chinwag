@@ -9,8 +9,8 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/auth/conn"
 	"github.com/Sephy314/chinwag/backend/services/auth/handler"
-	"github.com/Sephy314/chinwag/backend/services/auth/oauth"
 	authmigrations "github.com/Sephy314/chinwag/backend/services/auth/migrations"
+	"github.com/Sephy314/chinwag/backend/services/auth/oauth"
 	"github.com/Sephy314/chinwag/backend/services/auth/repo"
 	"github.com/Sephy314/chinwag/backend/services/auth/router"
 	"github.com/Sephy314/chinwag/backend/services/auth/scheduler"

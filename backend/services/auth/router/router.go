@@ -9,8 +9,8 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
-	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )

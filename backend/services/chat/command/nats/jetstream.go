@@ -15,8 +15,8 @@ import (
 )
 
 type wsEvent struct {
-	Type string      `json:"type"`
-	Data any `json:"data"`
+	Type string `json:"type"`
+	Data any    `json:"data"`
 }
 
 type JetStreamEventPublisher struct {

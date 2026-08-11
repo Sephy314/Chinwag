@@ -186,9 +186,9 @@ func main() {
 	r := router.NewRouter(roomHandler, roomMemberHandler, inviteLinkHandler, log)
 
 	r.Setup(&router.RouterConfig{
-		Port:        cfg.Port,
-		JWKSURL:     cfg.JWKSURL,
-		FrontendURL: cfg.FrontendURL,
+		Port:          cfg.Port,
+		JWKSURL:       cfg.JWKSURL,
+		FrontendURL:   cfg.FrontendURL,
 		DPoPValidator: newDPoPValidator(conns.Rds),
 	})
 

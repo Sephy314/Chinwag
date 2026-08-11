@@ -10,9 +10,9 @@ import (
 	natslib "github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/redis/go-redis/v9"
-)
 
-import _ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
 
 type Connection struct {
 	DB  *sqlx.DB

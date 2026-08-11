@@ -26,8 +26,8 @@ var (
 	googleUserURL  = "https://www.googleapis.com/oauth2/v2/userinfo"
 )
 
-func SetGoogleTokenURL(url string)  { googleTokenURL = url }
-func SetGoogleUserURL(url string)   { googleUserURL = url }
+func SetGoogleTokenURL(url string) { googleTokenURL = url }
+func SetGoogleUserURL(url string)  { googleUserURL = url }
 func ResetGoogleURLs() {
 	googleTokenURL = "https://oauth2.googleapis.com/token"
 	googleUserURL = "https://www.googleapis.com/oauth2/v2/userinfo"

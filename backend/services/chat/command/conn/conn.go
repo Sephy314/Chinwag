@@ -7,9 +7,9 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/chat/command/nats"
 	"github.com/jmoiron/sqlx"
 	"github.com/redis/go-redis/v9"
-)
 
-import _ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
+)
 
 type Connection struct {
 	DB   *sqlx.DB

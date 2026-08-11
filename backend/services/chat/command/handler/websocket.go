@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/chat/command/ws"
+	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v5"

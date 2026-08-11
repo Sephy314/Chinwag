@@ -7,10 +7,10 @@ import (
 
 	"github.com/Sephy314/chinwag/backend/services/room/domain"
 	"github.com/Sephy314/chinwag/backend/services/room/service"
-	"github.com/Sephy314/chinwag/backend/services/room/structs"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/room/shared/utils"
+	"github.com/Sephy314/chinwag/backend/services/room/structs"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )

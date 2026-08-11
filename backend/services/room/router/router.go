@@ -13,11 +13,11 @@ import (
 )
 
 type Router struct {
-	Echo                *echo.Echo
-	RoomHandler         *handler.RoomHandlerImpl
-	RoomMemberHandler   *handler.RoomMemberHandlerImpl
-	InviteLinkHandler   *handler.InviteLinkHandlerImpl
-	log                 *slog.Logger
+	Echo              *echo.Echo
+	RoomHandler       *handler.RoomHandlerImpl
+	RoomMemberHandler *handler.RoomMemberHandlerImpl
+	InviteLinkHandler *handler.InviteLinkHandlerImpl
+	log               *slog.Logger
 }
 
 func NewRouter(

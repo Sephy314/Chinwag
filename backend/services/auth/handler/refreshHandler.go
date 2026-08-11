@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/Sephy314/chinwag/backend/services/auth/domain"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
@@ -13,6 +12,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
+	"github.com/Sephy314/chinwag/backend/shared/auth/dpop"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )

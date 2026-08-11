@@ -6,10 +6,10 @@ import (
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/service"
-	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/utils"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 )
