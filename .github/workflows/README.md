@@ -4,7 +4,7 @@
 |---|---|---|
 | `ci.yml` | push (any branch), pull_request, manual (`workflow_dispatch`) | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` · K3s infra: `infra/ci-test.sh` (ephemeral k3d cluster, runs on every push/PR) |
 | `cd.yml` | push to `main`, manual (`workflow_dispatch`) | Self-hosted runner on the k3s node syncs `~/Chinwag` to `origin/main` and runs `infra/k3s/update.sh` (app images + manifests only — the observability stack is **not** updated on every deploy) |
-| `deploy-observability.yml` | manual (`workflow_dispatch`) | Self-hosted runner runs `infra/k3s/observability/install.sh` (Loki/Alloy/Prometheus/Grafana) — deploy the obs stack on demand |
+| `deploy-observability.yml` | after `CD` succeeds (`workflow_run`), manual (`workflow_dispatch`) | Self-hosted runner runs `infra/k3s/observability/install.sh` (Loki/Alloy/Prometheus/Grafana) — deploys the obs stack after every successful app deploy, or on demand |
 
 ## CI
 

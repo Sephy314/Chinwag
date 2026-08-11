@@ -1,18 +1,26 @@
-name: Deploy Observability (manual)
+name: Deploy Observability
 
 # Deploys / updates the observability stack (Loki + Grafana Alloy + Prometheus
-# + Grafana) on the production node, on demand. This is deliberately a SEPARATE
-# manual workflow: the stack rarely changes, so running observability/install.sh
-# (4 Helm upgrades with --wait) on every app deploy just slows CD down.
+# + Grafana) on the production node.
+#
+# Two triggers:
+#   1. workflow_run — runs automatically AFTER the CD workflow completes
+#      successfully on `main`. The stack changes rarely, but when it does (e.g.
+#      an observability PR is merged), this keeps it in sync on production
+#      without adding 4 Helm upgrades (with --wait) to the CD critical path.
+#      It runs as a separate workflow on the same self-hosted runner, so it
+#      does not slow CD down and an obs failure never blocks CD.
+#   2. workflow_dispatch — manual run from the Actions tab
+#      (Actions -> "Deploy Observability" -> Run workflow).
 #
 # The job runs on the SAME self-hosted runner as CD (installed on the k3s node),
 # operating on the persistent checkout at ~/Chinwag, which must contain the
 # gitignored infra/k3s/secret.yaml. See .github/workflows/README.md.
-#
-# Trigger it from the Actions tab: Actions -> "Deploy Observability (manual)"
-# -> Run workflow (branch: main).
 
 on:
+  workflow_run:
+    workflows: [CD]
+    types: [completed]
   workflow_dispatch:
 
 # Only one obs deploy at a time; a queued run waits (don't cancel a live rollout).
@@ -26,6 +34,7 @@ permissions:
 jobs:
   deploy-observability:
     name: Deploy observability stack to home server (k3s)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, linux]
     steps:
       - name: Sync repo checkout to origin/main
