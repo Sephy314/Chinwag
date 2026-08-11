@@ -2,7 +2,7 @@
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ci.yml` | push (any branch), pull_request, manual (`workflow_dispatch`) | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` · K3s infra: `infra/test.sh` (manual only, self-hosted `k3s` runner) |
+| `ci.yml` | push (any branch), pull_request, manual (`workflow_dispatch`) | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` · K3s infra: `infra/ci-test.sh` (ephemeral k3d cluster, runs on every push/PR) |
 | `cd.yml` | push to `main`, manual (`workflow_dispatch`) | Self-hosted runner on the k3s node syncs `~/Chinwag` to `origin/main` and runs `infra/k3s/update.sh` |
 
 ## CI
@@ -15,28 +15,30 @@ required — backend tests are unit tests with mocks, and the only live-DB test
 > `frontend/pnpm-lock.yaml` in the repo is **not** used — keep `package-lock.json`
 > in sync when changing dependencies.
 
-### K3s infrastructure test (`infra/test.sh`)
+### K3s infrastructure test (`infra/test.sh` / `infra/ci-test.sh`)
 
 `infra/test.sh` is a real integration test: it applies the kustomize manifests to
 a K3s cluster, waits for readiness, and runs runtime checks (Service DNS/TCP,
 health endpoints, gateway proxy, Traefik Ingress). It is **not** a YAML-only test.
 
-GitHub-hosted runners have **no access to a K3s cluster**, so the `k3s-infra` job
-never runs on `ubuntu-latest`. It runs on the **same self-hosted runner as CD**
-(the one on the k3s node, which has kubectl/helm access) on **every merge to
-`main`** and on manual dispatch (`workflow_dispatch`) — i.e. it verifies the
-deployed **production** cluster after each deploy. It is intentionally **not** run
-on pull requests (the runner points at production and `test.sh` applies the
-manifests).
+GitHub-hosted runners have **no permanent K3s cluster**, so the `k3s-infra` job
+runs `infra/ci-test.sh`, which creates an **ephemeral k3d cluster** on the
+`ubuntu-latest` runner:
 
-Because `infra/k3s/secret.yaml` is gitignored, a fresh `actions/checkout` does not
-contain it; the job copies it from the runner's **persistent CD checkout**
-(`~/Chinwag`, see `cd.yml` `DEPLOY_DIR`) before running the test. If that path
-differs on your runner, adjust the copy step in `ci.yml`.
+1. installs `k3d` + `kubectl` (if missing),
+2. creates a throwaway k3d cluster (Traefik ingress + local-path storage),
+3. installs **cert-manager** (the kustomize manifests reference its CRDs:
+   `ClusterIssuer`, `Issuer`, `Certificate`),
+4. generates a **dummy `infra/k3s/secret.yaml`** when the checkout has none
+   (the real one is gitignored),
+5. builds + imports the 6 Chinwag images,
+6. pre-applies kustomize and waits for the internal certs (`chinwag-ca`,
+   `postgres-tls`),
+7. runs `infra/test.sh`, then tears the cluster down.
 
-> To test a **non-production** cluster instead, register a separate self-hosted
-> runner with a `k3s` label pointing at a dev/test cluster and change the
-> `k3s-infra` job's `runs-on` + `if` accordingly.
+Because the cluster is ephemeral, this is **safe to run on every push and PR** —
+it never touches the dev or production clusters. No self-hosted runner is needed
+for CI anymore (only `cd.yml` still uses one).
 
 ## CD — self-hosted runner (no SSH needed)
 

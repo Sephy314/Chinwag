@@ -68,37 +68,30 @@ jobs:
       - name: Build (next build)
         run: npm run build
 
-  # Real K3s infrastructure integration test (infra/test.sh): applies the
-  # kustomize manifests to a real cluster, waits for readiness and runs runtime
-  # checks (Service DNS, health endpoints, gateway proxy, Traefik Ingress).
+  # Real K3s infrastructure integration test (infra/test.sh) against an
+  # EPHEMERAL k3d cluster (infra/ci-test.sh), so it runs on EVERY push and PR
+  # on GitHub-hosted runners — no self-hosted runner needed.
   #
-  # GitHub-hosted runners have NO access to a K3s cluster, so this never runs on
-  # ubuntu-latest. It runs on the existing SELF-HOSTED runner (the same one used
-  # by cd.yml, which sits on the k3s node and has kubectl + helm access) after
-  # every merge to main and on manual dispatch — i.e. it verifies the deployed
-  # production cluster. It is intentionally NOT run on PRs (the runner points at
-  # the production cluster and test.sh applies the manifests).
+  # GitHub-hosted runners have Docker but no permanent cluster, so ci-test.sh:
+  # creates a throwaway k3d cluster, installs cert-manager (kustomize needs its
+  # CRDs), generates a dummy secret.yaml, builds + imports the Chinwag images,
+  # and runs infra/test.sh against it. The dev and production clusters are
+  # never touched, which is why this is safe to run on PRs (unlike the old
+  # self-hosted job, which pointed at production and had to stay skip-on-PR).
   #
-  # infra/k3s/secret.yaml is gitignored, so a fresh actions/checkout does not
-  # contain it; it is copied from the runner's persistent CD checkout
-  # (~/Chinwag — see cd.yml DEPLOY_DIR) which preserves it across resets.
+  # infra/k3s/secret.yaml is gitignored; ci-test.sh generates a self-consistent
+  # dummy one when the checkout has none, so a fresh checkout works.
   k3s-infra:
     name: K3s Infrastructure
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
 
-      - name: Copy gitignored secret.yaml (from persistent CD checkout)
-        run: |
-          if [ -f "$HOME/Chinwag/infra/k3s/secret.yaml" ]; then
-            cp "$HOME/Chinwag/infra/k3s/secret.yaml" infra/k3s/secret.yaml
-            echo "secret.yaml copied from \$HOME/Chinwag"
-          else
-            echo "::warning::infra/k3s/secret.yaml not found in \$HOME/Chinwag — the test will fail its prerequisite check"
-          fi
+      - name: Set up Docker Buildx (GHA layer cache)
+        uses: docker/setup-buildx-action@v3
 
-      - name: Run K3s infrastructure test
+      - name: Run K3s infrastructure test (ephemeral k3d cluster)
         run: |
-          chmod +x infra/test.sh
-          ./infra/test.sh
+          chmod +x infra/ci-test.sh
+          ./infra/ci-test.sh
