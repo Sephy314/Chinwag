@@ -47,6 +47,13 @@ node**. The CD job runs on that runner, so `update.sh` executes natively with
 `docker`, `k3s`, and `kubectl` all available — no inbound ports, no SSH keys, no
 repo secrets.
 
+`update.sh` also updates the **observability stack** (`./observability/install.sh`:
+Loki, Alloy, Prometheus, Grafana via Helm — plus the `grafana-tls` cert and the
+`grafana-dashboards` ConfigMap). The runner needs `helm` and a working kubeconfig;
+`observability/install.sh` bootstraps both if missing (installs `helm`/standalone
+`kubectl` to `~/.local/bin`, or uses `/etc/rancher/k3s/k3s.yaml`), so no extra
+node setup is required beyond what's below.
+
 ### 1. Register a runner on the node
 
 1. GitHub repo → **Settings → Actions → Runners → New self-hosted runner** — copy
@@ -83,6 +90,19 @@ repo secrets.
    # <runner-user> ALL=(root) NOPASSWD: /usr/local/bin/k3s
    ```
 3. **`docker` access** for the runner user (add to the `docker` group).
+4. **Readable kubeconfig** for the runner user — `update.sh`'s observability step
+   (`observability/install.sh`) drives `helm`, which does **not** go through the
+   `k3s` wrapper and needs a readable `KUBECONFIG`. Copy the k3s admin config to
+   the runner user (it is also what `test.sh`'s `sudo k3s kubectl` fallback uses
+   — NOPASSWD for `k3s` covers that path):
+   ```bash
+   sudo mkdir -p ~/.kube \
+     && sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config \
+     && sudo chown -R $(whoami):$(whoami) ~/.kube \
+     && sudo chmod 600 ~/.kube/config
+   ```
+   `install.sh` also bootstraps `helm`/standalone `kubectl` into `~/.local/bin`
+   if missing, so no package install is needed.
 
 ### 3. Branch protection (recommended)
 
