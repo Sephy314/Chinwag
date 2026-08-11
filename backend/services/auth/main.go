@@ -48,12 +48,14 @@ func main() {
 
 	userRepo := repo.NewUserRepository(conns.DB)
 	jwksRepo := repo.NewJwtRepository(conns.DB)
+	auditRepo := repo.NewAuditRepo(conns.DB)
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
 	jwksService := service.NewJwksService(jwksRepo, log)
 	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Hour*24*14)
 	dpopService := service.NewDPoPService(cacheRedis)
 	userService := service.NewUserService(userRepo, jwksService, refreshTokenService, log, unitOfWork)
+	auditService := service.NewAuditService(auditRepo)
 	jwtService := service.NewJwtService(refreshTokenService, jwksService)
 
 	keyRotationScheduler := scheduler.NewKeyRotationScheduler(jwksService, scheduler.NextMidnight(), log)
@@ -63,7 +65,12 @@ func main() {
 	userHandler := handler.NewUserHandler(userService, log, dpopService)
 	jwksHandler := handler.NewJwksHandler(jwksService)
 
-	r := router.NewRouter(userHandler, jwksHandler, refreshTokenHandler, jwksService, log)
+	adminUserHandler := handler.NewAdminUserHandler(userService, refreshTokenService, auditService, log)
+	adminSessionHandler := handler.NewAdminSessionHandler(refreshTokenService, auditService, log)
+	adminAuditHandler := handler.NewAdminAuditHandler(auditService, log)
+
+	r := router.NewRouter(userHandler, jwksHandler, refreshTokenHandler, jwksService,
+		adminUserHandler, adminSessionHandler, adminAuditHandler, log)
 
 	googleCfg := oauth.LoadGoogleConfig()
 	r.Setup(&router.RouterConfig{

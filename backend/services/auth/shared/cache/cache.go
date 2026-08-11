@@ -17,6 +17,8 @@ type Cache interface {
 	HGetAll(ctx context.Context, key string) (map[string]string, error)
 	SAdd(ctx context.Context, key string, ttl time.Duration, members ...string) error
 	SMembers(ctx context.Context, key string) ([]string, error)
+	SRem(ctx context.Context, key string, members ...string) error
+	Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error)
 	Eval(ctx context.Context, script string, keys []string, args ...any) (any, error)
 	AcquireLock(ctx context.Context, key string, token string, ttl time.Duration) (bool, error)
 	ReleaseLock(ctx context.Context, key string, token string) error
@@ -78,6 +80,18 @@ func (rc *RedisCache) SAdd(ctx context.Context, key string, ttl time.Duration, m
 
 func (rc *RedisCache) SMembers(ctx context.Context, key string) ([]string, error) {
 	return rc.client.SMembers(ctx, key).Result()
+}
+
+func (rc *RedisCache) SRem(ctx context.Context, key string, members ...string) error {
+	args := make([]interface{}, len(members))
+	for i, m := range members {
+		args[i] = m
+	}
+	return rc.client.SRem(ctx, key, args...).Err()
+}
+
+func (rc *RedisCache) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	return rc.client.Scan(ctx, cursor, match, count).Result()
 }
 
 func (rc *RedisCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {

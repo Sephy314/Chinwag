@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,7 @@ func TestRefreshTokenService_InsertRefreshToken_Success_WithLineage(t *testing.T
 	cache.On("HSet", mock.Anything, "rt:tok123", mock.MatchedBy(func(f map[string]string) bool {
 		return f["user_id"] == "u1" && f["lineage_id"] == "lin1" && f["used"] == "0" && f["revoked"] == "0"
 	}), time.Hour).Return(nil).Once()
+	cache.On("SAdd", mock.Anything, "rt:user:u1", time.Hour, []string{"lin1"}).Return(nil).Once()
 	cache.On("SAdd", mock.Anything, "rt:lineage:lin1", time.Hour, []string{"tok123"}).Return(nil).Once()
 
 	err := svc.InsertRefreshToken(context.Background(), token)
@@ -101,8 +103,9 @@ func TestRefreshTokenService_InsertRefreshToken_AutoLineage(t *testing.T) {
 	cache.On("HSet", mock.Anything, "rt:tok123", mock.MatchedBy(func(f map[string]string) bool {
 		return f["user_id"] == "u1" && f["lineage_id"] != ""
 	}), time.Hour).Return(nil).Once()
+	cache.On("SAdd", mock.Anything, "rt:user:u1", time.Hour, mock.Anything).Return(nil).Once()
 	cache.On("SAdd", mock.Anything, mock.MatchedBy(func(k string) bool {
-		return len(k) > len("rt:lineage:")
+		return strings.HasPrefix(k, "rt:lineage:")
 	}), time.Hour, []string{"tok123"}).Return(nil).Once()
 
 	err := svc.InsertRefreshToken(context.Background(), token)
@@ -245,6 +248,8 @@ func TestRefreshTokenService_RevokeLineage_Success(t *testing.T) {
 	cache.On("SMembers", mock.Anything, "rt:lineage:lin1").Return([]string{"tok1", "tok2"}, nil).Once()
 	cache.On("HSet", mock.Anything, "rt:tok1", map[string]string{"revoked": "1"}, time.Duration(0)).Return(nil).Once()
 	cache.On("HSet", mock.Anything, "rt:tok2", map[string]string{"revoked": "1"}, time.Duration(0)).Return(nil).Once()
+	cache.On("HGetAll", mock.Anything, "rt:tok1").Return(map[string]string{"user_id": "u1"}, nil).Once()
+	cache.On("SRem", mock.Anything, "rt:user:u1", []string{"lin1"}).Return(nil).Once()
 	cache.On("Delete", mock.Anything, "rt:lineage:lin1").Return(nil).Once()
 
 	err := svc.RevokeLineage(context.Background(), "lin1")

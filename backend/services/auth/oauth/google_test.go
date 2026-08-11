@@ -63,6 +63,14 @@ func (m *mockCache) SMembers(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
 }
 
+func (m *mockCache) SRem(_ context.Context, _ string, _ ...string) error {
+	return nil
+}
+
+func (m *mockCache) Scan(_ context.Context, _ uint64, _ string, _ int64) ([]string, uint64, error) {
+	return nil, 0, nil
+}
+
 func (m *mockCache) Eval(_ context.Context, _ string, keys []string, _ ...any) (any, error) {
 	v, ok := m.set[keys[0]]
 	if ok {

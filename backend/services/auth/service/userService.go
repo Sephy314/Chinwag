@@ -209,3 +209,133 @@ func (s *UserService) Login(ctx context.Context, email string, pw string, jkt st
 		UserId:       user.Id,
 	}, nil
 }
+
+// --- Admin operations ---
+
+func toAdminUser(u domain.User) structs.AdminUserResponse {
+	return structs.AdminUserResponse{
+		Id:        u.Id,
+		Name:      u.Name,
+		Email:     u.Email,
+		Role:      string(u.Role),
+		Provider:  u.Provider,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+		DeletedAt: u.DeletedAt,
+	}
+}
+
+func (s *UserService) AdminListUsers(ctx context.Context, req structs.ListUsersRequest) ([]structs.AdminUserResponse, *structs.CursorMeta, error) {
+	if req.Limit <= 0 || req.Limit > 200 {
+		req.Limit = 50
+	}
+	users, meta, err := s.Repo.ListUsers(ctx, req.Cursor, req.Limit, req.Role, req.Deleted, req.Search)
+	if err != nil {
+		return nil, nil, err
+	}
+	out := make([]structs.AdminUserResponse, len(users))
+	for i, u := range users {
+		out[i] = toAdminUser(u)
+	}
+	return out, meta, nil
+}
+
+func (s *UserService) AdminGetUser(ctx context.Context, id string) (*structs.AdminUserResponse, error) {
+	u, err := s.Repo.GetUserIncludingDeleted(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	user := toAdminUser(*u)
+	return &user, nil
+}
+
+func (s *UserService) AdminCreateUser(ctx context.Context, req structs.CreateAdminUserRequest) (*structs.AdminUserResponse, error) {
+	role := req.Role
+	if role == "" {
+		role = string(domain.USER)
+	}
+	if !validRole(role) {
+		return nil, errs.ErrInvalidRole
+	}
+
+	u, err := s.CreateUser(ctx, structs.CreateUserReq{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: req.Password,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if role != string(domain.USER) {
+		if err := s.Repo.SetRole(ctx, u.Id, domain.Role(role)); err != nil {
+			return nil, err
+		}
+	}
+	admin := toAdminUser(*u)
+	admin.Role = role
+	return &admin, nil
+}
+
+func (s *UserService) AdminUpdateUser(ctx context.Context, id string, req structs.UpdateAdminUserRequest) (*structs.AdminUserResponse, error) {
+	u, err := s.UpdateUser(ctx, id, structs.UpdateUserReq{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: req.Password,
+	})
+	if err != nil {
+		return nil, err
+	}
+	admin := toAdminUser(*u)
+	return &admin, nil
+}
+
+func (s *UserService) AdminSetRole(ctx context.Context, id, actorID, role string) error {
+	if !validRole(role) {
+		return errs.ErrInvalidRole
+	}
+	if id == actorID && role != string(domain.ADMIN) {
+		return errs.ErrSelfDemotion
+	}
+
+	current, err := s.Repo.GetUserIncludingDeleted(ctx, id)
+	if err != nil {
+		return err
+	}
+	if string(current.Role) == string(domain.ADMIN) && role != string(domain.ADMIN) {
+		n, err := s.Repo.CountAdmins(ctx)
+		if err != nil {
+			return err
+		}
+		if n <= 1 {
+			return errs.ErrLastAdmin
+		}
+	}
+
+	return s.Repo.SetRole(ctx, id, domain.Role(role))
+}
+
+func (s *UserService) AdminRestoreUser(ctx context.Context, id string) (*structs.AdminUserResponse, error) {
+	if err := s.Repo.RestoreUser(ctx, id); err != nil {
+		return nil, err
+	}
+	u, err := s.Repo.GetUserIncludingDeleted(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	admin := toAdminUser(*u)
+	return &admin, nil
+}
+
+func (s *UserService) CountUsers(ctx context.Context) (int64, error) {
+	n, err := s.Repo.CountUsers(ctx)
+	return int64(n), err
+}
+
+func validRole(role string) bool {
+	switch role {
+	case string(domain.USER), string(domain.MANAGER), string(domain.ADMIN):
+		return true
+	default:
+		return false
+	}
+}

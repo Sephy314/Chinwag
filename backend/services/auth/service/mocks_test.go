@@ -56,6 +56,46 @@ func (m *MockUserRepo) GetUserByEmail(ctx context.Context, email string) (*domai
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
+func (m *MockUserRepo) GetUserIncludingDeleted(ctx context.Context, id string) (*domain.User, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *MockUserRepo) RestoreUser(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockUserRepo) SetRole(ctx context.Context, id string, role domain.Role) error {
+	args := m.Called(ctx, id, role)
+	return args.Error(0)
+}
+
+func (m *MockUserRepo) CountUsers(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepo) CountAdmins(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepo) ListUsers(ctx context.Context, cursor string, limit int, role, deleted, search string) ([]domain.User, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursor, limit, role, deleted, search)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	var meta *structs.CursorMeta
+	if args.Get(1) != nil {
+		meta = args.Get(1).(*structs.CursorMeta)
+	}
+	return args.Get(0).([]domain.User), meta, args.Error(2)
+}
+
 // ---- JWKS repo ----
 
 type MockJwksRepo struct {
@@ -267,6 +307,19 @@ func (m *MockCache) SMembers(ctx context.Context, key string) ([]string, error) 
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockCache) SRem(ctx context.Context, key string, members ...string) error {
+	args := m.Called(ctx, key, members)
+	return args.Error(0)
+}
+
+func (m *MockCache) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
+	args := m.Called(ctx, cursor, match, count)
+	if args.Get(0) == nil {
+		return nil, args.Get(1).(uint64), args.Error(2)
+	}
+	return args.Get(0).([]string), args.Get(1).(uint64), args.Error(2)
 }
 
 func (m *MockCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
