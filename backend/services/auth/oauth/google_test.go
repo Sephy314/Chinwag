@@ -67,8 +67,24 @@ func (m *mockCache) SRem(_ context.Context, _ string, _ ...string) error {
 	return nil
 }
 
-func (m *mockCache) Scan(_ context.Context, _ uint64, _ string, _ int64) ([]string, uint64, error) {
-	return nil, 0, nil
+func (m *mockCache) ZAdd(_ context.Context, _ string, _ int64, _ string) error {
+	return nil
+}
+
+func (m *mockCache) ZRem(_ context.Context, _ string, _ ...string) error {
+	return nil
+}
+
+func (m *mockCache) ZCard(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockCache) ZRangeByScore(_ context.Context, _, _, _ string, _, _ int64) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockCache) ZRevRangeByScore(_ context.Context, _, _, _ string, _, _ int64) ([]string, error) {
+	return nil, nil
 }
 
 func (m *mockCache) Eval(_ context.Context, _ string, keys []string, _ ...any) (any, error) {
@@ -106,11 +122,11 @@ func (m *mockCache) ReserveJti(_ context.Context, jti string, _ time.Duration) (
 
 type noopLogger struct{}
 
-func (noopLogger) Info(_ string, _ ...any)   {}
-func (noopLogger) Error(_ string, _ ...any)  {}
-func (noopLogger) Debug(_ string, _ ...any)  {}
-func (noopLogger) Warn(_ string, _ ...any)   {}
-func (noopLogger) Fatal(_ string, _ ...any)  {}
+func (noopLogger) Info(_ string, _ ...any)     {}
+func (noopLogger) Error(_ string, _ ...any)    {}
+func (noopLogger) Debug(_ string, _ ...any)    {}
+func (noopLogger) Warn(_ string, _ ...any)     {}
+func (noopLogger) Fatal(_ string, _ ...any)    {}
 func (noopLogger) With(_ ...any) logger.Logger { return noopLogger{} }
 
 func newTestLogger() logger.Logger { return noopLogger{} }

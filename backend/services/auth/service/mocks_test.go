@@ -314,12 +314,35 @@ func (m *MockCache) SRem(ctx context.Context, key string, members ...string) err
 	return args.Error(0)
 }
 
-func (m *MockCache) Scan(ctx context.Context, cursor uint64, match string, count int64) ([]string, uint64, error) {
-	args := m.Called(ctx, cursor, match, count)
+func (m *MockCache) ZAdd(ctx context.Context, key string, score int64, member string) error {
+	args := m.Called(ctx, key, score, member)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZRem(ctx context.Context, key string, members ...string) error {
+	args := m.Called(ctx, key, members)
+	return args.Error(0)
+}
+
+func (m *MockCache) ZCard(ctx context.Context, key string) (int64, error) {
+	args := m.Called(ctx, key)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockCache) ZRangeByScore(ctx context.Context, key, min, max string, offset, count int64) ([]string, error) {
+	args := m.Called(ctx, key, min, max, offset, count)
 	if args.Get(0) == nil {
-		return nil, args.Get(1).(uint64), args.Error(2)
+		return nil, args.Error(1)
 	}
-	return args.Get(0).([]string), args.Get(1).(uint64), args.Error(2)
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *MockCache) ZRevRangeByScore(ctx context.Context, key, max, min string, offset, count int64) ([]string, error) {
+	args := m.Called(ctx, key, max, min, offset, count)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]string), args.Error(1)
 }
 
 func (m *MockCache) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {

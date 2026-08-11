@@ -23,7 +23,8 @@ func TestAdminSessionHandler_RevokeSession(t *testing.T) {
 	cache.On("SMembers", mock.Anything, "refresh:lineage:lin1").Return([]string{"tok1"}, nil).Once()
 	cache.On("HSet", mock.Anything, "refresh:tok1", map[string]string{"revoked": "1"}, mock.Anything).Return(nil).Once()
 	cache.On("HGetAll", mock.Anything, "refresh:tok1").Return(fields, nil).Once()
-	cache.On("SRem", mock.Anything, "refresh:user:u1", []string{"lin1"}).Return(nil).Once()
+	cache.On("ZRem", mock.Anything, "refresh:user:u1", []string{"lin1"}).Return(nil).Once()
+	cache.On("ZRem", mock.Anything, "refresh:sessions", []string{"lin1"}).Return(nil).Once()
 	cache.On("Delete", mock.Anything, "refresh:lineage:lin1").Return(nil).Once()
 	audit.On("Insert", mock.Anything, mock.MatchedBy(func(ev domain.AuditEvent) bool {
 		return ev.Action == "session.revoke" && ev.TargetId == "lin1"
@@ -45,7 +46,7 @@ func TestAdminSessionHandler_StatsSessions(t *testing.T) {
 	cache := new(MockCache)
 	h := newAdminSessionHandler(cache, new(MockAuditRepo))
 
-	cache.On("Scan", mock.Anything, uint64(0), "refresh:lineage:*", int64(100)).Return([]string{"k1", "k2"}, uint64(0), nil).Once()
+	cache.On("ZCard", mock.Anything, "refresh:sessions").Return(int64(2), nil).Once()
 
 	c, rec := echotest.ContextConfig{}.ToContextRecorder(t)
 	err := h.StatsSessions(c)

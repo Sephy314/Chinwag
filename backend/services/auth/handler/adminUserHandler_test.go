@@ -114,7 +114,7 @@ func TestAdminUserHandler_ListUserSessions(t *testing.T) {
 	fields := map[string]string{
 		"user_id": "u1", "lineage_id": "lin1", "jkt": "jkt", "used": "0", "revoked": "0", "created_at": "1700000000",
 	}
-	cache.On("SMembers", mock.Anything, "refresh:user:u1").Return([]string{"lin1"}, nil).Once()
+	cache.On("ZRevRangeByScore", mock.Anything, "refresh:user:u1", "+inf", "-inf", int64(0), int64(-1)).Return([]string{"lin1"}, nil).Once()
 	cache.On("SMembers", mock.Anything, "refresh:lineage:lin1").Return([]string{"tok1"}, nil).Once()
 	cache.On("HGetAll", mock.Anything, "refresh:tok1").Return(fields, nil).Once()
 

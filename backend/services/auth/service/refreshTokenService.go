@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
-	"sort"
+	"encoding/json"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
@@ -64,6 +64,7 @@ func (r *RefreshTokenService) InsertRefreshToken(ctx context.Context, token stru
 		lineageID = uuid.Must(uuid.NewV7()).String()
 	}
 
+	now := time.Now().Unix()
 	fields := map[string]string{
 		"user_id":     token.Subject,
 		"lineage_id":  lineageID,
@@ -71,16 +72,20 @@ func (r *RefreshTokenService) InsertRefreshToken(ctx context.Context, token stru
 		"jkt":         token.Jkt,
 		"used":        "0",
 		"revoked":     "0",
-		"created_at":  strconv.FormatInt(time.Now().Unix(), 10),
+		"created_at":  strconv.FormatInt(now, 10),
 	}
 
 	if err := r.Cache.HSet(ctx, r.RefreshTokenPrefix+token.RefreshToken, fields, r.RefreshTokenTTL); err != nil {
 		return err
 	}
 
-	// Maintain the user -> lineage index so admin/session listing can find a
-	// user's sessions without scanning every token key.
-	if err := r.Cache.SAdd(ctx, r.RefreshTokenPrefix+"user:"+token.Subject, r.RefreshTokenTTL, lineageID); err != nil {
+	// Maintain the per-user and global session indexes as Sorted Sets so
+	// sessions can be listed with ordered, cursor-based range queries instead
+	// of scanning the whole Redis keyspace.
+	if err := r.Cache.ZAdd(ctx, r.RefreshTokenPrefix+"user:"+token.Subject, now, lineageID); err != nil {
+		return err
+	}
+	if err := r.Cache.ZAdd(ctx, r.RefreshTokenPrefix+"sessions", now, lineageID); err != nil {
 		return err
 	}
 
@@ -138,12 +143,13 @@ func (r *RefreshTokenService) RevokeLineage(ctx context.Context, lineageID strin
 		}
 	}
 
-	// Remove the lineage from its owner's user -> lineage index.
+	// Remove the lineage from the per-user and global session indexes.
 	if len(members) > 0 {
 		if rec, rerr := r.getRecord(ctx, members[0]); rerr == nil && rec.UserID != "" {
-			_ = r.Cache.SRem(ctx, r.RefreshTokenPrefix+"user:"+rec.UserID, lineageID)
+			_ = r.Cache.ZRem(ctx, r.RefreshTokenPrefix+"user:"+rec.UserID, lineageID)
 		}
 	}
+	_ = r.Cache.ZRem(ctx, r.RefreshTokenPrefix+"sessions", lineageID)
 
 	return r.Cache.Delete(ctx, lineageKey)
 }
@@ -217,9 +223,31 @@ func (r *RefreshTokenService) sessionFromLineage(ctx context.Context, lineageID 
 	}, nil
 }
 
-// ListSessionsByUser returns all lineages (sessions) belonging to a user.
+type sessionCursor struct {
+	CreatedAt int64  `json:"created_at"`
+	LineageId string `json:"lineage_id"`
+}
+
+func encodeSessionCursor(createdAt int64, lineageID string) string {
+	c := sessionCursor{CreatedAt: createdAt, LineageId: lineageID}
+	b, _ := json.Marshal(c)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+func decodeSessionCursor(s string) (sessionCursor, error) {
+	var c sessionCursor
+	b, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return c, err
+	}
+	err = json.Unmarshal(b, &c)
+	return c, err
+}
+
+// ListSessionsByUser returns all lineages (sessions) belonging to a user,
+// newest first, using the per-user Sorted Set index.
 func (r *RefreshTokenService) ListSessionsByUser(ctx context.Context, userId string) ([]structs.AdminSession, error) {
-	lineages, err := r.Cache.SMembers(ctx, r.RefreshTokenPrefix+"user:"+userId)
+	lineages, err := r.Cache.ZRevRangeByScore(ctx, r.RefreshTokenPrefix+"user:"+userId, "+inf", "-inf", 0, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -231,40 +259,79 @@ func (r *RefreshTokenService) ListSessionsByUser(ctx context.Context, userId str
 		}
 		out = append(out, *s)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
 	return out, nil
 }
 
-// ListAllSessions returns every active session (lineage) across all users.
-func (r *RefreshTokenService) ListAllSessions(ctx context.Context) ([]structs.AdminSession, error) {
-	seen := map[string]bool{}
-	out := []structs.AdminSession{}
-	var cursor uint64
-	for {
-		keys, next, err := r.Cache.Scan(ctx, cursor, r.RefreshTokenPrefix+"*", 100)
+// ListAllSessions returns a cursor-paginated page of all active sessions
+// (lineages), newest first. It uses the global `refresh:sessions` Sorted Set so
+// only the requested range is fetched from Redis; the cursor is deterministic
+// on (created_at, lineage_id) to disambiguate identical timestamps.
+func (r *RefreshTokenService) ListAllSessions(ctx context.Context, cursorStr string, limit int) ([]structs.AdminSession, *structs.CursorMeta, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	key := r.RefreshTokenPrefix + "sessions"
+	fetchLimit := int64(limit + 1)
+	lineageIDs := []string{}
+
+	if cursorStr == "" {
+		ids, err := r.Cache.ZRevRangeByScore(ctx, key, "+inf", "-inf", 0, fetchLimit)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		for _, k := range keys {
-			if strings.HasPrefix(k, r.RefreshTokenPrefix+"user:") || strings.HasPrefix(k, r.RefreshTokenPrefix+"lineage:") {
-				continue
-			}
-			rec, err := r.getRecord(ctx, strings.TrimPrefix(k, r.RefreshTokenPrefix))
-			if err != nil || rec.LineageID == "" || seen[rec.LineageID] {
-				continue
-			}
-			seen[rec.LineageID] = true
-			if s, err := r.sessionFromLineage(ctx, rec.LineageID); err == nil && s != nil {
-				out = append(out, *s)
+		lineageIDs = ids
+	} else {
+		c, err := decodeSessionCursor(cursorStr)
+		if err != nil {
+			return nil, nil, err
+		}
+		// Strictly older sessions, newest first.
+		ids, err := r.Cache.ZRevRangeByScore(ctx, key, "("+strconv.FormatInt(c.CreatedAt, 10), "-inf", 0, fetchLimit)
+		if err != nil {
+			return nil, nil, err
+		}
+		lineageIDs = append(lineageIDs, ids...)
+		// Ties at the cursor score: members that sort before the cursor in the
+		// ZSET (asc) order come after it in reverse order.
+		ties, err := r.Cache.ZRangeByScore(ctx, key, strconv.FormatInt(c.CreatedAt, 10), strconv.FormatInt(c.CreatedAt, 10), 0, -1)
+		if err != nil {
+			return nil, nil, err
+		}
+		for i := len(ties) - 1; i >= 0; i-- {
+			if ties[i] < c.LineageId {
+				lineageIDs = append(lineageIDs, ties[i])
 			}
 		}
-		cursor = next
-		if next == 0 {
-			break
+		if len(lineageIDs) > int(fetchLimit) {
+			lineageIDs = lineageIDs[:fetchLimit]
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
-	return out, nil
+
+	hasMore := len(lineageIDs) > limit
+	if hasMore {
+		lineageIDs = lineageIDs[:limit]
+	}
+
+	sessions := make([]structs.AdminSession, 0, len(lineageIDs))
+	for _, lg := range lineageIDs {
+		s, err := r.sessionFromLineage(ctx, lg)
+		if err != nil || s == nil {
+			continue
+		}
+		sessions = append(sessions, *s)
+	}
+
+	var meta *structs.CursorMeta
+	if hasMore && len(sessions) > 0 {
+		last := sessions[len(sessions)-1]
+		meta = &structs.CursorMeta{
+			NextCursor: encodeSessionCursor(last.CreatedAt, last.LineageId),
+			HasMore:    true,
+		}
+	}
+
+	return sessions, meta, nil
 }
 
 // GetLineage returns a single session (lineage) for inspection.
@@ -288,18 +355,5 @@ func (r *RefreshTokenService) RevokeUserSessions(ctx context.Context, userId str
 
 // CountSessions returns the number of active session lineages.
 func (r *RefreshTokenService) CountSessions(ctx context.Context) (int64, error) {
-	var count int64
-	var cursor uint64
-	for {
-		keys, next, err := r.Cache.Scan(ctx, cursor, r.RefreshTokenPrefix+"lineage:*", 100)
-		if err != nil {
-			return 0, err
-		}
-		count += int64(len(keys))
-		cursor = next
-		if next == 0 {
-			break
-		}
-	}
-	return count, nil
+	return r.Cache.ZCard(ctx, r.RefreshTokenPrefix+"sessions")
 }

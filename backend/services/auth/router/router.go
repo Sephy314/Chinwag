@@ -17,6 +17,7 @@ import (
 
 type Router struct {
 	Echo                *echo.Echo
+	InternalEcho        *echo.Echo
 	UserHandler         *handler.UserHandler
 	JwksHandler         *handler.JwksHandler
 	RefreshHandler      *handler.RefreshHandlerImpl
@@ -39,6 +40,7 @@ func NewRouter(
 ) *Router {
 	return &Router{
 		Echo:                echo.New(),
+		InternalEcho:        echo.New(),
 		UserHandler:         userHandler,
 		JwksHandler:         jwksHandler,
 		RefreshHandler:      refreshHandler,
@@ -48,6 +50,21 @@ func NewRouter(
 		AdminAuditHandler:   adminAuditHandler,
 		log:                 log,
 	}
+}
+
+// SetupInternal registers the service-to-service endpoints on a dedicated Echo
+// that main starts behind a mutual-TLS (mTLS) listener. Only clients presenting
+// a certificate signed by the configured CA can reach these routes.
+func (r *Router) SetupInternal() {
+	e := r.InternalEcho
+	e.Use(middleware.RequestID())
+	e.Use(middleware.Recover())
+	e.Use(r.requestLogger())
+
+	e.POST("/internal/audit", r.AdminAuditHandler.RecordAudit)
+	e.GET("/internal/health", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
 }
 
 func (r *Router) requestLogger() echo.MiddlewareFunc {
@@ -121,10 +138,6 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		pub.POST("/user", r.UserHandler.CreateUser)
 		pub.GET("/user/:id", r.UserHandler.GetUserByID)
 		pub.GET("/user/email/:email", r.UserHandler.GetUserByEmail)
-
-		// Internal, system-to-system audit write used by other services. Not
-		// routed by the gateway, so it is not publicly reachable.
-		pub.POST("/internal/audit", r.AdminAuditHandler.RecordAudit)
 
 		if cfg.GoogleOAuthEnabled {
 			googleOAuthHandler := oauth.NewGoogleOAuthHandler(

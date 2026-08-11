@@ -21,47 +21,17 @@ func NewAdminSessionHandler(sessions *service.RefreshTokenService, audit service
 	return &AdminSessionHandler{sessions: sessions, audit: audit, log: log}
 }
 
-// ListSessions returns all sessions, newest first. Sessions are aggregated in
-// Redis, so pagination is applied in-memory over the sorted lineage list using
-// the opaque `cursor` (a lineage id) + `limit`.
+// ListSessions returns a cursor-paginated page of all sessions, newest first,
+// backed by the global `refresh:sessions` Sorted Set index.
 func (h *AdminSessionHandler) ListSessions(c *echo.Context) error {
 	var req structs.ListSessionsRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, response.Error(err.Error()))
 	}
-	limit := req.Limit
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
 
-	all, err := h.sessions.ListAllSessions(c.Request().Context())
+	page, meta, err := h.sessions.ListAllSessions(c.Request().Context(), req.Cursor, req.Limit)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
-	}
-
-	start := 0
-	if req.Cursor != "" {
-		for i, s := range all {
-			if s.LineageId == req.Cursor {
-				start = i + 1
-				break
-			}
-		}
-	}
-
-	end := start + limit
-	hasMore := end < len(all)
-	if end > len(all) {
-		end = len(all)
-	}
-	page := all[start:end]
-
-	var meta *structs.CursorMeta
-	if hasMore && len(page) > 0 {
-		meta = &structs.CursorMeta{
-			NextCursor: page[len(page)-1].LineageId,
-			HasMore:    true,
-		}
 	}
 	resp := response.OK(page)
 	resp.Meta = meta

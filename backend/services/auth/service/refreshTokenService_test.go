@@ -85,7 +85,8 @@ func TestRefreshTokenService_InsertRefreshToken_Success_WithLineage(t *testing.T
 	cache.On("HSet", mock.Anything, "rt:tok123", mock.MatchedBy(func(f map[string]string) bool {
 		return f["user_id"] == "u1" && f["lineage_id"] == "lin1" && f["used"] == "0" && f["revoked"] == "0"
 	}), time.Hour).Return(nil).Once()
-	cache.On("SAdd", mock.Anything, "rt:user:u1", time.Hour, []string{"lin1"}).Return(nil).Once()
+	cache.On("ZAdd", mock.Anything, "rt:user:u1", mock.Anything, "lin1").Return(nil).Once()
+	cache.On("ZAdd", mock.Anything, "rt:sessions", mock.Anything, "lin1").Return(nil).Once()
 	cache.On("SAdd", mock.Anything, "rt:lineage:lin1", time.Hour, []string{"tok123"}).Return(nil).Once()
 
 	err := svc.InsertRefreshToken(context.Background(), token)
@@ -103,7 +104,8 @@ func TestRefreshTokenService_InsertRefreshToken_AutoLineage(t *testing.T) {
 	cache.On("HSet", mock.Anything, "rt:tok123", mock.MatchedBy(func(f map[string]string) bool {
 		return f["user_id"] == "u1" && f["lineage_id"] != ""
 	}), time.Hour).Return(nil).Once()
-	cache.On("SAdd", mock.Anything, "rt:user:u1", time.Hour, mock.Anything).Return(nil).Once()
+	cache.On("ZAdd", mock.Anything, "rt:user:u1", mock.Anything, mock.Anything).Return(nil).Once()
+	cache.On("ZAdd", mock.Anything, "rt:sessions", mock.Anything, mock.Anything).Return(nil).Once()
 	cache.On("SAdd", mock.Anything, mock.MatchedBy(func(k string) bool {
 		return strings.HasPrefix(k, "rt:lineage:")
 	}), time.Hour, []string{"tok123"}).Return(nil).Once()
@@ -128,13 +130,13 @@ func TestRefreshTokenService_InsertRefreshToken_HSetError(t *testing.T) {
 	cache.AssertExpectations(t)
 }
 
-func TestRefreshTokenService_InsertRefreshToken_SAddError(t *testing.T) {
+func TestRefreshTokenService_InsertRefreshToken_ZAddError(t *testing.T) {
 	cache := new(MockCache)
 	svc := newRefreshSvc(cache)
 
 	token := structs.RefreshToken{Subject: "u1", RefreshToken: "tok123"}
 	cache.On("HSet", mock.Anything, "rt:tok123", mock.Anything, time.Hour).Return(nil).Once()
-	cache.On("SAdd", mock.Anything, mock.Anything, time.Hour, mock.Anything).Return(errors.New("redis down")).Once()
+	cache.On("ZAdd", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("redis down")).Once()
 
 	err := svc.InsertRefreshToken(context.Background(), token)
 
@@ -249,7 +251,8 @@ func TestRefreshTokenService_RevokeLineage_Success(t *testing.T) {
 	cache.On("HSet", mock.Anything, "rt:tok1", map[string]string{"revoked": "1"}, time.Duration(0)).Return(nil).Once()
 	cache.On("HSet", mock.Anything, "rt:tok2", map[string]string{"revoked": "1"}, time.Duration(0)).Return(nil).Once()
 	cache.On("HGetAll", mock.Anything, "rt:tok1").Return(map[string]string{"user_id": "u1"}, nil).Once()
-	cache.On("SRem", mock.Anything, "rt:user:u1", []string{"lin1"}).Return(nil).Once()
+	cache.On("ZRem", mock.Anything, "rt:user:u1", []string{"lin1"}).Return(nil).Once()
+	cache.On("ZRem", mock.Anything, "rt:sessions", []string{"lin1"}).Return(nil).Once()
 	cache.On("Delete", mock.Anything, "rt:lineage:lin1").Return(nil).Once()
 
 	err := svc.RevokeLineage(context.Background(), "lin1")
@@ -293,4 +296,57 @@ func TestHashRefreshToken_Stable(t *testing.T) {
 	assert.Equal(t, h1, h2)
 	assert.NotEqual(t, h1, h3)
 	assert.Len(t, h1, 64)
+}
+
+func TestRefreshTokenService_ListSessionsByUser(t *testing.T) {
+	cache := new(MockCache)
+	svc := newRefreshSvc(cache)
+
+	cache.On("ZRevRangeByScore", mock.Anything, "rt:user:u1", "+inf", "-inf", int64(0), int64(-1)).Return([]string{"lin1"}, nil).Once()
+	cache.On("SMembers", mock.Anything, "rt:lineage:lin1").Return([]string{"tok1"}, nil).Once()
+	cache.On("HGetAll", mock.Anything, "rt:tok1").Return(map[string]string{
+		"user_id": "u1", "lineage_id": "lin1", "jkt": "jkt", "used": "0", "revoked": "0", "created_at": "1700000000",
+	}, nil).Once()
+
+	sessions, err := svc.ListSessionsByUser(context.Background(), "u1")
+
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 1)
+	assert.Equal(t, "lin1", sessions[0].LineageId)
+	cache.AssertExpectations(t)
+}
+
+func TestRefreshTokenService_ListAllSessions_Paginated(t *testing.T) {
+	cache := new(MockCache)
+	svc := newRefreshSvc(cache)
+
+	// limit 2 -> fetch 3; hasMore true; keep first 2 (l1, l2)
+	cache.On("ZRevRangeByScore", mock.Anything, "rt:sessions", "+inf", "-inf", int64(0), int64(3)).Return([]string{"l1", "l2", "l3"}, nil).Once()
+	for _, lg := range []string{"l1", "l2"} {
+		cache.On("SMembers", mock.Anything, "rt:lineage:"+lg).Return([]string{"tok_" + lg}, nil).Once()
+		cache.On("HGetAll", mock.Anything, "rt:tok_"+lg).Return(map[string]string{
+			"user_id": "u1", "lineage_id": lg, "used": "0", "revoked": "0", "created_at": "1700000000",
+		}, nil).Once()
+	}
+
+	sessions, meta, err := svc.ListAllSessions(context.Background(), "", 2)
+
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 2)
+	assert.True(t, meta.HasMore)
+	assert.NotEmpty(t, meta.NextCursor)
+	cache.AssertExpectations(t)
+}
+
+func TestRefreshTokenService_CountSessions(t *testing.T) {
+	cache := new(MockCache)
+	svc := newRefreshSvc(cache)
+
+	cache.On("ZCard", mock.Anything, "rt:sessions").Return(int64(4), nil).Once()
+
+	n, err := svc.CountSessions(context.Background())
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(4), n)
+	cache.AssertExpectations(t)
 }
