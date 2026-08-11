@@ -95,6 +95,15 @@ ingress:
         - chinwag.duckdns.org
       secretName: grafana-tls
 
+# Single replica with an RWO PVC (below): use Recreate so `helm upgrade --wait`
+# does not deadlock. With RollingUpdate (chart default), the new pod cannot
+# attach the RWO PVC until the old pod is gone, but the old pod is only torn
+# down after the new pod is Ready -> "Pending termination: 1 / context deadline
+# exceeded". Recreate terminates the old pod first, which is fine here (brief
+# Grafana downtime during upgrades).
+deploymentStrategy:
+  type: Recreate
+
 # Persist Grafana config/dashboards/plugins on the node (local-path).
 persistence:
   enabled: true

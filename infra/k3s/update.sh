@@ -21,13 +21,14 @@
 #   ./update.sh --backends      # refresh only the Go backend services
 #   ./update.sh --apply-only    # skip build/load; just apply + restart + verify
 #                               #   (use when images are already imported)
-#   ./update.sh --no-obs        # skip the observability stack (Loki/Alloy/Grafana)
+#   ./update.sh --obs           # ALSO update the observability stack
+#                               #   (Loki/Alloy/Prometheus/Grafana via Helm)
 #
-# The observability stack (infra/k3s/observability) is installed/updated too
-# (Loki + Grafana Alloy + Prometheus + Grafana via Helm + cert-manager
-# grafana-tls), unless --no-obs is given. This is what runs on the CD
-# self-hosted runner (see .github/workflows/cd.yml), so a push to main also
-# updates the monitoring stack on the production node.
+# The observability stack is NOT updated by default: it is unchanged on most
+# app-only deploys, so running install.sh (4 Helm upgrades with --wait) on every
+# CD run just slows the deploy down. Update it explicitly with --obs, or use the
+# dedicated manual workflow (.github/workflows/deploy-observability.yml) which
+# runs observability/install.sh on the self-hosted runner.
 # =============================================================================
 set -euo pipefail
 
@@ -42,17 +43,17 @@ NO_CACHE=0
 FRONTEND=0
 BACKENDS=0
 APPLY_ONLY=0
-SKIP_OBS=0
+WITH_OBS=0
 for arg in "$@"; do
   case "${arg}" in
     --no-cache)   NO_CACHE=1 ;;
     --frontend)   FRONTEND=1 ;;
     --backends)   BACKENDS=1 ;;
     --apply-only) APPLY_ONLY=1 ;;
-    --no-obs)     SKIP_OBS=1 ;;
+    --obs)        WITH_OBS=1 ;;
     *)
       echo "Unknown option: ${arg}" >&2
-      echo "Usage: $0 [--no-cache] [--frontend|--backends] [--apply-only] [--no-obs]" >&2
+      echo "Usage: $0 [--no-cache] [--frontend|--backends] [--apply-only] [--obs]" >&2
       exit 1
       ;;
   esac
@@ -144,12 +145,11 @@ for d in "${DEPLOYS[@]}"; do
 done
 
 # --- Observability stack (Loki + Grafana Alloy + Prometheus + Grafana) ---------
-# Deployed from infra/k3s/observability via Helm (see observability/install.sh),
-# which also creates the monitoring namespace, the grafana-admin Secret and the
-# grafana-dashboards ConfigMap, and issues the grafana-tls certificate (needs
-# cert-manager + letsencrypt ClusterIssuer + duckdns webhook, all applied by the
-# kustomize step above). Idempotent — safe to run on every deploy.
-if [[ "${SKIP_OBS}" -eq 0 ]]; then
+# OPT-IN (--obs): it is unchanged on most app-only deploys, so updating it on
+# every CD run just slows the deploy down. Use --obs, or the dedicated manual
+# workflow (.github/workflows/deploy-observability.yml) which runs
+# observability/install.sh on the self-hosted runner.
+if [[ "${WITH_OBS}" -eq 1 ]]; then
   echo "==> Installing/updating observability stack (Loki + Alloy + Prometheus + Grafana)"
   ./observability/install.sh
 
@@ -157,7 +157,7 @@ if [[ "${SKIP_OBS}" -eq 0 ]]; then
   ${KUBECTL} -n monitoring wait --for=condition=Ready certificate/grafana-tls --timeout=300s >/dev/null ||
     { echo "ERROR: grafana-tls not ready — see 'kubectl -n monitoring describe certificate/grafana-tls'" >&2; exit 1; }
 else
-  echo "==> Skipping observability stack (--no-obs)"
+  echo "==> Skipping observability stack (default — pass --obs to update it)"
 fi
 
 # --- Verify -------------------------------------------------------------------

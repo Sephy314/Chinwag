@@ -67,21 +67,23 @@ cd infra/k3s/observability
 ### Production (CD) deployment
 
 The observability stack is **not** part of the GitOps `infra/k3s` kustomize
-resources — it is installed with Helm via `install.sh`. It is deployed
-automatically:
+resources — it is installed with Helm via `install.sh`. Deployment is **manual /
+on-demand**, so an app-only `main` deploy does not slow down with 4 Helm
+upgrades or risk an obs upgrade failing in the middle of CD:
 
 - **Dev** — `infra/k3s/deploy.sh` calls `./observability/install.sh` (skip with
   `--no-obs`).
-- **Production** — the CD workflow (`.github/workflows/cd.yml`) runs
-  `infra/k3s/update.sh` on the self-hosted runner on the k3s node, which now
-  also calls `./observability/install.sh` (skip with `--no-obs`). So every push
-  to `main` also updates Loki/Alloy/Prometheus/Grafana on production.
+- **Production** — the **manual** workflow `.github/workflows/deploy-observability.yml`
+  (`workflow_dispatch`, Actions → "Deploy Observability (manual)") runs
+  `observability/install.sh` on the self-hosted runner on the k3s node.
+  `infra/k3s/update.sh` (the CD fast path) also accepts `--obs` if you want to
+  bundle the obs update into an app deploy, but it is **not** run by default.
 
 Both entry points are idempotent: the `grafana-admin` Secret is only created
 once (existing password is kept), dashboards ConfigMap is re-applied, and the
-`grafana-tls` Certificate auto-renews via cert-manager. You don't need to run
-`install.sh` manually on the server — a push to `main` (or a manual CD
-dispatch) takes care of it.
+`grafana-tls` Certificate auto-renews via cert-manager. Run the manual workflow
+whenever you change `loki-values.yaml` / `alloy-values.yaml` /
+`prometheus-values.yaml` / `grafana-values.yaml` / `dashboards/*`.
 
 What `install.sh` does (equivalent to doing it manually):
 

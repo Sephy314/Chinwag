@@ -1,0 +1,46 @@
+name: Deploy Observability (manual)
+
+# Deploys / updates the observability stack (Loki + Grafana Alloy + Prometheus
+# + Grafana) on the production node, on demand. This is deliberately a SEPARATE
+# manual workflow: the stack rarely changes, so running observability/install.sh
+# (4 Helm upgrades with --wait) on every app deploy just slows CD down.
+#
+# The job runs on the SAME self-hosted runner as CD (installed on the k3s node),
+# operating on the persistent checkout at ~/Chinwag, which must contain the
+# gitignored infra/k3s/secret.yaml. See .github/workflows/README.md.
+#
+# Trigger it from the Actions tab: Actions -> "Deploy Observability (manual)"
+# -> Run workflow (branch: main).
+
+on:
+  workflow_dispatch:
+
+# Only one obs deploy at a time; a queued run waits (don't cancel a live rollout).
+concurrency:
+  group: cd-observability
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-observability:
+    name: Deploy observability stack to home server (k3s)
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Sync repo checkout to origin/main
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="$HOME/Chinwag"
+          cd "${DEPLOY_DIR}"
+          echo "==> Syncing ${DEPLOY_DIR} to origin/main"
+          git fetch origin main
+          git checkout -f main
+          git reset --hard origin/main
+          git status --short
+
+      - name: Run observability/install.sh
+        run: |
+          set -euo pipefail
+          cd "$HOME/Chinwag/infra/k3s/observability"
+          ./install.sh
