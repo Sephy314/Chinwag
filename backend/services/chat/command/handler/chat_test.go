@@ -45,6 +45,11 @@ func (m *MockChatService) DeleteMessage(ctx context.Context, messageId uuid.UUID
 	return args.Error(0)
 }
 
+func (m *MockChatService) AdminDeleteMessage(ctx context.Context, messageId uuid.UUID) error {
+	args := m.Called(ctx, messageId)
+	return args.Error(0)
+}
+
 func TestChatHandler_Health(t *testing.T) {
 	mockSvc := new(MockChatService)
 	h := handler.NewChatHandler(mockSvc)

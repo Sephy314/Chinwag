@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/handler"
-	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/response"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	sharedauth "github.com/Sephy314/chinwag/backend/shared/auth"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -37,6 +37,31 @@ func (m *MockQueryService) ListMessages(ctx context.Context, req structs.ListMes
 		return nil, args.Get(1).(*structs.CursorMeta), args.Error(2)
 	}
 	return args.Get(0).([]structs.MessageResponse), args.Get(1).(*structs.CursorMeta), args.Error(2)
+}
+
+func (m *MockQueryService) AdminListMessages(ctx context.Context, req structs.AdminListMessagesRequest) ([]structs.MessageResponse, *structs.CursorMeta, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		var meta *structs.CursorMeta
+		if args.Get(1) != nil {
+			meta = args.Get(1).(*structs.CursorMeta)
+		}
+		return nil, meta, args.Error(2)
+	}
+	return args.Get(0).([]structs.MessageResponse), args.Get(1).(*structs.CursorMeta), args.Error(2)
+}
+
+func (m *MockQueryService) AdminGetMessage(ctx context.Context, messageId uuid.UUID) (*structs.MessageResponse, error) {
+	args := m.Called(ctx, messageId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*structs.MessageResponse), args.Error(1)
+}
+
+func (m *MockQueryService) AdminCountMessages(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func TestQueryHandler_Health(t *testing.T) {

@@ -13,19 +13,22 @@ import (
 )
 
 type Router struct {
-	Echo         *echo.Echo
-	QueryHandler *handler.QueryHandler
-	log          *slog.Logger
+	Echo              *echo.Echo
+	QueryHandler      *handler.QueryHandler
+	AdminQueryHandler *handler.AdminQueryHandler
+	log               *slog.Logger
 }
 
 func NewRouter(
 	queryHandler *handler.QueryHandler,
+	adminQueryHandler *handler.AdminQueryHandler,
 	log *slog.Logger,
 ) *Router {
 	return &Router{
-		Echo:         echo.New(),
-		QueryHandler: queryHandler,
-		log:          log,
+		Echo:              echo.New(),
+		QueryHandler:      queryHandler,
+		AdminQueryHandler: adminQueryHandler,
+		log:               log,
 	}
 }
 
@@ -95,6 +98,15 @@ func (r *Router) Setup(cfg *RouterConfig) {
 	{
 		priv.GET("/chat/rooms/:roomId/messages", r.QueryHandler.ListMessages)
 		priv.GET("/chat/rooms/:roomId/messages/:messageId", r.QueryHandler.GetMessage)
+	}
+
+	admin := e.Group("")
+	admin.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
+	admin.Use(sharedauth.RequireRole(sharedauth.RoleAdmin))
+	{
+		admin.GET("/chat/admin/messages", r.AdminQueryHandler.ListMessages)
+		admin.GET("/chat/admin/messages/:messageId", r.AdminQueryHandler.GetMessage)
+		admin.GET("/chat/admin/stats/messages", r.AdminQueryHandler.StatsMessages)
 	}
 
 	r.log.Info("chat query routes registered")

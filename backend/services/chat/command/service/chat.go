@@ -18,6 +18,7 @@ type ChatServiceInterface interface {
 	CreateMessage(ctx context.Context, roomId uuid.UUID, req structs.CreateMessageRequest) (*structs.MessageResponse, error)
 	UpdateMessage(ctx context.Context, messageId uuid.UUID, userId uuid.UUID, req structs.UpdateMessageRequest) (*structs.MessageResponse, error)
 	DeleteMessage(ctx context.Context, messageId uuid.UUID, userId uuid.UUID) error
+	AdminDeleteMessage(ctx context.Context, messageId uuid.UUID) error
 }
 
 type ChatService struct {
@@ -197,6 +198,52 @@ func (s *ChatService) DeleteMessage(ctx context.Context, messageId uuid.UUID, us
 
 	if msg.AuthorId != userId {
 		return errNotAuthor
+	}
+
+	deletedEvent := struct {
+		Id     string `json:"id"`
+		RoomId string `json:"room_id"`
+	}{
+		Id:     messageId.String(),
+		RoomId: msg.RoomId.String(),
+	}
+
+	evPayload, err := json.Marshal(map[string]any{
+		"type": "deleted_message",
+		"data": deletedEvent,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+
+	err = s.uow.Do(ctx, func(txCtx context.Context, tx repo.Transaction) error {
+		if err := tx.ChatRepo().DeleteMessage(txCtx, messageId); err != nil {
+			return err
+		}
+		return tx.OutboxRepo().Insert(txCtx, repo.OutboxEvent{
+			Id:        uuid.Must(uuid.NewV7()),
+			EventType: "message_deleted",
+			Subject:   fmt.Sprintf("chat.room.%s", msg.RoomId.String()),
+			Payload:   evPayload,
+			RoomId:    msg.RoomId,
+			CreatedAt: time.Now(),
+		})
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AdminDeleteMessage soft-deletes a message on behalf of an admin. Unlike the
+// user-facing DeleteMessage it skips both the author check and the popped-room
+// read-only guard. The deletion is still propagated to the projection via the
+// outbox so the query side stays consistent.
+func (s *ChatService) AdminDeleteMessage(ctx context.Context, messageId uuid.UUID) error {
+	msg, err := s.repo.GetMessageById(ctx, messageId)
+	if err != nil {
+		return err
 	}
 
 	deletedEvent := struct {

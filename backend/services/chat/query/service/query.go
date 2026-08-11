@@ -24,6 +24,9 @@ const (
 type QueryServiceInterface interface {
 	GetMessage(ctx context.Context, messageId uuid.UUID, userId uuid.UUID) (*structs.MessageResponse, error)
 	ListMessages(ctx context.Context, req structs.ListMessagesRequest) ([]structs.MessageResponse, *structs.CursorMeta, error)
+	AdminListMessages(ctx context.Context, req structs.AdminListMessagesRequest) ([]structs.MessageResponse, *structs.CursorMeta, error)
+	AdminGetMessage(ctx context.Context, messageId uuid.UUID) (*structs.MessageResponse, error)
+	AdminCountMessages(ctx context.Context) (int64, error)
 }
 
 type RoomMemberProvider interface {
@@ -167,6 +170,56 @@ func (s *QueryService) ListMessages(ctx context.Context, req structs.ListMessage
 	}
 
 	return result, meta, nil
+}
+
+// --- Admin operations (no membership checks) ---
+
+func (s *QueryService) AdminListMessages(ctx context.Context, req structs.AdminListMessagesRequest) ([]structs.MessageResponse, *structs.CursorMeta, error) {
+	var roomID, authorID *uuid.UUID
+	if req.RoomID != "" {
+		id, err := uuid.Parse(req.RoomID)
+		if err != nil {
+			return nil, nil, &errs.AppError{
+				Status:  http.StatusBadRequest,
+				Message: "invalid room_id",
+			}
+		}
+		roomID = &id
+	}
+	if req.AuthorID != "" {
+		id, err := uuid.Parse(req.AuthorID)
+		if err != nil {
+			return nil, nil, &errs.AppError{
+				Status:  http.StatusBadRequest,
+				Message: "invalid author_id",
+			}
+		}
+		authorID = &id
+	}
+
+	msgs, meta, err := s.repo.AdminListMessages(ctx, req.Cursor, req.Limit, roomID, authorID, req.Search)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	result := make([]structs.MessageResponse, len(msgs))
+	for i, m := range msgs {
+		result[i] = *toResponse(m)
+	}
+	return result, meta, nil
+}
+
+func (s *QueryService) AdminGetMessage(ctx context.Context, messageId uuid.UUID) (*structs.MessageResponse, error) {
+	msg, err := s.repo.AdminGetMessageIncludingDeleted(ctx, messageId)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(msg), nil
+}
+
+func (s *QueryService) AdminCountMessages(ctx context.Context) (int64, error) {
+	n, err := s.repo.AdminCountMessages(ctx)
+	return int64(n), err
 }
 
 func toResponse(msg domain.MessageProjection) *structs.MessageResponse {

@@ -314,7 +314,16 @@ func main() {
 	chatHandler := handler.NewChatHandler(chatSvc, log)
 	wsHandler := handler.NewWebSocketHandler(hub, conns.Rds, log)
 
-	r := router.NewRouter(chatHandler, wsHandler, log)
+	auditClient := service.NewAuditClient(
+		cfg.InternalAuditURL,
+		cfg.InternalClientCert,
+		cfg.InternalClientKey,
+		cfg.InternalCA,
+		log,
+	)
+	adminChatHandler := handler.NewAdminChatHandler(chatSvc, auditClient, log)
+
+	r := router.NewRouter(chatHandler, wsHandler, adminChatHandler, log)
 
 	r.Setup(&router.RouterConfig{
 		Port:          cfg.Port,
