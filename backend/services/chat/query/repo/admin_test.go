@@ -59,7 +59,7 @@ func TestProjectionRepo_AdminListMessages_AllFilters(t *testing.T) {
 
 func TestProjectionRepo_AdminListMessages_WithCursor(t *testing.T) {
 	repo, mock := newTestProjectionRepo(t)
-	now := time.Now().Truncate(0)
+	now := time.Now().Truncate(0).UTC()
 	id := uuid.New()
 	roomId := uuid.New()
 	authorId := uuid.New()
