@@ -10,6 +10,7 @@ import (
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/auth/shared/logger"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/response"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
 	"github.com/google/uuid"
@@ -25,14 +26,16 @@ type RefreshHandlerImpl struct {
 	jwtService service.JwtServiceInterface
 	locker     cache.Cache
 	dpop       service.DPoPServiceInterface
+	log        logger.Logger
 }
 
-func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService service.JwtServiceInterface, locker cache.Cache, dpop service.DPoPServiceInterface) *RefreshHandlerImpl {
+func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService service.JwtServiceInterface, locker cache.Cache, dpop service.DPoPServiceInterface, log logger.Logger) *RefreshHandlerImpl {
 	return &RefreshHandlerImpl{
 		service:    service,
 		jwtService: jwtService,
 		locker:     locker,
 		dpop:       dpop,
+		log:        log,
 	}
 }
 
@@ -56,14 +59,17 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 
 	cookie, err := c.Cookie("refresh")
 	if err != nil {
+		h.log.Warn("refresh: missing cookie")
 		return c.JSON(http.StatusBadRequest, response.Error("missing refresh token"))
 	}
 
 	record, err := h.service.GetRefreshToken(ctx, cookie.Value)
 	if err != nil {
+		h.log.Warn("refresh: invalid refresh token", "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 	if record.Jkt != "" && record.Jkt != jkt {
+		h.log.Warn("refresh: dpop key mismatch", "user_id", record.UserID)
 		return respondDPoPError(c, nonce, &dpop.Error{Code: dpop.ErrorInvalidProof, Message: "DPoP key does not match the bound refresh token"})
 	}
 
@@ -83,6 +89,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	consumed, err := h.service.ConsumeRefreshToken(ctx, cookie.Value)
 	if err != nil {
 		if errors.Is(err, errs.ErrRefreshTokenReused) {
+			h.log.Warn("refresh: token reuse detected, lineage revoked", "user_id", consumed.UserID, "lineage_id", consumed.LineageID)
 			_ = h.service.RevokeLineage(ctx, consumed.LineageID)
 		}
 		return c.JSON(errs.ParseError(err))
@@ -103,6 +110,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		Jkt:          jkt,
 	})
 	if err != nil {
+		h.log.Error("refresh: could not insert refresh token", "user_id", consumed.UserID, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
@@ -115,7 +123,7 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
-
+	h.log.Info("refresh: success", "user_id", consumed.UserID)
 	return c.JSON(http.StatusOK, response.OK(structs.LoginUserResp{
 		Token: *token,
 	}))

@@ -136,7 +136,7 @@ func (a *roomMemberAdapter) GetMembersByRoomId(ctx context.Context, roomId strin
 func main() {
 	_ = godotenv.Load()
 
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	log := slog.New(newJSONHandler())
 	cfg := LoadConfig()
 
 	if err := chatquerymigrations.RunAll(cfg.DBUrl, log); err != nil {
@@ -163,7 +163,7 @@ func main() {
 	cacheRedis := cache.NewRedisCache(conns.Rds)
 
 	querySvc := service.NewQueryService(projectionRepo, memberAdapter, cacheRedis)
-	queryHandler := handler.NewQueryHandler(querySvc)
+	queryHandler := handler.NewQueryHandler(querySvc, log)
 
 	if conns.Js != nil {
 		consumer := service.NewProjectionConsumer(projectionRepo, log)

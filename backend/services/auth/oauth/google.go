@@ -180,7 +180,7 @@ func (h *GoogleOAuthHandler) HandleCallback(c *echo.Context) error {
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
 
-	h.log.Info("oauth: login successful", "email", userInfo.Email)
+	h.log.Info("oauth: login successful", "email", userInfo.Email, "user_id", tokens.UserId)
 	redirectURL := fmt.Sprintf("%s/oauth/callback?token=%s", h.FrontendURL, tokens.AccessToken)
 	return c.Redirect(http.StatusTemporaryRedirect, redirectURL)
 }
@@ -300,6 +300,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleU
 	return &structs.TokenSet{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		UserId:       user.Id,
 	}, nil
 }
 

@@ -45,9 +45,11 @@ func (h *UserHandler) CreateUser(c *echo.Context) error {
 
 	usr, err := h.Service.CreateUser(c.Request().Context(), req)
 	if err != nil {
+		h.log.Warn("user: create failed", "email", req.Email, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("user: created", "user_id", usr.Id, "email", usr.Email)
 	return c.JSON(http.StatusOK, response.OK(usr.ToProjection()))
 }
 
@@ -56,9 +58,11 @@ func (h *UserHandler) GetUserByID(c *echo.Context) error {
 
 	user, err := h.Service.GetUser(c.Request().Context(), id)
 	if err != nil {
+		h.log.Debug("user: get by id failed", "user_id", id, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Debug("user: get by id", "user_id", id)
 	return c.JSON(http.StatusOK, response.OK(user.ToProjection()))
 }
 
@@ -67,9 +71,11 @@ func (h *UserHandler) GetUserByEmail(c *echo.Context) error {
 
 	user, err := h.Service.GetUserByEmail(c.Request().Context(), email)
 	if err != nil {
+		h.log.Debug("user: get by email failed", "email", email, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Debug("user: get by email", "user_id", user.Id, "email", email)
 	return c.JSON(http.StatusOK, response.OK(user.ToProjection()))
 }
 
@@ -77,8 +83,10 @@ func (h *UserHandler) DeleteUser(c *echo.Context) error {
 	id := c.Param("id")
 	err := h.Service.DeleteUser(c.Request().Context(), id)
 	if err != nil {
+		h.log.Warn("user: delete failed", "user_id", id, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
+	h.log.Info("user: deleted", "user_id", id)
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
@@ -92,9 +100,11 @@ func (h *UserHandler) UpdateUser(c *echo.Context) error {
 
 	usr, err := h.Service.UpdateUser(c.Request().Context(), id, req)
 	if err != nil {
+		h.log.Warn("user: update failed", "user_id", id, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("user: updated", "user_id", usr.Id)
 	return c.JSON(http.StatusOK, response.OK(usr.ToProjection()))
 }
 
@@ -153,7 +163,7 @@ func (h *UserHandler) Login(c *echo.Context) error {
 		Expires:  time.Now().Add(time.Hour * 24 * 7),
 	})
 
-	h.log.Info("login: success", "email", req.Email)
+	h.log.Info("login: success", "email", req.Email, "user_id", tokens.UserId)
 	return c.JSON(http.StatusOK, response.OK(map[string]string{
 		"token": tokens.AccessToken,
 	}))
@@ -170,5 +180,6 @@ func (h *UserHandler) Logout(c *echo.Context) error {
 		MaxAge:   -1,
 	})
 
+	h.log.Info("logout")
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }

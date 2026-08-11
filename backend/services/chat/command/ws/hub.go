@@ -52,6 +52,7 @@ func (h *Hub) Run() {
 			}
 			h.rooms[client.roomID][client] = true
 			h.mu.Unlock()
+			h.log.Info("ws: client connected", "room_id", client.roomID.String(), "user_id", client.userID.String())
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -65,6 +66,7 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mu.Unlock()
+			h.log.Info("ws: client disconnected", "room_id", client.roomID.String(), "user_id", client.userID.String())
 
 		case msg := <-h.broadcast:
 			h.mu.RLock()

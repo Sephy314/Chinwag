@@ -57,7 +57,7 @@ func (c *ProjectionConsumer) Handle(roomId uuid.UUID, data []byte) {
 		return
 	}
 
-	c.log.Info("projection consumer handling event",
+	c.log.Debug("nats: handling event",
 		"room_id", roomId.String(),
 		"event_type", ev.Type,
 	)
@@ -103,7 +103,9 @@ func (c *ProjectionConsumer) handleCreated(data json.RawMessage) {
 
 	if err := c.repo.Upsert(context.Background(), projection); err != nil {
 		c.log.Error("failed to upsert projection", "id", d.Id, "error", err)
+		return
 	}
+	c.log.Debug("nats: projection upserted", "id", d.Id, "room_id", d.RoomId)
 }
 
 func (c *ProjectionConsumer) handleUpdated(data json.RawMessage) {
@@ -122,7 +124,9 @@ func (c *ProjectionConsumer) handleUpdated(data json.RawMessage) {
 	msgId, _ := uuid.Parse(d.Id)
 	if err := c.repo.UpdateContent(context.Background(), msgId, d.Content, updatedAt); err != nil {
 		c.log.Error("failed to update projection content", "id", d.Id, "error", err)
+		return
 	}
+	c.log.Debug("nats: projection updated", "id", d.Id, "room_id", d.RoomId)
 }
 
 func (c *ProjectionConsumer) handleDeleted(data json.RawMessage) {
@@ -135,5 +139,7 @@ func (c *ProjectionConsumer) handleDeleted(data json.RawMessage) {
 	msgId, _ := uuid.Parse(d.Id)
 	if err := c.repo.SoftDelete(context.Background(), msgId, time.Now()); err != nil {
 		c.log.Error("failed to soft delete projection", "id", d.Id, "error", err)
+		return
 	}
+	c.log.Debug("nats: projection deleted", "id", d.Id, "room_id", d.RoomId)
 }

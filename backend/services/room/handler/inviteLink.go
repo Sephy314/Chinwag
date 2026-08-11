@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/room/service"
@@ -19,11 +20,17 @@ type InviteLinkHandler interface {
 
 type InviteLinkHandlerImpl struct {
 	inviteLinkSvc service.InviteLinkServiceInterface
+	log           *slog.Logger
 }
 
-func NewInviteLinkHandler(inviteLinkSvc service.InviteLinkServiceInterface) *InviteLinkHandlerImpl {
+func NewInviteLinkHandler(inviteLinkSvc service.InviteLinkServiceInterface, log ...*slog.Logger) *InviteLinkHandlerImpl {
+	l := slog.Default()
+	if len(log) > 0 && log[0] != nil {
+		l = log[0]
+	}
 	return &InviteLinkHandlerImpl{
 		inviteLinkSvc: inviteLinkSvc,
+		log:           l,
 	}
 }
 
@@ -50,9 +57,11 @@ func (h *InviteLinkHandlerImpl) CreateInviteLink(c *echo.Context) error {
 
 	invite, err := h.inviteLinkSvc.CreateInviteLink(c.Request().Context(), roomId, uid, req)
 	if err != nil {
+		h.log.Warn("room: invite link create failed", "room_id", roomId.String(), "user_id", uid.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: invite link created", "room_id", roomId.String(), "user_id", uid.String())
 	return c.JSON(http.StatusCreated, response.Created(invite))
 }
 
@@ -74,9 +83,11 @@ func (h *InviteLinkHandlerImpl) JoinByInviteLink(c *echo.Context) error {
 
 	roomId, err := h.inviteLinkSvc.JoinByInviteLink(c.Request().Context(), token, uid)
 	if err != nil {
+		h.log.Warn("room: invite join failed", "user_id", uid.String(), "token", token, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: invite join", "room_id", roomId.String(), "user_id", uid.String())
 	return c.JSON(http.StatusOK, response.OK(map[string]string{"room_id": roomId.String()}))
 }
 

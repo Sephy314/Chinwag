@@ -59,20 +59,20 @@ func NewJetStreamEventPublisher(ctx context.Context, natsURL string, log *slog.L
 }
 
 func (p *JetStreamEventPublisher) PublishRaw(ctx context.Context, subject string, data []byte) error {
-	p.log.Info("publishing raw event",
+	p.log.Debug("nats: publishing raw event",
 		"subject", subject,
 	)
 
 	_, err := p.js.Publish(ctx, subject, data)
 	if err != nil {
-		p.log.Error("failed to publish raw event",
+		p.log.Error("nats: failed to publish raw event",
 			"subject", subject,
 			"error", err,
 		)
 		return fmt.Errorf("jetstream publish raw: %w", err)
 	}
 
-	p.log.Info("raw event published",
+	p.log.Debug("nats: raw event published",
 		"subject", subject,
 	)
 
@@ -86,7 +86,7 @@ func (p *JetStreamEventPublisher) Publish(roomId uuid.UUID, event service.Event)
 	}
 
 	subject := fmt.Sprintf("chat.room.%s", roomId.String())
-	p.log.Info("publishing event",
+	p.log.Debug("nats: publishing event",
 		"subject", subject,
 		"event_type", event.Type,
 		"room_id", roomId.String(),
@@ -94,7 +94,7 @@ func (p *JetStreamEventPublisher) Publish(roomId uuid.UUID, event service.Event)
 
 	_, err = p.js.Publish(context.Background(), subject, data)
 	if err != nil {
-		p.log.Error("failed to publish event",
+		p.log.Error("nats: failed to publish event",
 			"subject", subject,
 			"event_type", event.Type,
 			"room_id", roomId.String(),
@@ -103,7 +103,7 @@ func (p *JetStreamEventPublisher) Publish(roomId uuid.UUID, event service.Event)
 		return fmt.Errorf("jetstream publish: %w", err)
 	}
 
-	p.log.Info("event published",
+	p.log.Debug("nats: event published",
 		"subject", subject,
 		"event_type", event.Type,
 		"room_id", roomId.String(),
@@ -152,7 +152,7 @@ func (p *JetStreamEventPublisher) Consume(ctx context.Context, consumerName stri
 			return
 		}
 
-		p.log.Info("consuming event",
+		p.log.Debug("nats: consuming event",
 			"subject", msg.Subject(),
 			"room_id", roomId.String(),
 			"event_type", ev.Type,

@@ -144,7 +144,7 @@ func (a *authUserAdapter) GetUser(ctx context.Context, id string) (*service.User
 func main() {
 	_ = godotenv.Load()
 
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	log := slog.New(newJSONHandler())
 	cfg := LoadConfig()
 
 	if err := roommigrations.RunAll(cfg.DBUrl, log); err != nil {
@@ -156,6 +156,7 @@ func main() {
 		DBUrl:         cfg.DBUrl,
 		RedisAddr:     cfg.RedisAddr,
 		RedisPassword: cfg.RedisPassword,
+		Log:           log,
 	})
 	if err != nil {
 		log.Error("failed to connect to database", "error", err)
@@ -175,9 +176,9 @@ func main() {
 	roomMemberService := service.NewRoomMemberService(roomMemberRepo, roomRepo, userAdapter, unitOfWork)
 	inviteLinkService := service.NewInviteLinkService(cacheRedis, roomMemberService, userAdapter, roomRepo)
 
-	roomHandler := handler.NewRoomHandler(roomService, roomMemberService)
-	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService, userAdapter)
-	inviteLinkHandler := handler.NewInviteLinkHandler(inviteLinkService)
+	roomHandler := handler.NewRoomHandler(roomService, roomMemberService, log)
+	roomMemberHandler := handler.NewRoomMemberHandler(roomMemberService, roomService, userAdapter, log)
+	inviteLinkHandler := handler.NewInviteLinkHandler(inviteLinkService, log)
 
 	popScheduler := scheduler.NewPopScheduler(scheduler.NewSQLPopper(conns.DB), 1*time.Minute, log)
 	go popScheduler.Start(context.Background())

@@ -21,4 +21,5 @@ type RefreshTokenRecord struct {
 type TokenSet struct {
 	AccessToken  string
 	RefreshToken string
+	UserId       string
 }

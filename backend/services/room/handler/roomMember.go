@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/room/service"
@@ -24,13 +25,19 @@ type RoomMemberHandlerImpl struct {
 	service     service.RoomMemberServiceInterface
 	roomService service.RoomServiceInterface
 	user        service.UserProvider
+	log         *slog.Logger
 }
 
-func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService service.RoomServiceInterface, user service.UserProvider) *RoomMemberHandlerImpl {
+func NewRoomMemberHandler(s service.RoomMemberServiceInterface, roomService service.RoomServiceInterface, user service.UserProvider, log ...*slog.Logger) *RoomMemberHandlerImpl {
+	l := slog.Default()
+	if len(log) > 0 && log[0] != nil {
+		l = log[0]
+	}
 	return &RoomMemberHandlerImpl{
 		service:     s,
 		roomService: roomService,
 		user:        user,
+		log:         l,
 	}
 }
 
@@ -61,9 +68,11 @@ func (h *RoomMemberHandlerImpl) AddMember(c *echo.Context) error {
 	}
 
 	if err := h.service.InviteUser(c.Request().Context(), req); err != nil {
+		h.log.Warn("room: add member failed", "room_id", roomId.String(), "user_id", body.UserID, "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: member added", "room_id", roomId.String(), "user_id", body.UserID, "role", body.Role)
 	return c.JSON(http.StatusCreated, response.OK[any](nil))
 }
 
@@ -93,9 +102,11 @@ func (h *RoomMemberHandlerImpl) RemoveMember(c *echo.Context) error {
 	}
 
 	if err := h.service.KickUser(c.Request().Context(), req); err != nil {
+		h.log.Warn("room: remove member failed", "room_id", roomId.String(), "user_id", userId.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: member removed", "room_id", roomId.String(), "user_id", userId.String())
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 
@@ -176,9 +187,11 @@ func (h *RoomMemberHandlerImpl) UpdateMember(c *echo.Context) error {
 
 	member, err := h.service.UpdateRoomMember(c.Request().Context(), userId, roomId, req)
 	if err != nil {
+		h.log.Warn("room: update member failed", "room_id", roomId.String(), "user_id", userId.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("room: member updated", "room_id", roomId.String(), "user_id", userId.String())
 	return c.JSON(http.StatusOK, response.OK(member))
 }
 

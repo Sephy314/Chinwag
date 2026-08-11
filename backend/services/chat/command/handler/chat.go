@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/command/service"
@@ -22,10 +23,15 @@ type ChatHandlerInterface interface {
 
 type ChatHandler struct {
 	svc service.ChatServiceInterface
+	log *slog.Logger
 }
 
-func NewChatHandler(svc service.ChatServiceInterface) *ChatHandler {
-	return &ChatHandler{svc: svc}
+func NewChatHandler(svc service.ChatServiceInterface, log ...*slog.Logger) *ChatHandler {
+	l := slog.Default()
+	if len(log) > 0 && log[0] != nil {
+		l = log[0]
+	}
+	return &ChatHandler{svc: svc, log: l}
 }
 
 func (h *ChatHandler) Health(c *echo.Context) error {
@@ -57,9 +63,11 @@ func (h *ChatHandler) CreateMessage(c *echo.Context) error {
 
 	msg, err := h.svc.CreateMessage(ctx, roomId, req)
 	if err != nil {
+		h.log.Warn("chat: message create failed", "room_id", roomId.String(), "user_id", uid.String(), "message_id", req.Id.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("chat: message created", "room_id", roomId.String(), "user_id", uid.String(), "message_id", msg.Id)
 	return c.JSON(http.StatusCreated, response.Created(msg))
 }
 
@@ -82,9 +90,11 @@ func (h *ChatHandler) UpdateMessage(c *echo.Context) error {
 
 	msg, err := h.svc.UpdateMessage(c.Request().Context(), messageId, uid, req)
 	if err != nil {
+		h.log.Warn("chat: message update failed", "message_id", messageId.String(), "user_id", uid.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("chat: message updated", "message_id", messageId.String(), "user_id", uid.String())
 	return c.JSON(http.StatusOK, response.OK(msg))
 }
 
@@ -101,9 +111,11 @@ func (h *ChatHandler) DeleteMessage(c *echo.Context) error {
 	uid, _ := uuid.Parse(*userId)
 
 	if err := h.svc.DeleteMessage(c.Request().Context(), messageId, uid); err != nil {
+		h.log.Warn("chat: message delete failed", "message_id", messageId.String(), "user_id", uid.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Info("chat: message deleted", "message_id", messageId.String(), "user_id", uid.String())
 	return c.JSON(http.StatusOK, response.OK[any](nil))
 }
 

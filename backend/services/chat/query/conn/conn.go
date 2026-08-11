@@ -31,7 +31,7 @@ type ConnectionConfig struct {
 }
 
 func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
-	db, err := sqlx.Connect("pgx", cfg.DBUrl)
+	db, err := newDB(cfg.DBUrl, cfg.Log)
 	if err != nil {
 		return nil, fmt.Errorf("db connect: %w", err)
 	}
@@ -43,6 +43,9 @@ func NewConnection(cfg *ConnectionConfig) (*Connection, error) {
 		Password: cfg.RedisPassword,
 		DB:       0,
 	})
+	if cfg.Log != nil {
+		rds.AddHook(&redisLogHook{log: cfg.Log})
+	}
 
 	if err := rds.Ping(context.Background()).Err(); err != nil {
 		return nil, fmt.Errorf("redis ping: %w", err)

@@ -116,6 +116,13 @@ func (p *OutboxPublisher) processBatch(ctx context.Context) {
 			continue
 		}
 
+		p.log.Debug("outbox: event published to nats",
+			"event_id", evt.Id,
+			"event_type", evt.EventType,
+			"subject", evt.Subject,
+			"retry_count", evt.RetryCount,
+		)
+
 		p.clearBackoff(evt.Id)
 
 		if err := p.outboxRepo.MarkPublished(ctx, evt.Id); err != nil {

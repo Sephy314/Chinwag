@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/service"
@@ -21,10 +22,15 @@ type QueryHandlerInterface interface {
 
 type QueryHandler struct {
 	svc service.QueryServiceInterface
+	log *slog.Logger
 }
 
-func NewQueryHandler(svc service.QueryServiceInterface) *QueryHandler {
-	return &QueryHandler{svc: svc}
+func NewQueryHandler(svc service.QueryServiceInterface, log ...*slog.Logger) *QueryHandler {
+	l := slog.Default()
+	if len(log) > 0 && log[0] != nil {
+		l = log[0]
+	}
+	return &QueryHandler{svc: svc, log: l}
 }
 
 func (h *QueryHandler) Health(c *echo.Context) error {
@@ -46,9 +52,11 @@ func (h *QueryHandler) GetMessage(c *echo.Context) error {
 
 	msg, err := h.svc.GetMessage(ctx, messageId, uid)
 	if err != nil {
+		h.log.Debug("chat: get message failed", "message_id", messageId.String(), "user_id", uid.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
 
+	h.log.Debug("chat: get message", "message_id", messageId.String(), "user_id", uid.String())
 	return c.JSON(http.StatusOK, response.OK(msg))
 }
 
@@ -74,8 +82,11 @@ func (h *QueryHandler) ListMessages(c *echo.Context) error {
 
 	msgs, meta, err := h.svc.ListMessages(ctx, req)
 	if err != nil {
+		h.log.Debug("chat: list messages failed", "room_id", roomId, "user_id", uid.String(), "error", err)
 		return c.JSON(errs.ParseError(err))
 	}
+
+	h.log.Debug("chat: list messages", "room_id", roomId, "user_id", uid.String(), "count", len(msgs))
 
 	var metaResp *structs.CursorMeta
 	if meta != nil {
