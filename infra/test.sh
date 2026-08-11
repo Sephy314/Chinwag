@@ -23,10 +23,10 @@
 #   - app images (chinwag/*:latest) already loaded in the cluster
 #     (this test does NOT build/import images — deploy.sh does that)
 #
-# CI: the `k3s-infra` job in .github/workflows/ci.yml runs this on a self-hosted
-# runner labelled `k3s` that has kubectl access to a K3s cluster. GitHub-hosted
-# runners have no cluster access, so that job is workflow_dispatch-only — it
-# never pretends to run without a cluster.
+# CI: the `k3s-infra` job in .github/workflows/ci.yml runs this on GitHub-hosted
+# runners against an EPHEMERAL k3d cluster (see infra/ci-test.sh), which installs
+# cert-manager, generates a dummy secret.yaml, and builds+imports the images
+# first. The dev/production clusters are never touched.
 # =============================================================================
 set -Eeuo pipefail
 
