@@ -164,6 +164,17 @@ echo "==> Creating grafana-dashboards ConfigMap (provisioned dashboards)"
   --dry-run=client -o yaml | "${KUBECTL}" apply -f -
 
 echo "==> Installing Grafana (Loki + Prometheus datasources, provisioned dashboards)"
+# Before upgrading, delete the Grafana Deployment if it exists. Why: when the
+# strategy is switched from RollingUpdate (chart default) to Recreate, Helm's
+# server-side apply keeps the previously-owned `strategy.rollingUpdate` field on
+# the live Deployment, which the API server rejects with:
+#   spec.strategy.rollingUpdate: Forbidden: may not be specified when strategy
+#   'type' is 'Recreate'
+# Setting `rollingUpdate: null` in grafana-values.yaml alone does NOT clear it
+# (Helm 4 drops the null before SSA). Deleting the Deployment and letting Helm
+# recreate it fresh (with the PVC intact — Grafana data persists) resolves it.
+# On a first install the Deployment does not exist yet, so this is a no-op.
+"${KUBECTL}" -n monitoring delete deployment grafana --ignore-not-found --wait=true --timeout=120s >/dev/null 2>&1 || true
 "${HELM}" upgrade --install grafana grafana/grafana \
   --namespace monitoring \
   --version "${GRAFANA_CHART_VERSION}" \
