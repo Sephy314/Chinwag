@@ -101,7 +101,7 @@ func (h *AdminUserHandler) UpdateRole(c *echo.Context) error {
 
 func (h *AdminUserHandler) DisableUser(c *echo.Context) error {
 	id := c.Param("id")
-	if err := h.users.DeleteUser(c.Request().Context(), id); err != nil {
+	if err := h.users.AdminDisableUser(c.Request().Context(), id); err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
 	_ = h.audit.Record(c.Request().Context(), adminID(c), "user.disable", "user", id, nil)

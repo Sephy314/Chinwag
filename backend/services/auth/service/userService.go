@@ -314,6 +314,24 @@ func (s *UserService) AdminSetRole(ctx context.Context, id, actorID, role string
 	return s.Repo.SetRole(ctx, id, domain.Role(role))
 }
 
+func (s *UserService) AdminDisableUser(ctx context.Context, id string) error {
+	current, err := s.Repo.GetUserIncludingDeleted(ctx, id)
+	if err != nil {
+		return err
+	}
+	// Disabling an ADMIN effectively removes an admin; protect the last one.
+	if string(current.Role) == string(domain.ADMIN) {
+		n, err := s.Repo.CountAdmins(ctx)
+		if err != nil {
+			return err
+		}
+		if n <= 1 {
+			return errs.ErrLastAdmin
+		}
+	}
+	return s.DeleteUser(ctx, id)
+}
+
 func (s *UserService) AdminRestoreUser(ctx context.Context, id string) (*structs.AdminUserResponse, error) {
 	if err := s.Repo.RestoreUser(ctx, id); err != nil {
 		return nil, err

@@ -70,3 +70,31 @@ func TestUserService_AdminSetRole_Success(t *testing.T) {
 	assert.NoError(t, err)
 	userRepo.AssertExpectations(t)
 }
+
+func TestUserService_AdminDisableUser_LastAdmin(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	svc := baseUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService))
+
+	userRepo.On("GetUserIncludingDeleted", mock.Anything, "admin2").Return(
+		&domain.User{Id: "admin2", Role: domain.ADMIN}, nil).Once()
+	userRepo.On("CountAdmins", mock.Anything).Return(1, nil).Once()
+
+	err := svc.AdminDisableUser(context.Background(), "admin2")
+
+	assert.ErrorIs(t, err, errs.ErrLastAdmin)
+	userRepo.AssertNotCalled(t, "DeleteUser", mock.Anything, mock.Anything)
+}
+
+func TestUserService_AdminDisableUser_Success(t *testing.T) {
+	userRepo := new(MockUserRepo)
+	svc := baseUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService))
+
+	userRepo.On("GetUserIncludingDeleted", mock.Anything, "u1").Return(
+		&domain.User{Id: "u1", Role: domain.USER}, nil).Once()
+	userRepo.On("DeleteUser", mock.Anything, "u1").Return(nil).Once()
+
+	err := svc.AdminDisableUser(context.Background(), "u1")
+
+	assert.NoError(t, err)
+	userRepo.AssertExpectations(t)
+}
