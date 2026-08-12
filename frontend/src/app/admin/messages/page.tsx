@@ -83,7 +83,7 @@ function MessageRow({ message }: { message: Message }) {
     <tr className="hover:bg-gray-900/50">
       <Td className="font-medium text-gray-100">{message.author_name}</Td>
       <Td className="max-w-[320px] truncate text-gray-300">{message.content}</Td>
-      <Td className="font-mono text-xs text-gray-400">{message.room_id.slice(0, 8)}…</Td>
+      <Td className="break-all font-mono text-xs text-gray-400">{message.room_id}</Td>
       <Td>
         <Badge className="bg-gray-800 text-gray-200">{message.message_type}</Badge>
       </Td>
