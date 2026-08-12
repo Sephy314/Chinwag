@@ -22,7 +22,7 @@ type RoomRepoInterface interface {
 	DeleteRoomById(context.Context, uuid.UUID) error
 	PopRoom(context.Context, uuid.UUID) error
 	ListRooms(context.Context, string, int, string) ([]domain.Room, *structs.CursorMeta, error)
-	CountRooms(context.Context) (int, error)
+	CountRooms(context.Context) (int64, error)
 	AdminUpdateRoom(context.Context, domain.Room) error
 	AdminDeleteRoomById(context.Context, uuid.UUID) error
 }
@@ -198,8 +198,8 @@ func (r *RoomRepo) AdminDeleteRoomById(ctx context.Context, roomId uuid.UUID) er
 	return nil
 }
 
-func (r *RoomRepo) CountRooms(ctx context.Context) (int, error) {
-	var n int
+func (r *RoomRepo) CountRooms(ctx context.Context) (int64, error) {
+	var n int64
 	err := sqlx.GetContext(ctx, r.db, &n, `SELECT COUNT(*) FROM rooms WHERE deleted_at IS NULL`)
 	return n, err
 }

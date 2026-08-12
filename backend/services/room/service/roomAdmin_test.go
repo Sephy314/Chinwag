@@ -131,7 +131,7 @@ func TestRoomService_AdminCountRooms(t *testing.T) {
 	mockRepo := new(MockRoomRepo)
 	svc := NewRoomService(mockRepo)
 
-	mockRepo.On("CountRooms", mock.Anything).Return(42, nil).Once()
+	mockRepo.On("CountRooms", mock.Anything).Return(int64(42), nil).Once()
 
 	n, err := svc.AdminCountRooms(context.Background())
 	assert.NoError(t, err)

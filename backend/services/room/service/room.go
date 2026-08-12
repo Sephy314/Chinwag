@@ -268,8 +268,7 @@ func (r *RoomService) AdminDeleteRoom(ctx context.Context, roomId uuid.UUID) err
 }
 
 func (r *RoomService) AdminCountRooms(ctx context.Context) (int64, error) {
-	n, err := r.repo.CountRooms(ctx)
-	return int64(n), err
+	return r.repo.CountRooms(ctx)
 }
 
 func (r *RoomService) PopRoom(ctx context.Context, roomId uuid.UUID) error {

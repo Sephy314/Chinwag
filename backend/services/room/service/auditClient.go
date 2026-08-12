@@ -22,24 +22,35 @@ type AuditClient struct {
 }
 
 func NewAuditClient(url, clientCert, clientKey, caFile string, log *slog.Logger) *AuditClient {
+	if log == nil {
+		log = slog.Default()
+	}
 	if url == "" {
 		return &AuditClient{log: log}
 	}
 
 	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
-	if clientCert != "" && clientKey != "" {
+	switch {
+	case clientCert != "" && clientKey != "":
 		cert, err := tls.LoadX509KeyPair(clientCert, clientKey)
 		if err != nil {
-			log.Warn("audit: failed to load client cert", "error", err)
+			log.Warn("audit: failed to load client cert", "cert", clientCert, "error", err)
 		} else {
 			tlsCfg.Certificates = []tls.Certificate{cert}
 		}
+	case clientCert != "" || clientKey != "":
+		log.Warn("audit: only one of client cert/key set; mTLS client certificate disabled",
+			"client_cert_set", clientCert != "", "client_key_set", clientKey != "")
 	}
 	if caFile != "" {
 		caPEM, err := os.ReadFile(caFile)
-		if err == nil {
+		if err != nil {
+			log.Warn("audit: failed to read CA file", "path", caFile, "error", err)
+		} else {
 			pool := x509.NewCertPool()
-			if pool.AppendCertsFromPEM(caPEM) {
+			if !pool.AppendCertsFromPEM(caPEM) {
+				log.Warn("audit: failed to parse CA PEM", "path", caFile)
+			} else {
 				tlsCfg.RootCAs = pool
 			}
 		}

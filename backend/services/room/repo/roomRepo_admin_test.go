@@ -81,7 +81,7 @@ func TestRoomRepo_CountRooms(t *testing.T) {
 
 	n, err := repo.CountRooms(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, 7, n)
+	assert.Equal(t, int64(7), n)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

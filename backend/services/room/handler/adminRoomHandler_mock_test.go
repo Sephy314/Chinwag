@@ -58,9 +58,9 @@ func (m *adminRoomRepoMock) ListRooms(ctx context.Context, cursor string, limit 
 	}
 	return rooms, meta, args.Error(2)
 }
-func (m *adminRoomRepoMock) CountRooms(ctx context.Context) (int, error) {
+func (m *adminRoomRepoMock) CountRooms(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
-	return args.Int(0), args.Error(1)
+	return args.Get(0).(int64), args.Error(1)
 }
 func (m *adminRoomRepoMock) AdminUpdateRoom(ctx context.Context, room domain.Room) error {
 	args := m.Called(ctx, room)

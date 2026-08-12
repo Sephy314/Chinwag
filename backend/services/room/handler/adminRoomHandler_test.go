@@ -239,7 +239,7 @@ func TestAdminRoomHandler_StatsRooms_Success(t *testing.T) {
 	roomRepo := new(adminRoomRepoMock)
 	h := newAdminRoomHandler(t, roomRepo, new(adminMemberRepoMock))
 
-	roomRepo.On("CountRooms", mock.Anything).Return(12, nil).Once()
+	roomRepo.On("CountRooms", mock.Anything).Return(int64(12), nil).Once()
 
 	c, rec := echotest.ContextConfig{}.ToContextRecorder(t)
 	setAdminRoomClaims(c)
