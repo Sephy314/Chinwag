@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
-import { apiPost, apiGet, apiRequest, setAccessToken, ApiError } from "@/lib/api-client"
+import { apiPost, apiGet, apiRequest, setAccessToken, getAccessToken, ApiError } from "@/lib/api-client"
 import { API_PATHS } from "@/lib/api-paths"
 import type { User, LoginRequest, RegisterRequest } from "@/types"
 
@@ -45,8 +45,21 @@ function setCachedUser(user: User | null) {
 
 /** Merge the account role (from whoami's `{user, role}` payload) into the user. */
 function withRole(user: User, role?: string): User {
-  if (!role) return user
-  return { ...user, role }
+  const r = role ?? tokenRole()
+  if (!r) return user
+  return { ...user, role: r }
+}
+
+/** Read the `role` claim from the stored access token (JWT) as a fallback. */
+function tokenRole(): string | undefined {
+  const token = getAccessToken()
+  if (!token) return undefined
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    return typeof payload.role === "string" ? payload.role : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function isAuthUnavailable(err: unknown): boolean {
@@ -88,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isAuthUnavailable(err)) {
         const cached = getCachedUser()
         if (cached) {
-          setUser(cached)
+          setUser(withRole(cached))
           setReadOnly(true)
           setIsLoading(false)
           return
@@ -171,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isAuthUnavailable(err)) {
         const cached = getCachedUser()
         if (cached) {
-          setUser(cached)
+          setUser(withRole(cached))
           setReadOnly(true)
           setIsLoading(false)
           return true
