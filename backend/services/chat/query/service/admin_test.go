@@ -61,7 +61,7 @@ func TestQueryService_AdminCountMessages(t *testing.T) {
 	mockRepo := new(MockProjectionRepo)
 	svc := NewQueryService(mockRepo, new(MockMemberProvider), noopCache{})
 
-	mockRepo.On("AdminCountMessages", mock.Anything).Return(77, nil).Once()
+	mockRepo.On("AdminCountMessages", mock.Anything).Return(int64(77), nil).Once()
 
 	n, err := svc.AdminCountMessages(context.Background())
 	assert.NoError(t, err)

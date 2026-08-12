@@ -76,7 +76,7 @@ type ProjectionRepoInterface interface {
 	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
 	AdminListMessages(ctx context.Context, cursorStr string, limit int, roomID, authorID *uuid.UUID, search string) ([]domain.MessageProjection, *structs.CursorMeta, error)
 	AdminGetMessageIncludingDeleted(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error)
-	AdminCountMessages(ctx context.Context) (int, error)
+	AdminCountMessages(ctx context.Context) (int64, error)
 }
 
 type ProjectionRepo struct {
@@ -314,8 +314,8 @@ func (r *ProjectionRepo) AdminGetMessageIncludingDeleted(ctx context.Context, id
 }
 
 // AdminCountMessages returns the number of active (non-deleted) messages.
-func (r *ProjectionRepo) AdminCountMessages(ctx context.Context) (int, error) {
-	var n int
+func (r *ProjectionRepo) AdminCountMessages(ctx context.Context) (int64, error) {
+	var n int64
 	err := sqlx.GetContext(ctx, r.db, &n, `SELECT COUNT(*) FROM message_projections WHERE deleted_at IS NULL`)
 	return n, err
 }

@@ -109,6 +109,6 @@ func TestProjectionRepo_AdminCountMessages(t *testing.T) {
 
 	n, err := repo.AdminCountMessages(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, 9, n)
+	assert.Equal(t, int64(9), n)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

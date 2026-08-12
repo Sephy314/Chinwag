@@ -72,9 +72,9 @@ func (m *MockProjectionRepo) AdminGetMessageIncludingDeleted(ctx context.Context
 	return args.Get(0).(domain.MessageProjection), args.Error(1)
 }
 
-func (m *MockProjectionRepo) AdminCountMessages(ctx context.Context) (int, error) {
+func (m *MockProjectionRepo) AdminCountMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
-	return args.Int(0), args.Error(1)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 type MockMemberProvider struct {

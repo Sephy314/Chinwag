@@ -218,8 +218,7 @@ func (s *QueryService) AdminGetMessage(ctx context.Context, messageId uuid.UUID)
 }
 
 func (s *QueryService) AdminCountMessages(ctx context.Context) (int64, error) {
-	n, err := s.repo.AdminCountMessages(ctx)
-	return int64(n), err
+	return s.repo.AdminCountMessages(ctx)
 }
 
 func toResponse(msg domain.MessageProjection) *structs.MessageResponse {

@@ -21,6 +21,30 @@ func TestAuditClient_DisabledWhenURLEmpty(t *testing.T) {
 	c.Record(context.Background(), "admin1", "message.delete", "message", "m1", nil)
 }
 
+func TestAuditClient_NilLoggerDefaultsToSlog(t *testing.T) {
+	// A nil logger must not panic: NewAuditClient defaults to slog.Default()
+	// and Record logs are best-effort.
+	c := NewAuditClient("", "", "", "", nil)
+	assert.NotNil(t, c)
+	c.Record(context.Background(), "admin1", "message.delete", "message", "m1", nil)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+	c2 := NewAuditClient(srv.URL, "", "", "", nil)
+	assert.NotNil(t, c2)
+	c2.Record(context.Background(), "admin1", "message.delete", "message", "m1", nil)
+}
+
+func TestAuditClient_PartialCertConfig_NoPanic(t *testing.T) {
+	// Only one of client cert/key set: NewAuditClient warns and disables the
+	// client cert instead of panicking or silently ignoring.
+	c := NewAuditClient("https://example.test/internal/audit", "/nonexistent/client.crt", "", "", slog.Default())
+	assert.NotNil(t, c)
+	c.Record(context.Background(), "admin1", "message.delete", "message", "m1", nil)
+}
+
 func TestAuditClient_Record_SendsPayload(t *testing.T) {
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

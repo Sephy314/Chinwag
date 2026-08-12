@@ -58,9 +58,9 @@ func (m *MockProjectionRepoConsumer) AdminGetMessageIncludingDeleted(ctx context
 	return args.Get(0).(domain.MessageProjection), args.Error(1)
 }
 
-func (m *MockProjectionRepoConsumer) AdminCountMessages(ctx context.Context) (int, error) {
+func (m *MockProjectionRepoConsumer) AdminCountMessages(ctx context.Context) (int64, error) {
 	args := m.Called(ctx)
-	return args.Int(0), args.Error(1)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func log() *slog.Logger {
