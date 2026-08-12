@@ -14,6 +14,7 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
+  Shield,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/features/auth/hooks/use-auth"
@@ -158,6 +159,17 @@ export function Sidebar() {
               </p>
             </div>
             <div className="flex gap-1">
+              {user?.role === "ADMIN" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-blue-400 hover:text-blue-300"
+                  onClick={() => router.push("/admin")}
+                  aria-label="Admin"
+                >
+                  <Shield className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

@@ -31,6 +31,10 @@ func LoadConfig() *Config {
 	if roomURL != "" {
 		routes = append(routes, ServiceRoute{Prefix: "/rooms", TargetURL: roomURL})
 		routes = append(routes, ServiceRoute{Prefix: "/users", TargetURL: roomURL})
+		// Admin panel routes live at the room service root (/admin/...).
+		routes = append(routes, ServiceRoute{Prefix: "/admin/rooms", TargetURL: roomURL})
+		routes = append(routes, ServiceRoute{Prefix: "/admin/users/", TargetURL: roomURL})
+		routes = append(routes, ServiceRoute{Prefix: "/admin/stats/rooms", TargetURL: roomURL})
 	}
 
 	chatCommandURL := os.Getenv("CHAT_COMMAND_SERVICE_URL")

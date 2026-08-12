@@ -197,7 +197,32 @@ NATS JetStream (CHAT_EVENTS) ──▶ consumer (chat-projection) ──▶ proj
 
 ---
 
-## 📚 API Docs
+## �️ Admin Panel
+
+The platform ships with a **role-gated admin panel** for platform operators. Access is enforced **on the backend** (`RequireRole(ADMIN)`), never by the UI alone.
+
+- **UI**: `/admin` in the frontend (linked from the sidebar for `ADMIN`-role users)
+- **Roles**: `USER` → `MANAGER` → `ADMIN` (set via the admin Users page)
+
+| Area | Endpoints (via gateway) | Service |
+|:---|:---|:---|
+| Users | `/auth/admin/users[/:id][/role][/restore][/sessions]` | auth |
+| Sessions | `/auth/admin/sessions[/:id]` | auth |
+| Audit log | `/auth/admin/audit` | auth |
+| Stats | `/auth/admin/stats/*`, `/admin/stats/rooms`, `/chat/admin/stats/messages` | auth / room / chat-query |
+| Rooms | `/admin/rooms[/:id][/members]`, `/admin/users/:userId/rooms` | room |
+| Messages | `/chat/admin/messages[/:messageId]` | chat-query / chat-command |
+
+Notes:
+
+- All admin routes require a valid **DPoP** access token whose `role` claim is `ADMIN`.
+- Every admin mutation records an event in the **audit log** (`admin_audit_log`) via the auth service's internal mTLS endpoint (`POST /internal/audit`, `INTERNAL_PORT=8085`). Audit reporting is best-effort — a failure is logged but does not fail the operation.
+- Admin room/message operations bypass the normal user guards (e.g. popped-room read-only, message authorship) so operators can moderate the platform.
+- Message deletion is **CQRS-propagated**: `chat-command` soft-deletes and emits a `message_deleted` event through the outbox/NATS so the `chat-query` projection stays consistent.
+
+---
+
+## �📚 API Docs
 
 Each service exposes a **Swagger UI** at `/docs`, reachable through the gateway's `/auth`, `/rooms`, and `/chat` paths.
 
