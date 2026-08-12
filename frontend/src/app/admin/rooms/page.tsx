@@ -81,7 +81,7 @@ function RoomRow({ room }: { room: Room }) {
   return (
     <tr className="hover:bg-gray-900/50">
       <Td className="font-medium text-gray-100">{room.name}</Td>
-      <Td className="break-all font-mono text-xs">{room.owner_id}</Td>
+      <Td className="font-mono text-xs">{room.owner_id.slice(0, 8)}…</Td>
       <Td>{room.max_members}</Td>
       <Td className="text-gray-400">{new Date(room.created_at).toLocaleString()}</Td>
       <Td>
@@ -140,7 +140,7 @@ function MembersDialog({ room }: { room: Room }) {
               <div key={m.user_id} className="flex items-center justify-between py-2">
                 <div>
                   <p className="text-sm font-medium text-gray-200">{m.user_name}</p>
-                  <p className="break-all font-mono text-xs text-gray-500">{m.user_id}</p>
+                  <p className="font-mono text-xs text-gray-500">{m.user_id.slice(0, 12)}…</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className={m.role === 1 ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-200"}>

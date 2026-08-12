@@ -72,12 +72,12 @@ export default function AdminAuditPage() {
             {events.map((e) => (
               <tr key={e.id} className="hover:bg-gray-900/50">
                 <Td className="whitespace-nowrap text-gray-400">{new Date(e.created_at).toLocaleString()}</Td>
-                <Td className="break-all font-mono text-xs">{e.admin_id}</Td>
+                <Td className="font-mono text-xs">{e.admin_id.slice(0, 8)}…</Td>
                 <Td>
                   <Badge className="bg-gray-800 text-gray-200">{e.action}</Badge>
                 </Td>
                 <Td className="text-gray-400">{e.target_type}</Td>
-                <Td className="break-all font-mono text-xs text-gray-400">{e.target_id}</Td>
+                <Td className="font-mono text-xs text-gray-400">{e.target_id.slice(0, 12)}…</Td>
                 <Td className="max-w-[220px] truncate font-mono text-xs text-gray-500">
                   {e.metadata ? JSON.stringify(e.metadata) : "—"}
                 </Td>

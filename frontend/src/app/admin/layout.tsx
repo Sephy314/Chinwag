@@ -8,11 +8,7 @@ import {
   KeyRound,
   MessagesSquare,
   ScrollText,
-  ExternalLink,
 } from "lucide-react"
-
-const GRAFANA_URL =
-  process.env.NEXT_PUBLIC_GRAFANA_URL || "https://chinwag.duckdns.org/grafana"
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -61,15 +57,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Logo className="h-7 w-7" />
             <span className="font-semibold text-gray-100">Chinwag Admin</span>
           </div>
-          <a
-            href={GRAFANA_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:border-gray-700 hover:bg-gray-900 hover:text-gray-100"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Grafana
-          </a>
         </header>
         <AdminNav />
         <main className="flex-1 overflow-auto p-4">{children}</main>
