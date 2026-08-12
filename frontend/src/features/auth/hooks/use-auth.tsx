@@ -43,6 +43,12 @@ function setCachedUser(user: User | null) {
   }
 }
 
+/** Merge the account role (from whoami's `{user, role}` payload) into the user. */
+function withRole(user: User, role?: string): User {
+  if (!role) return user
+  return { ...user, role }
+}
+
 function isAuthUnavailable(err: unknown): boolean {
   return err instanceof ApiError && err.status >= 500
 }
@@ -69,10 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const restoreSession = useCallback(async () => {
     try {
-      const res = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
+      const res = await apiGet<{ user: User; role?: string }>(API_PATHS.auth.whoami)
       if (res.success && res.data?.user) {
-        setUser(res.data.user)
-        setCachedUser(res.data.user)
+        const next = withRole(res.data.user, res.data.role)
+        setUser(next)
+        setCachedUser(next)
         setReadOnly(false)
         setIsLoading(false)
         return
@@ -109,10 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       if (res.success && res.data?.token) {
         setAccessToken(res.data.token)
-        const whoami = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
+        const whoami = await apiGet<{ user: User; role?: string }>(API_PATHS.auth.whoami)
         if (whoami.success && whoami.data?.user) {
-          setUser(whoami.data.user)
-          setCachedUser(whoami.data.user)
+          const next = withRole(whoami.data.user, whoami.data.role)
+          setUser(next)
+          setCachedUser(next)
           setReadOnly(false)
           router.push("/home")
           return
@@ -150,10 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkSession = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await apiGet<{ user: User }>(API_PATHS.auth.whoami)
+      const res = await apiGet<{ user: User; role?: string }>(API_PATHS.auth.whoami)
       if (res.success && res.data?.user) {
-        setUser(res.data.user)
-        setCachedUser(res.data.user)
+        const next = withRole(res.data.user, res.data.role)
+        setUser(next)
+        setCachedUser(next)
         setReadOnly(false)
         setIsLoading(false)
         return true
