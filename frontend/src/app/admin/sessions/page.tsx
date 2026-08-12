@@ -53,8 +53,8 @@ function SessionRow({ session }: { session: AdminSession }) {
 
   return (
     <tr className="hover:bg-gray-900/50">
-      <Td className="font-mono text-xs text-gray-300">{session.lineage_id.slice(0, 8)}…</Td>
-      <Td className="font-mono text-xs">{session.user_id.slice(0, 8)}…</Td>
+      <Td className="break-all font-mono text-xs text-gray-300">{session.lineage_id}</Td>
+      <Td className="break-all font-mono text-xs">{session.user_id}</Td>
       <Td className="text-gray-400">{new Date(session.created_at).toLocaleString()}</Td>
       <Td>{session.tokens}</Td>
       <Td>
