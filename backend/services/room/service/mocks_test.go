@@ -50,6 +50,34 @@ func (m *MockRoomRepo) PopRoom(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
+func (m *MockRoomRepo) ListRooms(ctx context.Context, cursor string, limit int, search string) ([]domain.Room, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursor, limit, search)
+	var rooms []domain.Room
+	if args.Get(0) != nil {
+		rooms = args.Get(0).([]domain.Room)
+	}
+	var meta *structs.CursorMeta
+	if args.Get(1) != nil {
+		meta = args.Get(1).(*structs.CursorMeta)
+	}
+	return rooms, meta, args.Error(2)
+}
+
+func (m *MockRoomRepo) CountRooms(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockRoomRepo) AdminUpdateRoom(ctx context.Context, room domain.Room) error {
+	args := m.Called(ctx, room)
+	return args.Error(0)
+}
+
+func (m *MockRoomRepo) AdminDeleteRoomById(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 type MockRoomMemberRepo struct {
 	mock.Mock
 }
@@ -91,6 +119,26 @@ func (m *MockRoomMemberRepo) RemoveMember(ctx context.Context, userId, roomId uu
 }
 
 func (m *MockRoomMemberRepo) SetUserRole(ctx context.Context, userId, roomId uuid.UUID, role domain.Role) error {
+	args := m.Called(ctx, userId, roomId, role)
+	return args.Error(0)
+}
+
+func (m *MockRoomMemberRepo) AdminAddMember(ctx context.Context, member domain.RoomMember) error {
+	args := m.Called(ctx, member)
+	return args.Error(0)
+}
+
+func (m *MockRoomMemberRepo) AdminUpdateMember(ctx context.Context, member domain.RoomMember) error {
+	args := m.Called(ctx, member)
+	return args.Error(0)
+}
+
+func (m *MockRoomMemberRepo) AdminRemoveMember(ctx context.Context, userId, roomId uuid.UUID) error {
+	args := m.Called(ctx, userId, roomId)
+	return args.Error(0)
+}
+
+func (m *MockRoomMemberRepo) AdminSetUserRole(ctx context.Context, userId, roomId uuid.UUID, role domain.Role) error {
 	args := m.Called(ctx, userId, roomId, role)
 	return args.Error(0)
 }

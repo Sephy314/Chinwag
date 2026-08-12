@@ -17,6 +17,7 @@ type Router struct {
 	RoomHandler       *handler.RoomHandlerImpl
 	RoomMemberHandler *handler.RoomMemberHandlerImpl
 	InviteLinkHandler *handler.InviteLinkHandlerImpl
+	AdminRoomHandler  *handler.AdminRoomHandler
 	log               *slog.Logger
 }
 
@@ -24,6 +25,7 @@ func NewRouter(
 	roomHandler *handler.RoomHandlerImpl,
 	roomMemberHandler *handler.RoomMemberHandlerImpl,
 	inviteLinkHandler *handler.InviteLinkHandlerImpl,
+	adminRoomHandler *handler.AdminRoomHandler,
 	log *slog.Logger,
 ) *Router {
 	return &Router{
@@ -31,6 +33,7 @@ func NewRouter(
 		RoomHandler:       roomHandler,
 		RoomMemberHandler: roomMemberHandler,
 		InviteLinkHandler: inviteLinkHandler,
+		AdminRoomHandler:  adminRoomHandler,
 		log:               log,
 	}
 }
@@ -119,6 +122,25 @@ func (r *Router) Setup(cfg *RouterConfig) {
 
 		priv.POST("/rooms/:roomId/invite", r.InviteLinkHandler.CreateInviteLink)
 		priv.POST("/rooms/invite/:token/join", r.InviteLinkHandler.JoinByInviteLink)
+	}
+
+	admin := e.Group("")
+	admin.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
+	admin.Use(sharedauth.RequireRole(sharedauth.RoleAdmin))
+	{
+		admin.GET("/admin/rooms", r.AdminRoomHandler.ListRooms)
+		admin.POST("/admin/rooms", r.AdminRoomHandler.CreateRoom)
+		admin.GET("/admin/rooms/:id", r.AdminRoomHandler.GetRoom)
+		admin.PUT("/admin/rooms/:id", r.AdminRoomHandler.UpdateRoom)
+		admin.DELETE("/admin/rooms/:id", r.AdminRoomHandler.DeleteRoom)
+
+		admin.GET("/admin/rooms/:id/members", r.AdminRoomHandler.ListMembers)
+		admin.POST("/admin/rooms/:id/members", r.AdminRoomHandler.AddMember)
+		admin.PUT("/admin/rooms/:id/members/:userId", r.AdminRoomHandler.UpdateMember)
+		admin.DELETE("/admin/rooms/:id/members/:userId", r.AdminRoomHandler.RemoveMember)
+
+		admin.GET("/admin/users/:userId/rooms", r.AdminRoomHandler.ListUserRooms)
+		admin.GET("/admin/stats/rooms", r.AdminRoomHandler.StatsRooms)
 	}
 
 	r.SetUpSwaggerRoutes(e)

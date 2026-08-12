@@ -17,6 +17,10 @@ type RoomMemberRepoInterface interface {
 	UpdateMember(context.Context, domain.RoomMember) error
 	RemoveMember(context.Context, uuid.UUID, uuid.UUID) error
 	SetUserRole(context.Context, uuid.UUID, uuid.UUID, domain.Role) error
+	AdminAddMember(context.Context, domain.RoomMember) error
+	AdminUpdateMember(context.Context, domain.RoomMember) error
+	AdminRemoveMember(context.Context, uuid.UUID, uuid.UUID) error
+	AdminSetUserRole(context.Context, uuid.UUID, uuid.UUID, domain.Role) error
 }
 
 type RoomMemberRepo struct {
@@ -168,6 +172,91 @@ func (r *RoomMemberRepo) SetUserRole(ctx context.Context, userId uuid.UUID, room
 		return errs.ErrNotFound
 	}
 
+	return nil
+}
+
+// AdminAddMember adds a member regardless of the room's popped state.
+func (r *RoomMemberRepo) AdminAddMember(ctx context.Context, req domain.RoomMember) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO room_member (user_id, room_id, role)
+		 SELECT $1, $2, $3
+		 WHERE EXISTS (SELECT 1 FROM rooms WHERE id = $4 AND deleted_at IS NULL)`,
+		req.UserId, req.RoomId, req.Role, req.RoomId.String(),
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrConflict
+	}
+	return nil
+}
+
+// AdminUpdateMember updates a member role regardless of the room's popped state.
+func (r *RoomMemberRepo) AdminUpdateMember(ctx context.Context, member domain.RoomMember) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member SET role = $1
+		 WHERE user_id = $2 AND room_id = $3 AND left_at IS NULL`,
+		member.Role, member.UserId, member.RoomId,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+	return nil
+}
+
+// AdminRemoveMember removes a member regardless of the room's popped state.
+func (r *RoomMemberRepo) AdminRemoveMember(ctx context.Context, userId uuid.UUID, roomId uuid.UUID) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member SET left_at = now()
+		 WHERE user_id = $1 AND room_id = $2`,
+		userId, roomId,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
+	return nil
+}
+
+// AdminSetUserRole sets a member role regardless of the room's popped state.
+func (r *RoomMemberRepo) AdminSetUserRole(ctx context.Context, userId uuid.UUID, roomId uuid.UUID, role domain.Role) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE room_member SET role = $1
+		 WHERE user_id = $2 AND room_id = $3`,
+		role, userId, roomId,
+	)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return errs.ErrNotFound
+	}
 	return nil
 }
 
