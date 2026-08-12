@@ -164,6 +164,7 @@ func main() {
 
 	querySvc := service.NewQueryService(projectionRepo, memberAdapter, cacheRedis)
 	queryHandler := handler.NewQueryHandler(querySvc, log)
+	adminQueryHandler := handler.NewAdminQueryHandler(querySvc, log)
 
 	if conns.Js != nil {
 		consumer := service.NewProjectionConsumer(projectionRepo, log)
@@ -214,7 +215,7 @@ func main() {
 		log.Info("projection consumer started")
 	}
 
-	r := router.NewRouter(queryHandler, log)
+	r := router.NewRouter(queryHandler, adminQueryHandler, log)
 	r.Setup(&router.RouterConfig{
 		Port:          cfg.Port,
 		JWKSURL:       cfg.JWKSURL,

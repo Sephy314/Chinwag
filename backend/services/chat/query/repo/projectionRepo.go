@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/domain"
-	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -34,6 +35,35 @@ func decodeCursor(s string) (cursor, error) {
 	return c, err
 }
 
+// rebind converts "?" placeholders to the pgx ($N) positional style.
+func rebind(q string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range q {
+		if r == '?' {
+			n++
+			b.WriteString("$" + itoa(n))
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(buf[i:])
+}
+
 const defaultLimit = 50
 const maxLimit = 200
 
@@ -44,6 +74,9 @@ type ProjectionRepoInterface interface {
 	ListAfterByRoomId(ctx context.Context, roomId uuid.UUID, afterCursor string, limit int) ([]domain.MessageProjection, error)
 	UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error
 	SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error
+	AdminListMessages(ctx context.Context, cursorStr string, limit int, roomID, authorID *uuid.UUID, search string) ([]domain.MessageProjection, *structs.CursorMeta, error)
+	AdminGetMessageIncludingDeleted(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error)
+	AdminCountMessages(ctx context.Context) (int64, error)
 }
 
 type ProjectionRepo struct {
@@ -168,7 +201,8 @@ func (r *ProjectionRepo) ListAfterByRoomId(ctx context.Context, roomId uuid.UUID
 	return msgs, nil
 }
 
-func (r *ProjectionRepo) UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error {	res, err := r.db.ExecContext(
+func (r *ProjectionRepo) UpdateContent(ctx context.Context, id uuid.UUID, content string, updatedAt time.Time) error {
+	res, err := r.db.ExecContext(
 		ctx,
 		`UPDATE message_projections SET content = $1, updated_at = $2
 		 WHERE id = $3 AND deleted_at IS NULL`,
@@ -204,4 +238,84 @@ func (r *ProjectionRepo) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt
 		return errs.ErrNotFound
 	}
 	return nil
+}
+
+// AdminListMessages lists messages across all rooms with optional filters
+// (room, author, content search) and cursor pagination. Admin only.
+func (r *ProjectionRepo) AdminListMessages(ctx context.Context, cursorStr string, limit int, roomID, authorID *uuid.UUID, search string) ([]domain.MessageProjection, *structs.CursorMeta, error) {
+	if limit <= 0 || limit > maxLimit {
+		limit = defaultLimit
+	}
+
+	where := []string{"deleted_at IS NULL"}
+	args := []any{}
+	arg := func(v any) string {
+		args = append(args, v)
+		return "?"
+	}
+	if roomID != nil {
+		where = append(where, "room_id = "+arg(*roomID))
+	}
+	if authorID != nil {
+		where = append(where, "author_id = "+arg(*authorID))
+	}
+	if search != "" {
+		where = append(where, "content ILIKE "+arg("%"+search+"%"))
+	}
+
+	query := `SELECT id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at
+	          FROM message_projections WHERE ` + strings.Join(where, " AND ")
+
+	if cursorStr == "" {
+		query += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	} else {
+		c, cerr := decodeCursor(cursorStr)
+		if cerr != nil {
+			return nil, nil, cerr
+		}
+		query += ` AND (created_at, id) < (?, ?) ORDER BY created_at DESC, id DESC LIMIT ?`
+		args = append(args, c.CreatedAt, c.Id)
+	}
+	args = append(args, limit+1)
+	query = rebind(query)
+
+	var msgs []domain.MessageProjection
+	if err := sqlx.SelectContext(ctx, r.db, &msgs, query, args...); err != nil {
+		return nil, nil, err
+	}
+
+	hasMore := len(msgs) > limit
+	if hasMore {
+		msgs = msgs[:limit]
+	}
+	var meta *structs.CursorMeta
+	if hasMore && len(msgs) > 0 {
+		last := msgs[len(msgs)-1]
+		meta = &structs.CursorMeta{
+			NextCursor: encodeCursor(last.CreatedAt, last.Id),
+			HasMore:    true,
+		}
+	}
+	return msgs, meta, nil
+}
+
+// AdminGetMessageIncludingDeleted returns a message even if it has been
+// soft-deleted. Admin only.
+func (r *ProjectionRepo) AdminGetMessageIncludingDeleted(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error) {
+	var msg domain.MessageProjection
+	err := sqlx.GetContext(
+		ctx, r.db, &msg,
+		`SELECT id, room_id, author_id, author_name, message_type, content, created_at, updated_at, deleted_at
+		 FROM message_projections
+		 WHERE id = $1`,
+		id,
+	)
+	return msg, err
+}
+
+// AdminCountMessages returns the number of active (non-deleted) messages.
+func (r *ProjectionRepo) AdminCountMessages(ctx context.Context) (int64, error) {
+	var n int64
+	err := sqlx.GetContext(ctx, r.db, &n, `SELECT COUNT(*) FROM message_projections WHERE deleted_at IS NULL`)
+	return n, err
 }

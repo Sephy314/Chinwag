@@ -13,22 +13,25 @@ import (
 )
 
 type Router struct {
-	Echo        *echo.Echo
-	ChatHandler *handler.ChatHandler
-	WSHandler   *handler.WebSocketHandler
-	log         *slog.Logger
+	Echo             *echo.Echo
+	ChatHandler      *handler.ChatHandler
+	WSHandler        *handler.WebSocketHandler
+	AdminChatHandler *handler.AdminChatHandler
+	log              *slog.Logger
 }
 
 func NewRouter(
 	chatHandler *handler.ChatHandler,
 	wsHandler *handler.WebSocketHandler,
+	adminChatHandler *handler.AdminChatHandler,
 	log *slog.Logger,
 ) *Router {
 	return &Router{
-		Echo:        echo.New(),
-		ChatHandler: chatHandler,
-		WSHandler:   wsHandler,
-		log:         log,
+		Echo:             echo.New(),
+		ChatHandler:      chatHandler,
+		WSHandler:        wsHandler,
+		AdminChatHandler: adminChatHandler,
+		log:              log,
 	}
 }
 
@@ -103,6 +106,13 @@ func (r *Router) Setup(cfg *RouterConfig) {
 		priv.POST("/chat/rooms/:roomId/messages", r.ChatHandler.CreateMessage)
 		priv.PUT("/chat/rooms/:roomId/messages/:messageId", r.ChatHandler.UpdateMessage)
 		priv.DELETE("/chat/rooms/:roomId/messages/:messageId", r.ChatHandler.DeleteMessage)
+	}
+
+	admin := e.Group("")
+	admin.Use(sharedauth.NewMiddleware(jwksClient, r.log, cfg.DPoPValidator))
+	admin.Use(sharedauth.RequireRole(sharedauth.RoleAdmin))
+	{
+		admin.DELETE("/chat/admin/messages/:messageId", r.AdminChatHandler.DeleteMessage)
 	}
 
 	SetUpSwaggerRoutes(e)

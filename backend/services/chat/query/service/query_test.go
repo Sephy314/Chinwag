@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/Sephy314/chinwag/backend/services/chat/query/domain"
-	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/Sephy314/chinwag/backend/services/chat/query/shared/errs"
+	"github.com/Sephy314/chinwag/backend/services/chat/query/structs"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -53,6 +53,28 @@ func (m *MockProjectionRepo) UpdateContent(ctx context.Context, id uuid.UUID, co
 func (m *MockProjectionRepo) SoftDelete(ctx context.Context, id uuid.UUID, deletedAt time.Time) error {
 	args := m.Called(ctx, id, deletedAt)
 	return args.Error(0)
+}
+
+func (m *MockProjectionRepo) AdminListMessages(ctx context.Context, cursorStr string, limit int, roomID, authorID *uuid.UUID, search string) ([]domain.MessageProjection, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursorStr, limit, roomID, authorID, search)
+	if args.Get(0) == nil {
+		var meta *structs.CursorMeta
+		if args.Get(1) != nil {
+			meta = args.Get(1).(*structs.CursorMeta)
+		}
+		return nil, meta, args.Error(2)
+	}
+	return args.Get(0).([]domain.MessageProjection), args.Get(1).(*structs.CursorMeta), args.Error(2)
+}
+
+func (m *MockProjectionRepo) AdminGetMessageIncludingDeleted(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(domain.MessageProjection), args.Error(1)
+}
+
+func (m *MockProjectionRepo) AdminCountMessages(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 type MockMemberProvider struct {

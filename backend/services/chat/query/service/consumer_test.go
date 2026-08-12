@@ -48,6 +48,21 @@ func (m *MockProjectionRepoConsumer) SoftDelete(ctx context.Context, id uuid.UUI
 	return args.Error(0)
 }
 
+func (m *MockProjectionRepoConsumer) AdminListMessages(ctx context.Context, cursorStr string, limit int, roomID, authorID *uuid.UUID, search string) ([]domain.MessageProjection, *structs.CursorMeta, error) {
+	args := m.Called(ctx, cursorStr, limit, roomID, authorID, search)
+	return args.Get(0).([]domain.MessageProjection), args.Get(1).(*structs.CursorMeta), args.Error(2)
+}
+
+func (m *MockProjectionRepoConsumer) AdminGetMessageIncludingDeleted(ctx context.Context, id uuid.UUID) (domain.MessageProjection, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(domain.MessageProjection), args.Error(1)
+}
+
+func (m *MockProjectionRepoConsumer) AdminCountMessages(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func log() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, nil))
 }

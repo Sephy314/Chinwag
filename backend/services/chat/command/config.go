@@ -6,16 +6,20 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DBUrl          string
-	RedisAddr      string
-	RedisPassword  string
-	AuthServiceURL string
-	RoomServiceURL string
-	JWKSURL        string
-	FrontendURL    string
-	NatsURL        string
-	InstanceID     string
+	Port               string
+	DBUrl              string
+	RedisAddr          string
+	RedisPassword      string
+	AuthServiceURL     string
+	RoomServiceURL     string
+	JWKSURL            string
+	FrontendURL        string
+	NatsURL            string
+	InstanceID         string
+	InternalAuditURL   string
+	InternalClientCert string
+	InternalClientKey  string
+	InternalCA         string
 }
 
 func LoadConfig() *Config {
@@ -67,16 +71,25 @@ func LoadConfig() *Config {
 	}
 	instanceID = strings.NewReplacer(".", "-", ":", "-", "_", "-").Replace(instanceID)
 
+	internalAuditURL := os.Getenv("INTERNAL_AUDIT_URL")
+	internalClientCert := os.Getenv("INTERNAL_CLIENT_CERT")
+	internalClientKey := os.Getenv("INTERNAL_CLIENT_KEY")
+	internalCA := os.Getenv("INTERNAL_CA")
+
 	return &Config{
-		Port:           port,
-		DBUrl:          dbUrl,
-		RedisAddr:      redisAddr,
-		RedisPassword:  redisPassword,
-		AuthServiceURL: authServiceURL,
-		RoomServiceURL: roomServiceURL,
-		JWKSURL:        jwksURL,
-		FrontendURL:    frontendURL,
-		NatsURL:        natsURL,
-		InstanceID:     instanceID,
+		Port:               port,
+		DBUrl:              dbUrl,
+		RedisAddr:          redisAddr,
+		RedisPassword:      redisPassword,
+		AuthServiceURL:     authServiceURL,
+		RoomServiceURL:     roomServiceURL,
+		JWKSURL:            jwksURL,
+		FrontendURL:        frontendURL,
+		NatsURL:            natsURL,
+		InstanceID:         instanceID,
+		InternalAuditURL:   internalAuditURL,
+		InternalClientCert: internalClientCert,
+		InternalClientKey:  internalClientKey,
+		InternalCA:         internalCA,
 	}
 }
