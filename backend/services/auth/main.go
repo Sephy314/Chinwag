@@ -68,7 +68,7 @@ func main() {
 	keyRotationScheduler := scheduler.NewKeyRotationScheduler(jwksService, scheduler.NextMidnight(), log)
 	go keyRotationScheduler.Start(context.Background())
 
-	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService, cacheRedis, dpopService, log)
+	refreshTokenHandler := handler.NewRefreshHandler(refreshTokenService, jwtService, cacheRedis, dpopService, userService, log)
 	userHandler := handler.NewUserHandler(userService, log, dpopService)
 	jwksHandler := handler.NewJwksHandler(jwksService)
 

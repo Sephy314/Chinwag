@@ -33,7 +33,15 @@ func refreshRequest(t *testing.T, withCookie bool) (*echo.Context, *httptest.Res
 }
 
 func newRefreshHandler(refresh *MockRefreshTokenService, jwtSvc *MockJwtService, locker *MockCache, dpopSvc *MockDPoPService) *RefreshHandlerImpl {
-	return NewRefreshHandler(refresh, jwtSvc, locker, dpopSvc, logger.New())
+	userSvc := service.NewUserService(new(MockUserRepo), new(MockJwksService), new(MockRefreshTokenService), &noopLogger{})
+	return NewRefreshHandler(refresh, jwtSvc, locker, dpopSvc, userSvc, logger.New())
+}
+
+// newRefreshHandlerWithUser builds the handler with a caller-provided user
+// repo so tests can stub GetUser and assert the refreshed role.
+func newRefreshHandlerWithUser(refresh *MockRefreshTokenService, jwtSvc *MockJwtService, locker *MockCache, dpopSvc *MockDPoPService, userRepo *MockUserRepo) *RefreshHandlerImpl {
+	userSvc := service.NewUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService), &noopLogger{})
+	return NewRefreshHandler(refresh, jwtSvc, locker, dpopSvc, userSvc, logger.New())
 }
 
 func TestRefreshHandler_Refresh_Success(t *testing.T) {
@@ -41,7 +49,8 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 	jwtSvc := new(MockJwtService)
 	locker := new(MockCache)
 	dpopSvc := new(MockDPoPService)
-	h := newRefreshHandler(refresh, jwtSvc, locker, dpopSvc)
+	userRepo := new(MockUserRepo)
+	h := newRefreshHandlerWithUser(refresh, jwtSvc, locker, dpopSvc, userRepo)
 
 	proof := makeProof(t)
 	jkt := proofJkt(t, proof)
@@ -59,7 +68,10 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 		UserID:    "u1",
 		LineageID: "lin1",
 	}, nil).Once()
-	jwtSvc.On("NewAccessToken", mock.Anything, "u1", domain.USER, jkt).Return(&token, nil).Once()
+	// The fresh access token must carry the user's CURRENT role (ADMIN), not a
+	// hardcoded USER — this is what lets admins keep their role across refreshes.
+	userRepo.On("GetUser", mock.Anything, "u1").Return(&domain.User{Id: "u1", Role: domain.ADMIN}, nil).Once()
+	jwtSvc.On("NewAccessToken", mock.Anything, "u1", domain.ADMIN, jkt).Return(&token, nil).Once()
 	refresh.On("InsertRefreshToken", mock.Anything, mock.MatchedBy(func(tk structs.RefreshToken) bool {
 		return tk.Subject == "u1" && tk.LineageID == "lin1" && tk.Jkt == jkt && tk.ParentHash == service.HashRefreshToken(testRefreshCookie)
 	})).Return(nil).Once()
@@ -77,6 +89,7 @@ func TestRefreshHandler_Refresh_Success(t *testing.T) {
 	jwtSvc.AssertExpectations(t)
 	locker.AssertExpectations(t)
 	dpopSvc.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
 }
 
 func TestRefreshHandler_Refresh_MissingCookie(t *testing.T) {
@@ -191,6 +204,43 @@ func TestRefreshHandler_Refresh_LockBusy(t *testing.T) {
 	dpopSvc.AssertExpectations(t)
 }
 
+func TestRefreshHandler_Refresh_DisabledUserRejected(t *testing.T) {
+	refresh := new(MockRefreshTokenService)
+	jwtSvc := new(MockJwtService)
+	locker := new(MockCache)
+	dpopSvc := new(MockDPoPService)
+	userRepo := new(MockUserRepo)
+	h := newRefreshHandlerWithUser(refresh, jwtSvc, locker, dpopSvc, userRepo)
+
+	proof := makeProof(t)
+	jkt := proofJkt(t, proof)
+	lockKey := "refresh:lock:" + service.HashRefreshToken(testRefreshCookie)
+
+	dpopSvc.On("Validate", mock.Anything, mock.Anything).Return(proof, "nonce-1", nil).Once()
+	refresh.On("GetRefreshToken", mock.Anything, testRefreshCookie).Return(&structs.RefreshTokenRecord{
+		UserID: "u1", LineageID: "lin1", Jkt: jkt,
+	}, nil).Once()
+	locker.On("AcquireLock", mock.Anything, lockKey, mock.Anything, 5*time.Second).Return(true, nil).Once()
+	refresh.On("ConsumeRefreshToken", mock.Anything, testRefreshCookie).Return(&structs.RefreshTokenRecord{
+		UserID: "u1", LineageID: "lin1",
+	}, nil).Once()
+	// Soft-deleted users are excluded by GetUser -> refresh is rejected and no
+	// new access token is minted.
+	userRepo.On("GetUser", mock.Anything, "u1").Return(nil, sql.ErrNoRows).Once()
+	locker.On("ReleaseLock", mock.Anything, lockKey, mock.Anything).Return(nil).Once()
+
+	c, rec := refreshRequest(t, true)
+	err := h.Refresh(c)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	jwtSvc.AssertNotCalled(t, "NewAccessToken", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	refresh.AssertNotCalled(t, "InsertRefreshToken", mock.Anything, mock.Anything)
+	refresh.AssertExpectations(t)
+	locker.AssertExpectations(t)
+	dpopSvc.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
+}
+
 func TestRefreshHandler_Refresh_ReusedTokenRevokesLineage(t *testing.T) {
 	refresh := new(MockRefreshTokenService)
 	jwtSvc := new(MockJwtService)
@@ -227,7 +277,8 @@ func TestRefreshHandler_Refresh_NewAccessTokenError(t *testing.T) {
 	jwtSvc := new(MockJwtService)
 	locker := new(MockCache)
 	dpopSvc := new(MockDPoPService)
-	h := newRefreshHandler(refresh, jwtSvc, locker, dpopSvc)
+	userRepo := new(MockUserRepo)
+	h := newRefreshHandlerWithUser(refresh, jwtSvc, locker, dpopSvc, userRepo)
 
 	proof := makeProof(t)
 	jkt := proofJkt(t, proof)
@@ -241,7 +292,8 @@ func TestRefreshHandler_Refresh_NewAccessTokenError(t *testing.T) {
 	refresh.On("ConsumeRefreshToken", mock.Anything, testRefreshCookie).Return(&structs.RefreshTokenRecord{
 		UserID: "u1", LineageID: "lin1",
 	}, nil).Once()
-	jwtSvc.On("NewAccessToken", mock.Anything, "u1", domain.USER, jkt).Return(nil, errs.ErrNoKey).Once()
+	userRepo.On("GetUser", mock.Anything, "u1").Return(&domain.User{Id: "u1", Role: domain.MANAGER}, nil).Once()
+	jwtSvc.On("NewAccessToken", mock.Anything, "u1", domain.MANAGER, jkt).Return(nil, errs.ErrNoKey).Once()
 	locker.On("ReleaseLock", mock.Anything, lockKey, mock.Anything).Return(nil).Once()
 
 	c, rec := refreshRequest(t, true)
@@ -252,6 +304,7 @@ func TestRefreshHandler_Refresh_NewAccessTokenError(t *testing.T) {
 	jwtSvc.AssertExpectations(t)
 	locker.AssertExpectations(t)
 	dpopSvc.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
 }
 
 func TestRefreshHandler_Refresh_InsertTokenError(t *testing.T) {
@@ -259,7 +312,8 @@ func TestRefreshHandler_Refresh_InsertTokenError(t *testing.T) {
 	jwtSvc := new(MockJwtService)
 	locker := new(MockCache)
 	dpopSvc := new(MockDPoPService)
-	h := newRefreshHandler(refresh, jwtSvc, locker, dpopSvc)
+	userRepo := new(MockUserRepo)
+	h := newRefreshHandlerWithUser(refresh, jwtSvc, locker, dpopSvc, userRepo)
 
 	proof := makeProof(t)
 	jkt := proofJkt(t, proof)
@@ -274,6 +328,7 @@ func TestRefreshHandler_Refresh_InsertTokenError(t *testing.T) {
 	refresh.On("ConsumeRefreshToken", mock.Anything, testRefreshCookie).Return(&structs.RefreshTokenRecord{
 		UserID: "u1", LineageID: "lin1",
 	}, nil).Once()
+	userRepo.On("GetUser", mock.Anything, "u1").Return(&domain.User{Id: "u1", Role: domain.USER}, nil).Once()
 	jwtSvc.On("NewAccessToken", mock.Anything, "u1", domain.USER, jkt).Return(&token, nil).Once()
 	refresh.On("InsertRefreshToken", mock.Anything, mock.Anything).Return(errs.ErrCacheNotFound).Once()
 	locker.On("ReleaseLock", mock.Anything, lockKey, mock.Anything).Return(nil).Once()
@@ -286,6 +341,7 @@ func TestRefreshHandler_Refresh_InsertTokenError(t *testing.T) {
 	jwtSvc.AssertExpectations(t)
 	locker.AssertExpectations(t)
 	dpopSvc.AssertExpectations(t)
+	userRepo.AssertExpectations(t)
 }
 
 func TestRefreshHandler_Refresh_ConnError(t *testing.T) {

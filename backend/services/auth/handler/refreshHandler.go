@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sephy314/chinwag/backend/services/auth/domain"
 	"github.com/Sephy314/chinwag/backend/services/auth/service"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/cache"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
@@ -26,15 +25,17 @@ type RefreshHandlerImpl struct {
 	jwtService service.JwtServiceInterface
 	locker     cache.Cache
 	dpop       service.DPoPServiceInterface
+	users      *service.UserService
 	log        logger.Logger
 }
 
-func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService service.JwtServiceInterface, locker cache.Cache, dpop service.DPoPServiceInterface, log logger.Logger) *RefreshHandlerImpl {
+func NewRefreshHandler(service service.RefreshTokenServiceInterface, jwtService service.JwtServiceInterface, locker cache.Cache, dpop service.DPoPServiceInterface, users *service.UserService, log logger.Logger) *RefreshHandlerImpl {
 	return &RefreshHandlerImpl{
 		service:    service,
 		jwtService: jwtService,
 		locker:     locker,
 		dpop:       dpop,
+		users:      users,
 		log:        log,
 	}
 }
@@ -95,7 +96,17 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 		return c.JSON(errs.ParseError(err))
 	}
 
-	token, err := h.jwtService.NewAccessToken(ctx, consumed.UserID, domain.USER, jkt)
+	// Sign the fresh access token with the user's CURRENT role (not a hardcoded
+	// role) so role changes take effect immediately and admins are not demoted
+	// to USER on every token refresh. A disabled (soft-deleted) user is
+	// rejected here because GetUser only returns active accounts.
+	user, err := h.users.GetUser(ctx, consumed.UserID)
+	if err != nil {
+		h.log.Warn("refresh: user unavailable", "user_id", consumed.UserID, "error", err)
+		return c.JSON(http.StatusUnauthorized, response.Error("account unavailable"))
+	}
+
+	token, err := h.jwtService.NewAccessToken(ctx, consumed.UserID, user.Role, jkt)
 	if err != nil {
 		return c.JSON(errs.ParseError(err))
 	}
