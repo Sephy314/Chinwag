@@ -157,6 +157,16 @@ export function Sidebar() {
               <p className="text-sm font-medium text-gray-200 truncate">
                 {user?.name}
               </p>
+              {user?.role && (
+                <p
+                  className={cn(
+                    "text-[11px] font-medium uppercase tracking-wider",
+                    user.role === "ADMIN" ? "text-blue-400" : "text-gray-500",
+                  )}
+                >
+                  {user.role}
+                </p>
+              )}
             </div>
             <div className="flex gap-1">
               {user?.role === "ADMIN" && (
