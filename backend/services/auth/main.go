@@ -59,7 +59,7 @@ func main() {
 	unitOfWork := repo.NewSQLUnitOfWork(conns.DB)
 
 	jwksService := service.NewJwksService(jwksRepo, log)
-	refreshTokenService := service.NewRefreshTokenService(cacheRedis, "refresh:", time.Hour*24*14)
+	refreshTokenService := service.NewRefreshTokenService(cacheRedis, jwksService, "refresh:", time.Hour*24*14)
 	dpopService := service.NewDPoPService(cacheRedis)
 	userService := service.NewUserService(userRepo, jwksService, refreshTokenService, log, unitOfWork)
 	auditService := service.NewAuditService(auditRepo)

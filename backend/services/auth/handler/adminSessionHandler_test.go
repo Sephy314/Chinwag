@@ -20,12 +20,12 @@ func TestAdminSessionHandler_RevokeSession(t *testing.T) {
 	h := newAdminSessionHandler(cache, audit)
 
 	fields := map[string]string{"user_id": "u1"}
-	cache.On("SMembers", mock.Anything, "refresh:lineage:lin1").Return([]string{"tok1"}, nil).Once()
-	cache.On("HSet", mock.Anything, "refresh:tok1", map[string]string{"revoked": "1"}, mock.Anything).Return(nil).Once()
+	cache.On("HSet", mock.Anything, "refresh:lineage:lin1", map[string]string{"status": "revoked"}, mock.Anything).Return(nil).Once()
+	cache.On("SMembers", mock.Anything, "refresh:lineage:lin1:members").Return([]string{"tok1"}, nil).Once()
+	cache.On("HSet", mock.Anything, "refresh:tok1", map[string]string{"status": "revoked"}, mock.Anything).Return(nil).Once()
 	cache.On("HGetAll", mock.Anything, "refresh:tok1").Return(fields, nil).Once()
 	cache.On("ZRem", mock.Anything, "refresh:user:u1", []string{"lin1"}).Return(nil).Once()
 	cache.On("ZRem", mock.Anything, "refresh:sessions", []string{"lin1"}).Return(nil).Once()
-	cache.On("Delete", mock.Anything, "refresh:lineage:lin1").Return(nil).Once()
 	audit.On("Insert", mock.Anything, mock.MatchedBy(func(ev domain.AuditEvent) bool {
 		return ev.Action == "session.revoke" && ev.TargetId == "lin1"
 	})).Return(nil).Once()

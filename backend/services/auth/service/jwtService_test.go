@@ -16,7 +16,7 @@ func TestJwtService_NewAccessToken_Success(t *testing.T) {
 	svc := NewJwtService(refresh, jwks)
 
 	key := makeSigningKey(t)
-	jwks.On("GetActiveKey", mock.Anything).Return(key, nil).Once()
+	jwks.On("GetActiveAccessKey", mock.Anything).Return(key, nil).Once()
 
 	token, err := svc.NewAccessToken(context.Background(), "u1", domain.USER, "jkt")
 
@@ -32,7 +32,7 @@ func TestJwtService_NewAccessToken_NoJkt(t *testing.T) {
 	svc := NewJwtService(refresh, jwks)
 
 	key := makeSigningKey(t)
-	jwks.On("GetActiveKey", mock.Anything).Return(key, nil).Once()
+	jwks.On("GetActiveAccessKey", mock.Anything).Return(key, nil).Once()
 
 	token, err := svc.NewAccessToken(context.Background(), "u1", domain.MANAGER, "")
 
@@ -47,7 +47,7 @@ func TestJwtService_NewAccessToken_JwksError(t *testing.T) {
 	refresh := new(MockRefreshTokenService)
 	svc := NewJwtService(refresh, jwks)
 
-	jwks.On("GetActiveKey", mock.Anything).Return(nil, errors.New("no key")).Once()
+	jwks.On("GetActiveAccessKey", mock.Anything).Return(nil, errors.New("no key")).Once()
 
 	token, err := svc.NewAccessToken(context.Background(), "u1", domain.USER, "jkt")
 

@@ -24,7 +24,7 @@ func NewJwtService(refreshService RefreshTokenServiceInterface, jwksService Jwks
 }
 
 func (s *JwtServiceImpl) NewAccessToken(ctx context.Context, userId string, role domain.Role, jkt string) (*string, error) {
-	key, err := s.jwksService.GetActiveKey(ctx)
+	key, err := s.jwksService.GetActiveAccessKey(ctx)
 	if err != nil {
 		return nil, err
 	}

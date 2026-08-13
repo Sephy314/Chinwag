@@ -23,6 +23,7 @@ func makeSigningKey(t *testing.T) *domain.SigningKey {
 	require.NoError(t, err)
 	return &domain.SigningKey{
 		Kid:        "test-kid",
+		Type:       domain.KeyTypeAccess,
 		PublicKey:  &priv.PublicKey,
 		PrivateKey: priv,
 		Status:     domain.Active,
@@ -321,17 +322,15 @@ func TestUserService_Login_Success(t *testing.T) {
 	key := makeSigningKey(t)
 
 	userRepo.On("GetUserByEmail", mock.Anything, email).Return(user, nil).Once()
-	jwk.On("GetActiveKey", mock.Anything).Return(key, nil).Once()
-	refresh.On("InsertRefreshToken", mock.Anything, mock.MatchedBy(func(tk structs.RefreshToken) bool {
-		return tk.Subject == "u1" && tk.RefreshToken != "" && tk.Jkt == jkt
-	})).Return(nil).Once()
+	jwk.On("GetActiveAccessKey", mock.Anything).Return(key, nil).Once()
+	refresh.On("IssueRefreshToken", mock.Anything, "u1", jkt, "").Return("new-refresh-token", nil).Once()
 
 	tokens, err := svc.Login(context.Background(), email, pw, jkt)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, tokens)
 	assert.NotEmpty(t, tokens.AccessToken)
-	assert.NotEmpty(t, tokens.RefreshToken)
+	assert.Equal(t, "new-refresh-token", tokens.RefreshToken)
 	userRepo.AssertExpectations(t)
 	jwk.AssertExpectations(t)
 	refresh.AssertExpectations(t)
@@ -349,7 +348,7 @@ func TestUserService_Login_UserNotFound(t *testing.T) {
 
 	assert.Nil(t, tokens)
 	assert.ErrorIs(t, err, errs.ErrInvalidCreds)
-	jwk.AssertNotCalled(t, "GetActiveKey", mock.Anything)
+	jwk.AssertNotCalled(t, "GetActiveAccessKey", mock.Anything)
 	userRepo.AssertExpectations(t)
 }
 
@@ -368,7 +367,7 @@ func TestUserService_Login_WrongPassword(t *testing.T) {
 
 	assert.Nil(t, tokens)
 	assert.ErrorIs(t, err, errs.ErrInvalidCreds)
-	jwk.AssertNotCalled(t, "GetActiveKey", mock.Anything)
+	jwk.AssertNotCalled(t, "GetActiveAccessKey", mock.Anything)
 	userRepo.AssertExpectations(t)
 }
 
@@ -383,13 +382,13 @@ func TestUserService_Login_JwkError(t *testing.T) {
 	user := &domain.User{Id: "u1", Email: email, Password: mustHash(t, pw)}
 
 	userRepo.On("GetUserByEmail", mock.Anything, email).Return(user, nil).Once()
-	jwk.On("GetActiveKey", mock.Anything).Return(nil, errors.New("no active key")).Once()
+	jwk.On("GetActiveAccessKey", mock.Anything).Return(nil, errors.New("no active key")).Once()
 
 	tokens, err := svc.Login(context.Background(), email, pw, "jkt")
 
 	assert.Nil(t, tokens)
 	assert.EqualError(t, err, "no active key")
-	refresh.AssertNotCalled(t, "InsertRefreshToken", mock.Anything, mock.Anything)
+	refresh.AssertNotCalled(t, "IssueRefreshToken", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	jwk.AssertExpectations(t)
 	userRepo.AssertExpectations(t)
 }
@@ -406,8 +405,8 @@ func TestUserService_Login_RefreshInsertError(t *testing.T) {
 	key := makeSigningKey(t)
 
 	userRepo.On("GetUserByEmail", mock.Anything, email).Return(user, nil).Once()
-	jwk.On("GetActiveKey", mock.Anything).Return(key, nil).Once()
-	refresh.On("InsertRefreshToken", mock.Anything, mock.Anything).Return(errors.New("redis down")).Once()
+	jwk.On("GetActiveAccessKey", mock.Anything).Return(key, nil).Once()
+	refresh.On("IssueRefreshToken", mock.Anything, "u1", "jkt", "").Return("", errors.New("redis down")).Once()
 
 	tokens, err := svc.Login(context.Background(), email, pw, "jkt")
 
@@ -459,6 +458,6 @@ func TestUserService_Login_DBConnError(t *testing.T) {
 
 	assert.Nil(t, tokens)
 	assert.ErrorIs(t, err, sql.ErrConnDone)
-	jwk.AssertNotCalled(t, "GetActiveKey", mock.Anything)
+	jwk.AssertNotCalled(t, "GetActiveAccessKey", mock.Anything)
 	userRepo.AssertExpectations(t)
 }
