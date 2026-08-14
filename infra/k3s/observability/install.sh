@@ -14,9 +14,10 @@
 #
 # The Chinwag Notifier (Alertmanager -> Discord) is also deployed here: its
 # image is built + imported into k3s (requires docker + k3s on this host), and
-# the Discord webhook URL is read from $DISCORD_WEBHOOK_URL (or a gitignored
-# ./notifier.env) and stored in the chinwag-notifier-secrets Secret — it is
-# NEVER committed to the repo or written to the logs.
+# the Discord webhook URL is read from the gitignored infra/k3s/secret.yaml
+# (DISCORD_WEBHOOK_URL, see secret.yaml.example; $DISCORD_WEBHOOK_URL or a local
+# ./notifier.env also work) and stored in the chinwag-notifier-secrets Secret —
+# it is NEVER committed to the repo or written to the logs.
 #
 # Order matters:
 #   1. monitoring namespace
@@ -153,12 +154,18 @@ echo "==> Installing Prometheus (metrics: CPU/RAM via cAdvisor, pod counts via k
 # Stateless Go service that receives Alertmanager webhooks (the Alertmanager
 # receiver is configured in prometheus-values.yaml) and forwards Discord embeds
 # to a Discord webhook. The image is built + imported into k3s here. The Discord
-# webhook URL is read from $DISCORD_WEBHOOK_URL (or a gitignored ./notifier.env)
-# and stored in the chinwag-notifier-secrets Secret — never committed, never
-# echoed to the logs.
+# webhook URL is read from the gitignored infra/k3s/secret.yaml
+# (DISCORD_WEBHOOK_URL, copied from secret.yaml.example), with $DISCORD_WEBHOOK_URL
+# or ./notifier.env as fallbacks, and stored in the chinwag-notifier-secrets
+# Secret — never committed, never echoed to the logs.
 echo "==> Deploying Chinwag Notifier (Alertmanager -> Discord)"
 
-if [ -f notifier.env ]; then
+# Source of truth: gitignored infra/k3s/secret.yaml (DISCORD_WEBHOOK_URL),
+# then an explicit $DISCORD_WEBHOOK_URL, then a local notifier.env.
+if [ -z "${DISCORD_WEBHOOK_URL:-}" ] && [ -f ../secret.yaml ]; then
+  DISCORD_WEBHOOK_URL="$(grep -E '^[[:space:]]*DISCORD_WEBHOOK_URL:' ../secret.yaml | head -1 | sed -E 's/^[[:space:]]*DISCORD_WEBHOOK_URL:[[:space:]]*//; s/^"//; s/"$//')"
+fi
+if [ -z "${DISCORD_WEBHOOK_URL:-}" ] && [ -f notifier.env ]; then
   set -a; . ./notifier.env; set +a
 fi
 
@@ -168,7 +175,7 @@ if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
     --dry-run=client -o yaml | "${KUBECTL}" -n monitoring apply -f -
   echo "    chinwag-notifier-secrets Secret updated (DISCORD_WEBHOOK_URL)"
 else
-  echo "    WARNING: DISCORD_WEBHOOK_URL not set (env or notifier.env) — notifier will start but alerts will not be delivered"
+  echo "    WARNING: DISCORD_WEBHOOK_URL not set (secret.yaml / env / notifier.env) — notifier will start but alerts will not be delivered"
 fi
 
 if command -v docker >/dev/null 2>&1; then

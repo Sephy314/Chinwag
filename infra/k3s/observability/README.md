@@ -212,19 +212,28 @@ Prometheus ──(alert rules)──► Alertmanager ──(HTTP webhook)──�
 
 ### Discord webhook URL (secret)
 
-The URL is **never** committed. `install.sh` reads `DISCORD_WEBHOOK_URL` (env or
-a gitignored `./notifier.env`) and stores it in the `chinwag-notifier-secrets`
-Secret (key `DISCORD_WEBHOOK_URL`), which the Deployment injects via `envFrom`.
-The notifier never logs the URL.
+The URL is **never** committed. `install.sh` reads `DISCORD_WEBHOOK_URL` from the
+gitignored `infra/k3s/secret.yaml` (copied from `secret.yaml.example`), with
+`$DISCORD_WEBHOOK_URL` or a local `./notifier.env` as fallbacks, and stores it in
+the `chinwag-notifier-secrets` Secret (key `DISCORD_WEBHOOK_URL`), which the
+Deployment injects via `envFrom`. The notifier never logs the URL.
 
 ```bash
-# one time, on the deploy host:
-echo 'DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<id>/<token>' > infra/k3s/observability/notifier.env
+# one time, on the deploy host — add to infra/k3s/secret.yaml (gitignored):
+#   DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/<id>/<token>"
 ./infra/k3s/observability/install.sh
 ```
 
 If the URL is missing, the notifier still starts and serves `/health`, but
 alert webhooks return `500` and nothing is delivered (a warning is logged).
+
+Notifier env vars (see `notifier/config.go`):
+
+| Env | Default | Description |
+|---|---|---|
+| `NOTIFIER_PORT` | `9095` | HTTP listen port |
+| `DISCORD_WEBHOOK_URL` | — | Discord webhook URL (injected via Secret) |
+| `NOTIFIER_DISCORD_TIMEOUT` | `10s` | Max duration for a single Discord POST |
 
 ### Alert rules
 

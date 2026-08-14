@@ -34,6 +34,8 @@ spec:
           env:
             - name: NOTIFIER_PORT
               value: "9095"
+            - name: NOTIFIER_DISCORD_TIMEOUT
+              value: "10s"
           envFrom:
             - secretRef:
                 name: chinwag-notifier-secrets
