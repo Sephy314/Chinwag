@@ -13,6 +13,9 @@ import (
 	internaljwt "github.com/Sephy314/chinwag/backend/services/auth/internal/jwt"
 	"github.com/Sephy314/chinwag/backend/services/auth/shared/errs"
 	"github.com/Sephy314/chinwag/backend/services/auth/structs"
+	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jws"
+	jwxjwt "github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -120,14 +123,49 @@ func TestRefreshTokenService_ValidateRefreshToken_KeyLookupError(t *testing.T) {
 	svc := newRefreshSvc(cache, jwks)
 
 	key := makeRefreshKey(t)
-	raw := signedRT(t, "u1", "jti1", "sid1", "", key, time.Now())
+	raw := signedRT(t, "u1", "jti1", "sid1", "jkt", key, time.Now())
 
 	jwks.On("GetRefreshKeyByKid", mock.Anything, "ref-kid").Return(nil, errors.New("no key")).Once()
 
-	claims, err := svc.ValidateRefreshToken(context.Background(), raw, "")
+	claims, err := svc.ValidateRefreshToken(context.Background(), raw, "jkt")
 
 	assert.Nil(t, claims)
 	assert.ErrorIs(t, err, errs.ErrInvalidRefreshToken)
+	jwks.AssertExpectations(t)
+}
+
+// Defense in depth: even if some future issuer path produces a signed RT with
+// no cnf claim, validation must reject it rather than treat it as valid.
+func TestRefreshTokenService_ValidateRefreshToken_MissingCNFRejected(t *testing.T) {
+	cache := new(MockCache)
+	jwks := new(MockJwksService)
+	svc := newRefreshSvc(cache, jwks)
+
+	key := makeRefreshKey(t)
+	// Build a valid signed RT WITHOUT the cnf claim directly (bypassing
+	// SignRefreshToken, which already forbids empty jkt).
+	now := time.Now()
+	token, err := jwxjwt.NewBuilder().
+		Issuer(internaljwt.RefreshTokenIssuer).
+		Subject("u1").
+		Audience([]string{internaljwt.RefreshTokenAudience}).
+		IssuedAt(now).
+		Expiration(now.Add(time.Hour)).
+		JwtID("jti1").
+		Claim("sid", "sid1").
+		Build()
+	require.NoError(t, err)
+	headers := jws.NewHeaders()
+	require.NoError(t, headers.Set("kid", "ref-kid"))
+	raw, err := jwxjwt.Sign(token, jwxjwt.WithKey(jwa.ES256(), key.PrivateKey, jws.WithProtectedHeaders(headers)))
+	require.NoError(t, err)
+
+	jwks.On("GetRefreshKeyByKid", mock.Anything, "ref-kid").Return(key, nil).Once()
+
+	claims, err := svc.ValidateRefreshToken(context.Background(), string(raw), "some-jkt")
+
+	assert.Nil(t, claims)
+	assert.ErrorIs(t, err, errs.ErrRefreshTokenBindingMismatch)
 	jwks.AssertExpectations(t)
 }
 

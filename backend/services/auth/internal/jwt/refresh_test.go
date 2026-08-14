@@ -28,11 +28,19 @@ func TestSignVerifyRefreshToken_RoundTrip(t *testing.T) {
 	assert.Equal(t, "ref-kid", kid)
 }
 
+func TestSignRefreshToken_RequiresJkt(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	_, err = SignRefreshToken("u1", "jti1", "sid1", "", priv, "ref-kid", time.Now(), time.Hour)
+	assert.Error(t, err)
+}
+
 func TestVerifyRefreshToken_Tampered(t *testing.T) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	raw, err := SignRefreshToken("u1", "jti1", "sid1", "", priv, "ref-kid", time.Now(), time.Hour)
+	raw, err := SignRefreshToken("u1", "jti1", "sid1", "jkt-abc", priv, "ref-kid", time.Now(), time.Hour)
 	require.NoError(t, err)
 
 	tampered := raw[:len(raw)-3] + "abc"

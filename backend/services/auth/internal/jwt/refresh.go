@@ -34,9 +34,15 @@ type VerifiedRefreshToken struct {
 // SignRefreshToken builds and signs a refresh-token JWT.
 //
 // Claims: iss, sub, aud, iat, exp, jti, sid (refresh-token lineage id) and
-// cnf.jkt (DPoP key thumbprint) when jkt != "". The token is signed with a
-// Refresh-type key; callers must guarantee the key's type is Refresh.
+// cnf.jkt (DPoP key thumbprint). The DPoP binding is MANDATORY: a refresh token
+// without a jkt is refused at signing time so no call path can accidentally
+// mint an unbound RT. The token is signed with a Refresh-type key; callers must
+// guarantee the key's type is Refresh.
 func SignRefreshToken(subject, jti, sid, jkt string, privateKey *ecdsa.PrivateKey, kid string, now time.Time, ttl time.Duration) (string, error) {
+	if jkt == "" {
+		return "", errors.New("refresh token requires a DPoP jkt binding")
+	}
+
 	builder := jwxjwt.NewBuilder().
 		Issuer(RefreshTokenIssuer).
 		Subject(subject).
@@ -44,11 +50,8 @@ func SignRefreshToken(subject, jti, sid, jkt string, privateKey *ecdsa.PrivateKe
 		IssuedAt(now).
 		Expiration(now.Add(ttl)).
 		JwtID(jti).
-		Claim("sid", sid)
-
-	if jkt != "" {
-		builder = builder.Claim("cnf", map[string]string{"jkt": jkt})
-	}
+		Claim("sid", sid).
+		Claim("cnf", map[string]string{"jkt": jkt})
 
 	token, err := builder.Build()
 	if err != nil {

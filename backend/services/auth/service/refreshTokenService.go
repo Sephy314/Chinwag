@@ -221,7 +221,10 @@ func (r *RefreshTokenService) ValidateRefreshToken(ctx context.Context, rawToken
 		return nil, errs.ErrInvalidRefreshToken
 	}
 
-	if verified.Jkt != "" && verified.Jkt != jkt {
+	// DPoP binding is mandatory: a refresh token WITHOUT cnf.jkt must be
+	// rejected even if signing logic changes later (defense in depth), and a
+	// token bound to a different key must also be rejected.
+	if verified.Jkt == "" || verified.Jkt != jkt {
 		return nil, errs.ErrRefreshTokenBindingMismatch
 	}
 
