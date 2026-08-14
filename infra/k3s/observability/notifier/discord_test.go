@@ -48,10 +48,25 @@ func (m *mockDiscordServer) handle(w http.ResponseWriter, r *http.Request) {
 // client keeps the exact path from the configured URL.
 func (m *mockDiscordServer) URL() string { return m.ts.URL + "/api/webhooks/123456/token" }
 
+// WebhookURL returns a per-category webhook URL, so tests can assert which
+// webhook (path) a request was routed to.
+func (m *mockDiscordServer) WebhookURL(category string) string {
+	return m.ts.URL + "/api/webhooks/123456/" + category
+}
+
 func (m *mockDiscordServer) Count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.requests)
+}
+
+// All returns a copy of every recorded request (in order).
+func (m *mockDiscordServer) All() []discordRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]discordRequest, len(m.requests))
+	copy(out, m.requests)
+	return out
 }
 
 func (m *mockDiscordServer) Last() discordRequest {

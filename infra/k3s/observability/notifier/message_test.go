@@ -158,3 +158,53 @@ func TestFormatTime(t *testing.T) {
 		t.Errorf("formatTime = %q", got)
 	}
 }
+
+func TestAlertCategory(t *testing.T) {
+	cases := []struct {
+		name          string
+		alert         Alert
+		payloadStatus string
+		want          string
+	}{
+		{"resolved status wins", Alert{Status: "resolved", Labels: map[string]string{"category": "incidents"}}, "firing", catRecoveries},
+		{"resolved from payload", Alert{Labels: map[string]string{"category": "warnings"}}, "resolved", catRecoveries},
+		{"explicit category", Alert{Status: "firing", Labels: map[string]string{"category": "traffic"}}, "firing", "traffic"},
+		{"no category falls back to default", Alert{Status: "firing", Labels: map[string]string{}}, "firing", catDefault},
+		{"unknown category passes through", Alert{Status: "firing", Labels: map[string]string{"category": "custom"}}, "firing", "custom"},
+	}
+	for _, c := range cases {
+		if got := alertCategory(&c.alert, c.payloadStatus); got != c.want {
+			t.Errorf("alertCategory(%q) = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestGroupByCategory(t *testing.T) {
+	p := &AlertmanagerPayload{Status: "firing", Alerts: []Alert{
+		{Status: "firing", Labels: map[string]string{"alertname": "A", "category": "incidents"}},
+		{Status: "firing", Labels: map[string]string{"alertname": "B", "category": "incidents"}},
+		{Status: "firing", Labels: map[string]string{"alertname": "C", "category": "traffic"}},
+		{Status: "firing", Labels: map[string]string{"alertname": "D"}},
+		{Status: "resolved", Labels: map[string]string{"alertname": "E", "category": "incidents"}},
+	}}
+
+	groups := groupByCategory(p)
+	if len(groups["incidents"]) != 2 {
+		t.Errorf("incidents = %d alerts, want 2", len(groups["incidents"]))
+	}
+	if len(groups["traffic"]) != 1 {
+		t.Errorf("traffic = %d alerts, want 1", len(groups["traffic"]))
+	}
+	if len(groups[catDefault]) != 1 {
+		t.Errorf("default = %d alerts, want 1", len(groups[catDefault]))
+	}
+	if len(groups[catRecoveries]) != 1 {
+		t.Errorf("recoveries = %d alerts, want 1", len(groups[catRecoveries]))
+	}
+}
+
+func TestGroupByCategoryNilPayload(t *testing.T) {
+	if g := groupByCategory(nil); len(g) != 0 {
+		t.Errorf("expected no groups for nil payload, got %d", len(g))
+	}
+}

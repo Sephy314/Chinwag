@@ -13,10 +13,10 @@ func TestDiscordSendCorrectRequest(t *testing.T) {
 	mock := newMockDiscordServer()
 	defer mock.Close()
 
-	client := &DiscordClient{WebhookURL: mock.URL(), HTTPClient: mock.ts.Client()}
+	client := &DiscordClient{HTTPClient: mock.ts.Client()}
 	msg := DiscordMessage{Embeds: []DiscordEmbed{{Title: "🔴 X", Color: colorRed}}}
 
-	if err := client.Send(context.Background(), msg); err != nil {
+	if err := client.Send(context.Background(), mock.URL(), msg); err != nil {
 		t.Fatalf("Send returned error: %v", err)
 	}
 
@@ -37,8 +37,8 @@ func TestDiscordSendErrorOnNon2xx(t *testing.T) {
 	defer mock.Close()
 	mock.status = http.StatusBadRequest
 
-	client := &DiscordClient{WebhookURL: mock.URL(), HTTPClient: mock.ts.Client()}
-	err := client.Send(context.Background(), DiscordMessage{})
+	client := &DiscordClient{HTTPClient: mock.ts.Client()}
+	err := client.Send(context.Background(), mock.URL(), DiscordMessage{})
 	if err == nil {
 		t.Fatal("expected error for non-2xx response")
 	}
@@ -48,8 +48,8 @@ func TestDiscordSendErrorOnNon2xx(t *testing.T) {
 }
 
 func TestDiscordSendMissingURL(t *testing.T) {
-	client := &DiscordClient{WebhookURL: "", HTTPClient: &http.Client{}}
-	err := client.Send(context.Background(), DiscordMessage{})
+	client := &DiscordClient{HTTPClient: &http.Client{}}
+	err := client.Send(context.Background(), "", DiscordMessage{})
 	if err == nil {
 		t.Fatal("expected error for missing webhook url")
 	}
@@ -61,11 +61,10 @@ func TestDiscordSendTimeout(t *testing.T) {
 	mock.delay = 300 * time.Millisecond
 
 	client := &DiscordClient{
-		WebhookURL: mock.URL(),
 		HTTPClient: &http.Client{Timeout: 50 * time.Millisecond},
 	}
 	start := time.Now()
-	err := client.Send(context.Background(), DiscordMessage{})
+	err := client.Send(context.Background(), mock.URL(), DiscordMessage{})
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -79,10 +78,10 @@ func TestDiscordSendContextDeadline(t *testing.T) {
 	defer mock.Close()
 	mock.delay = 300 * time.Millisecond
 
-	client := &DiscordClient{WebhookURL: mock.URL(), HTTPClient: mock.ts.Client()}
+	client := &DiscordClient{HTTPClient: mock.ts.Client()}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if err := client.Send(ctx, DiscordMessage{}); err == nil {
+	if err := client.Send(ctx, mock.URL(), DiscordMessage{}); err == nil {
 		t.Fatal("expected context deadline error")
 	}
 }
@@ -91,9 +90,9 @@ func TestDiscordSendPayloadIsJSON(t *testing.T) {
 	mock := newMockDiscordServer()
 	defer mock.Close()
 
-	client := &DiscordClient{WebhookURL: mock.URL(), HTTPClient: mock.ts.Client()}
+	client := &DiscordClient{HTTPClient: mock.ts.Client()}
 	msg := DiscordMessage{Embeds: []DiscordEmbed{{Title: "t", Color: colorGreen, Fields: []DiscordField{{Name: "Service", Value: "auth"}}}}}
-	if err := client.Send(context.Background(), msg); err != nil {
+	if err := client.Send(context.Background(), mock.URL(), msg); err != nil {
 		t.Fatalf("Send returned error: %v", err)
 	}
 
@@ -116,5 +115,39 @@ func TestDiscordSendPayloadIsJSON(t *testing.T) {
 	}
 	if !json.Valid(raw) {
 		t.Errorf("marshaled payload is not valid json")
+	}
+}
+
+func TestDiscordURLFor(t *testing.T) {
+	client := &DiscordClient{
+		Webhooks: map[string]string{
+			"default":    "https://discord.example/default",
+			"incidents":  "https://discord.example/incidents",
+			"recoveries": "https://discord.example/recoveries",
+		},
+	}
+	if got := client.URLFor("incidents"); got != "https://discord.example/incidents" {
+		t.Errorf("URLFor(incidents) = %q", got)
+	}
+	// Category without a dedicated webhook falls back to the default.
+	if got := client.URLFor("warnings"); got != "https://discord.example/default" {
+		t.Errorf("URLFor(warnings) = %q, want default", got)
+	}
+	// No default configured -> empty.
+	only := &DiscordClient{Webhooks: map[string]string{"incidents": "https://discord.example/incidents"}}
+	if got := only.URLFor("warnings"); got != "" {
+		t.Errorf("URLFor(warnings) with no default = %q, want empty", got)
+	}
+}
+
+func TestDiscordHasWebhooks(t *testing.T) {
+	if (&DiscordClient{Webhooks: map[string]string{}}).HasWebhooks() {
+		t.Error("empty webhooks should report false")
+	}
+	if !(&DiscordClient{Webhooks: map[string]string{"default": "https://discord.example/x"}}).HasWebhooks() {
+		t.Error("a configured webhook should report true")
+	}
+	if (&DiscordClient{Webhooks: map[string]string{"incidents": ""}}).HasWebhooks() {
+		t.Error("empty-value webhook should report false")
 	}
 }

@@ -69,6 +69,42 @@ func BuildMessage(p *AlertmanagerPayload) DiscordMessage {
 	return msg
 }
 
+// alertCategory returns the webhook routing category for an alert.
+// Resolved alerts always go to the "recoveries" webhook; otherwise the
+// alert's `category` label (set by the Prometheus alert rules) is used, and
+// alerts with no category fall back to the default webhook.
+func alertCategory(a *Alert, payloadStatus string) string {
+	status := a.Status
+	if status == "" {
+		status = payloadStatus
+	}
+	if status == "resolved" {
+		return catRecoveries
+	}
+	if c := labelValue(a, "category", ""); c != "" {
+		return c
+	}
+	return catDefault
+}
+
+// groupByCategory buckets the payload's alerts by webhook routing category so
+// each category can be delivered to its own Discord webhook.
+func groupByCategory(p *AlertmanagerPayload) map[string][]Alert {
+	groups := map[string][]Alert{}
+	if p == nil {
+		return groups
+	}
+	payloadStatus := p.Status
+	if payloadStatus == "" {
+		payloadStatus = "firing"
+	}
+	for i := range p.Alerts {
+		cat := alertCategory(&p.Alerts[i], payloadStatus)
+		groups[cat] = append(groups[cat], p.Alerts[i])
+	}
+	return groups
+}
+
 // buildEmbed renders a single alert as one Discord embed. Missing labels are
 // never required: absent values are simply omitted from the fields.
 func buildEmbed(a *Alert, payloadStatus string) DiscordEmbed {

@@ -213,30 +213,54 @@ Prometheus ──(alert rules)──► Alertmanager ──(HTTP webhook)──�
 - Unknown/extra labels never fail parsing (the payload struct only declares the
   fields the notifier uses), and missing labels/annotations fall back gracefully.
 
-### Discord webhook URL (secret)
+### Discord webhooks (secret) & category routing
 
-The URL is **never** committed. `install.sh` reads `DISCORD_WEBHOOK_URL` from the
-gitignored `infra/k3s/secret.yaml` (copied from `secret.yaml.example`), with
-`$DISCORD_WEBHOOK_URL` or a local `./notifier.env` as fallbacks, and stores it in
-the `chinwag-notifier-secrets` Secret (key `DISCORD_WEBHOOK_URL`), which the
-Deployment injects via `envFrom`. The notifier never logs the URL.
+Alerts are routed to **one Discord webhook per category**, so each channel can
+be muted/silenced independently:
+
+| Category | Purpose | Example alerts |
+|---|---|---|
+| `incidents` | critical app/infra failures | High5xxRate, GatewayDown, PodFailed, CrashLoopBackOff, OOMKilled, … |
+| `deployments` | rollout / replica issues | DeploymentReplicasMismatch |
+| `traffic` | traffic & latency | TrafficSpike, HighLatency |
+| `recoveries` | **resolved** alerts (any category) | — (status-based) |
+| `warnings` | non-critical warnings | High4xxRate, PodRestarting, HighCPU, HighMemory, PVCLowSpace |
+
+The category comes from the alert's `category` label (set on each rule in
+`prometheus-values.yaml`); resolved alerts always go to `recoveries`. Alerts
+with no category fall back to the **default** webhook.
+
+The URLs are **never** committed. `install.sh` reads
+`DISCORD_WEBHOOK_URL` / `DISCORD_WEBHOOK_URL_<CATEGORY>` from the gitignored
+`infra/k3s/secret.yaml` (copied from `secret.yaml.example`), with explicit env /
+`./notifier.env` as fallbacks, and stores them in the `chinwag-notifier-secrets`
+Secret, which the Deployment injects via `envFrom`. The notifier never logs them.
 
 ```bash
 # one time, on the deploy host — add to infra/k3s/secret.yaml (gitignored):
 #   DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/<id>/<token>"
+#   DISCORD_WEBHOOK_URL_INCIDENTS: "https://discord.com/api/webhooks/<id>/<token>"
+#   ... (optional per-category URLs)
 ./infra/k3s/observability/install.sh
 ```
 
-If the URL is missing, the notifier still starts and serves `/health`, but
-alert webhooks return `500` and nothing is delivered (a warning is logged).
+If no webhook is configured, the notifier still starts and serves `/health`,
+but alert webhooks return `500` and nothing is delivered (a warning is logged).
 
 Notifier env vars (see `notifier/config.go`):
 
 | Env | Default | Description |
 |---|---|---|
 | `NOTIFIER_PORT` | `9095` | HTTP listen port |
-| `DISCORD_WEBHOOK_URL` | — | Discord webhook URL (injected via Secret) |
+| `DISCORD_WEBHOOK_URL` | — | Default/fallback Discord webhook URL |
+| `DISCORD_WEBHOOK_URL_INCIDENTS` | — | Incidents webhook |
+| `DISCORD_WEBHOOK_URL_DEPLOYMENTS` | — | Deployments webhook |
+| `DISCORD_WEBHOOK_URL_TRAFFIC` | — | Traffic webhook |
+| `DISCORD_WEBHOOK_URL_RECOVERIES` | — | Recoveries webhook |
+| `DISCORD_WEBHOOK_URL_WARNINGS` | — | Warnings webhook |
 | `NOTIFIER_DISCORD_TIMEOUT` | `10s` | Max duration for a single Discord POST |
+
+All webhook URLs are injected via the `chinwag-notifier-secrets` Secret.
 
 ### Alert rules
 
@@ -245,24 +269,24 @@ and are evaluated by Prometheus every 15s. Only metrics that actually exist in
 this stack are used; a rule referencing a metric that never appears simply stays
 silent (no fabricated metrics).
 
-| Alert | Severity | Signals |
-|---|---|---|
-| `ChinwagHigh5xxRate` | critical | >5% 5xx of gateway traffic per service (5m) |
-| `ChinwagHigh4xxRate` | warning | >10% 4xx per service (10m) |
-| `ChinwagTrafficSpike` | warning | current 5m traffic >3x the 1h average (10m) |
-| `ChinwagHighLatency` | warning | p95 latency >1s (10m) |
-| `ChinwagGatewayDown` | critical | `up{service="gateway"} == 0` (3m) |
-| `ChinwagKubeStateMetricsDown` | critical | `up{service="kube-state-metrics"} == 0` (5m) |
-| `ChinwagAlertmanagerDown` | critical | `up{service="prometheus-alertmanager"} == 0` (5m) |
-| `ChinwagPodFailed` | critical | pod phase `Failed` (2m) |
-| `ChinwagPodNotReady` | critical | pod not-ready (5m) |
-| `ChinwagPodCrashLoopBackOff` | critical | container waiting `CrashLoopBackOff` (5m) |
-| `ChinwagPodOOMKilled` | critical | container last terminated `OOMKilled` (2m) |
-| `ChinwagPodRestarting` | warning | >3 restarts / 15m (10m) |
-| `ChinwagDeploymentReplicasMismatch` | critical | desired ≠ available replicas (10m) |
-| `ChinwagHighCPU` | warning | >90% of CPU request (10m) |
-| `ChinwagHighMemory` | warning | >90% of memory request (10m) |
-| `ChinwagPVCLowSpace` | warning | PVC <15% free (10m, via kubelet volume stats) |
+| Alert | Severity | Category | Signals |
+|---|---|---|---|
+| `ChinwagHigh5xxRate` | critical | incidents | >5% 5xx of gateway traffic per service (5m) |
+| `ChinwagHigh4xxRate` | warning | warnings | >10% 4xx per service (10m) |
+| `ChinwagTrafficSpike` | warning | traffic | current 5m traffic >3x the 1h average (10m) |
+| `ChinwagHighLatency` | warning | traffic | p95 latency >1s (10m) |
+| `ChinwagGatewayDown` | critical | incidents | `up{service="gateway"} == 0` (3m) |
+| `ChinwagKubeStateMetricsDown` | critical | incidents | `up{service="kube-state-metrics"} == 0` (5m) |
+| `ChinwagAlertmanagerDown` | critical | incidents | `up{service="prometheus-alertmanager"} == 0` (5m) |
+| `ChinwagPodFailed` | critical | incidents | pod phase `Failed` (2m) |
+| `ChinwagPodNotReady` | critical | incidents | pod not-ready (5m) |
+| `ChinwagPodCrashLoopBackOff` | critical | incidents | container waiting `CrashLoopBackOff` (5m) |
+| `ChinwagPodOOMKilled` | critical | incidents | container last terminated `OOMKilled` (2m) |
+| `ChinwagPodRestarting` | warning | warnings | >3 restarts / 15m (10m) |
+| `ChinwagDeploymentReplicasMismatch` | critical | deployments | desired ≠ available replicas (10m) |
+| `ChinwagHighCPU` | warning | warnings | >90% of CPU request (10m) |
+| `ChinwagHighMemory` | warning | warnings | >90% of memory request (10m) |
+| `ChinwagPVCLowSpace` | warning | warnings | PVC <15% free (10m, via kubelet volume stats) |
 
 App-level HTTP metrics come from the **gateway's `/metrics`** endpoint
 (`backend/gateway/middleware/metrics.go`) — the gateway is the single edge for

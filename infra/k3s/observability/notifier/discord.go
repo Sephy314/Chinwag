@@ -9,20 +9,38 @@ import (
 	"net/http"
 )
 
-// DiscordClient posts messages to a Discord webhook. It is deliberately
-// dependency-free (stdlib http only) and keeps the webhook URL in memory only —
-// it is never logged.
+// DiscordClient posts messages to Discord webhooks. It keeps the webhook URLs
+// in memory only — they are never logged.
 type DiscordClient struct {
-	// WebhookURL is the Discord webhook endpoint to POST to.
-	WebhookURL string
-	// HTTPClient performs the request; give it a timeout to bound the call.
+	// Webhooks maps a routing category (or "default") to a Discord webhook URL.
+	Webhooks map[string]string
+	// HTTPClient performs the requests; give it a timeout to bound the calls.
 	HTTPClient *http.Client
 }
 
-// Send POSTs msg to the configured webhook and returns an error on any
+// HasWebhooks reports whether at least one webhook URL is configured.
+func (c *DiscordClient) HasWebhooks() bool {
+	for _, u := range c.Webhooks {
+		if u != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// URLFor returns the webhook URL for a category, falling back to the "default"
+// webhook URL when the category has none. Returns "" when neither is set.
+func (c *DiscordClient) URLFor(category string) string {
+	if u := c.Webhooks[category]; u != "" {
+		return u
+	}
+	return c.Webhooks[catDefault]
+}
+
+// Send POSTs msg to the given webhook URL and returns an error on any
 // transport or non-2xx response.
-func (c *DiscordClient) Send(ctx context.Context, msg DiscordMessage) error {
-	if c.WebhookURL == "" {
+func (c *DiscordClient) Send(ctx context.Context, url string, msg DiscordMessage) error {
+	if url == "" {
 		return fmt.Errorf("discord webhook url is not configured")
 	}
 
@@ -31,7 +49,7 @@ func (c *DiscordClient) Send(ctx context.Context, msg DiscordMessage) error {
 		return fmt.Errorf("encode discord message: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.WebhookURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create discord request: %w", err)
 	}

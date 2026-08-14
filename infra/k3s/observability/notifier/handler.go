@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 )
 
 // maxBodyBytes bounds the size of an incoming webhook payload.
@@ -59,25 +60,54 @@ func (h *Handler) AlertmanagerWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.discord.WebhookURL == "" {
-		slog.Error("discord webhook is not configured — set DISCORD_WEBHOOK_URL")
+	if !h.discord.HasWebhooks() {
+		slog.Error("discord webhooks are not configured — set DISCORD_WEBHOOK_URL (and/or DISCORD_WEBHOOK_URL_*)")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "discord webhook not configured"})
 		return
 	}
 
-	msg := BuildMessage(&p)
 	ctx, cancel := context.WithTimeout(r.Context(), h.cfg.DiscordTimeout)
 	defer cancel()
 
-	if err := h.discord.Send(ctx, msg); err != nil {
-		// Do NOT log the webhook URL or any part of it.
-		slog.Error("discord send failed", "error", err, "status", p.Status, "alerts", len(p.Alerts))
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to deliver notification to discord"})
-		return
+	// Route alerts by category (incidents/deployments/traffic/recoveries/
+	// warnings) so each category can be delivered to its own Discord webhook.
+	groups := groupByCategory(&p)
+	cats := make([]string, 0, len(groups))
+	for cat := range groups {
+		cats = append(cats, cat)
+	}
+	sort.Strings(cats)
+
+	sent, failed := 0, 0
+	for _, cat := range cats {
+		alerts := groups[cat]
+		url := h.discord.URLFor(cat)
+		if url == "" {
+			// No dedicated webhook for this category and no default — skip.
+			slog.Warn("no webhook for alert category, skipping", "category", cat, "alerts", len(alerts))
+			continue
+		}
+		sub := &AlertmanagerPayload{Status: p.Status, Alerts: alerts, ExternalURL: p.ExternalURL}
+		msg := BuildMessage(sub)
+		if err := h.discord.Send(ctx, url, msg); err != nil {
+			// Do NOT log the webhook URL or any part of it.
+			slog.Error("discord send failed", "error", err, "category", cat, "alerts", len(alerts))
+			failed++
+			continue
+		}
+		sent++
+		slog.Info("alertmanager webhook delivered to discord",
+			"category", cat, "alerts", len(alerts), "status", p.Status)
 	}
 
-	slog.Info("alertmanager webhook delivered to discord",
-		"status", p.Status, "alerts", len(p.Alerts))
+	if sent == 0 {
+		if failed > 0 {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "failed to deliver notification to discord"})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "no webhook configured for alert categories"})
+		}
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "alerts": len(p.Alerts)})
 }
 

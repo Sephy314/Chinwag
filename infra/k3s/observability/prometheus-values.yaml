@@ -119,6 +119,7 @@ serverFiles:
             for: 5m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "High 5xx error rate on {{ $labels.service }}"
               description: '{{ $labels.service }} is returning 5xx for more than 5% of requests over the last 5 minutes (current 5xx ratio: {{ printf "%.3f" $value }}).'
@@ -128,6 +129,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: warnings
             annotations:
               summary: "High 4xx error rate on {{ $labels.service }}"
               description: '{{ $labels.service }} is returning 4xx for more than 10% of requests over the last 5 minutes (current 4xx ratio: {{ printf "%.3f" $value }}).'
@@ -137,6 +139,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: traffic
             annotations:
               summary: "Traffic spike on {{ $labels.service }}"
               description: '{{ $labels.service }} is receiving more than 3x its 1-hour average traffic for 10 minutes (current/baseline: {{ printf "%.1f" $value }}x).'
@@ -146,6 +149,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: traffic
             annotations:
               summary: "High latency on {{ $labels.service }}"
               description: '95th percentile latency on {{ $labels.service }} has been above 1s for 10 minutes (currently {{ printf "%.2f" $value }}s).'
@@ -158,6 +162,7 @@ serverFiles:
             for: 3m
             labels:
               severity: critical
+              category: incidents
               service: gateway
             annotations:
               summary: "Gateway is down"
@@ -168,6 +173,7 @@ serverFiles:
             for: 5m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "kube-state-metrics is down"
               description: "kube-state-metrics has not been scrapable for more than 5 minutes — Kubernetes pod/deployment alerts may be stale."
@@ -177,6 +183,7 @@ serverFiles:
             for: 5m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "Alertmanager is down"
               description: "Alertmanager has not been scrapable for more than 5 minutes — no alerts will be delivered to Discord."
@@ -189,6 +196,7 @@ serverFiles:
             for: 2m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "Pod {{ $labels.pod }} failed"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} entered the Failed phase."
@@ -198,6 +206,7 @@ serverFiles:
             for: 5m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "Pod {{ $labels.pod }} is not ready"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not-ready for more than 5 minutes."
@@ -207,6 +216,7 @@ serverFiles:
             for: 5m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "Pod {{ $labels.pod }} is CrashLoopBackOff"
               description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is stuck in CrashLoopBackOff."
@@ -216,6 +226,7 @@ serverFiles:
             for: 2m
             labels:
               severity: critical
+              category: incidents
             annotations:
               summary: "Container {{ $labels.container }} was OOMKilled"
               description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) was terminated with OOMKilled."
@@ -225,6 +236,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: warnings
             annotations:
               summary: "Pod {{ $labels.pod }} is restarting repeatedly"
               description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) restarted more than 3 times in the last 15 minutes."
@@ -234,6 +246,7 @@ serverFiles:
             for: 10m
             labels:
               severity: critical
+              category: deployments
             annotations:
               summary: "Deployment {{ $labels.deployment }} replica mismatch"
               description: "Deployment {{ $labels.deployment }} ({{ $labels.namespace }}) has {{ $value }} fewer available replicas than desired for more than 10 minutes (rollout may be stuck)."
@@ -248,6 +261,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: warnings
             annotations:
               summary: "High CPU usage on {{ $labels.pod }}"
               description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 90% of its CPU request for 10 minutes."
@@ -259,6 +273,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: warnings
             annotations:
               summary: "High memory usage on {{ $labels.pod }}"
               description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 90% of its memory request for 10 minutes."
@@ -274,6 +289,7 @@ serverFiles:
             for: 10m
             labels:
               severity: warning
+              category: warnings
             annotations:
               summary: "PVC {{ $labels.persistentvolumeclaim }} is running low on space"
               description: "PVC {{ $labels.persistentvolumeclaim }} ({{ $labels.namespace }}) has less than 15% free space."

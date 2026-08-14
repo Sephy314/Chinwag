@@ -18,13 +18,12 @@ func main() {
 
 	cfg := LoadConfig()
 
-	if cfg.DiscordWebhook == "" {
-		slog.Warn("DISCORD_WEBHOOK_URL is not set — alerts will not be delivered (health still served)")
-	}
-
 	discord := &DiscordClient{
-		WebhookURL: cfg.DiscordWebhook,
+		Webhooks:   cfg.Webhooks,
 		HTTPClient: &http.Client{Timeout: cfg.DiscordTimeout},
+	}
+	if !discord.HasWebhooks() {
+		slog.Warn("no Discord webhook configured (DISCORD_WEBHOOK_URL / DISCORD_WEBHOOK_URL_*) — alerts will not be delivered (health still served)")
 	}
 	h := NewHandler(cfg, discord)
 
