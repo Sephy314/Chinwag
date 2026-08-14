@@ -25,7 +25,8 @@ import (
 // consumed, creates the next RT in the same lineage, and updates lineage/index
 // state. Concurrent requests racing on the same RT can therefore never both
 // succeed — the second one observes status == 'consumed' and is reported as a
-// REUSE, which the caller turns into a full lineage revocation.
+// REUSE, which atomically revokes the ENTIRE lineage (including the active RT)
+// within this same script. No intermediate state is ever observable.
 //
 // The consumed RT keeps a full TTL so a replay of any rotated token stays
 // detectable for the lifetime of its lineage.
@@ -55,7 +56,24 @@ if cur['status'] == 'revoked' then
 end
 
 if cur['status'] == 'consumed' then
-  return {'REUSED', cur['sid'], cur['user_id']}
+  -- Reuse of a rotated RT: atomically revoke the ENTIRE lineage (RFC 9700).
+  -- The active RT and every consumed member are marked revoked and the
+  -- lineage is removed from the session indexes, all in this same script so
+  -- no request can race between reuse detection and revocation.
+  local sid = cur['sid']
+  if sid ~= nil and sid ~= '' then
+    local lk = ARGV[7] .. 'lineage:' .. sid
+    redis.call('HSET', lk, 'status', 'revoked')
+    local members = redis.call('SMEMBERS', lk .. ':members')
+    for _, jti in ipairs(members) do
+      redis.call('HSET', ARGV[7] .. jti, 'status', 'revoked')
+    end
+    if cur['user_id'] ~= nil and cur['user_id'] ~= '' then
+      redis.call('ZREM', ARGV[7] .. 'user:' .. cur['user_id'], sid)
+    end
+    redis.call('ZREM', ARGV[7] .. 'sessions', sid)
+  end
+  return {'REUSED', sid, cur['user_id']}
 end
 
 local lin = hgetall(KEYS[2])

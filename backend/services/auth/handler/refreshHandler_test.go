@@ -292,9 +292,10 @@ func TestRefreshHandler_Refresh_RotationDependency(t *testing.T) {
 	dpopSvc.AssertExpectations(t)
 }
 
-// Reuse of an already-rotated RT: the lineage is revoked (RFC 9700) and the
-// request fails.
-func TestRefreshHandler_Refresh_ReusedTokenRevokesLineage(t *testing.T) {
+// Reuse of an already-rotated RT: the atomic rotation script revokes the whole
+// lineage in the same operation (RFC 9700), so the handler must NOT perform a
+// separate revocation — it only surfaces the reuse error.
+func TestRefreshHandler_Refresh_ReusedTokenAtomicallyRevokesLineage(t *testing.T) {
 	refresh := new(MockRefreshTokenService)
 	jwtSvc := new(MockJwtService)
 	locker := new(MockCache)
@@ -311,13 +312,15 @@ func TestRefreshHandler_Refresh_ReusedTokenRevokesLineage(t *testing.T) {
 	}, nil).Once()
 	locker.On("AcquireLock", mock.Anything, lockKey, mock.Anything, 5*time.Second).Return(true, nil).Once()
 	refresh.On("RotateRefreshToken", mock.Anything, mock.Anything).Return(nil, errs.ErrRefreshTokenReused).Once()
-	refresh.On("RevokeLineage", mock.Anything, "lin1").Return(nil).Once()
 	locker.On("ReleaseLock", mock.Anything, lockKey, mock.Anything).Return(nil).Once()
 
 	c, rec := refreshRequest(t, true)
 	err := h.Refresh(c)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	// Lineage revocation is handled inside the atomic rotation script; the
+	// handler must not issue a separate RevokeLineage call.
+	refresh.AssertNotCalled(t, "RevokeLineage", mock.Anything, mock.Anything)
 	jwtSvc.AssertNotCalled(t, "NewAccessToken", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 	refresh.AssertExpectations(t)
 	locker.AssertExpectations(t)

@@ -112,12 +112,10 @@ func (h *RefreshHandlerImpl) Refresh(c *echo.Context) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, errs.ErrRefreshTokenReused):
-			h.log.Warn("refresh: rt reuse detected", "user_id", claims.Subject, "lineage_id", claims.SID)
-			if rerr := h.service.RevokeLineage(ctx, claims.SID); rerr != nil {
-				h.log.Warn("refresh: lineage revocation failed", "lineage_id", claims.SID, "error", rerr)
-			} else {
-				h.log.Warn("refresh: lineage revoked", "lineage_id", claims.SID)
-			}
+			// The atomic rotation script already revoked the entire lineage as
+			// part of the same operation (RFC 9700) — the handler only reports
+			// the result, it does not perform a separate revocation.
+			h.log.Warn("refresh: rt reuse detected — lineage revoked atomically", "user_id", claims.Subject, "lineage_id", claims.SID)
 		case errors.Is(err, errs.ErrRefreshTokenRevoked):
 			h.log.Warn("refresh: lineage revoked", "lineage_id", claims.SID)
 		case errors.Is(err, errs.ErrDependencyUnavailable):
