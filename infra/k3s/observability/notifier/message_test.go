@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -223,5 +224,103 @@ func TestValidURL(t *testing.T) {
 		if got := validURL(c.in); got != c.want {
 			t.Errorf("validURL(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// messageCharTotal sums Discord's countable embed text (title + description +
+// field names/values) across all embeds — the aggregate Discord measures.
+func messageCharTotal(msg DiscordMessage) int {
+	total := 0
+	for _, e := range msg.Embeds {
+		total += len([]rune(e.Title)) + len([]rune(e.Description))
+		for _, f := range e.Fields {
+			total += len([]rune(f.Name)) + len([]rune(f.Value))
+		}
+	}
+	return total
+}
+
+func TestBuildMessageAggregateBudgetSingleWorstCase(t *testing.T) {
+	// Max-length title, summary and every label present: without an aggregate
+	// budget this single embed (250 + 2000 + 6×1000) alone exceeds Discord's
+	// 6000-char message limit.
+	p := &AlertmanagerPayload{Status: "firing", Alerts: []Alert{{
+		Status: "firing",
+		Labels: map[string]string{
+			"alertname": strings.Repeat("A", 300),
+			"service":   strings.Repeat("s", 300),
+			"severity":  strings.Repeat("v", 300),
+			"instance":  strings.Repeat("i", 300),
+			"pod":       strings.Repeat("p", 300),
+			"namespace": strings.Repeat("n", 300),
+		},
+		Annotations: map[string]string{"summary": strings.Repeat("x", 5000)},
+	}}}
+
+	msg := BuildMessage(p)
+	if len(msg.Embeds) != 1 {
+		t.Fatalf("expected 1 embed, got %d", len(msg.Embeds))
+	}
+	if total := messageCharTotal(msg); total > messageCharLimit {
+		t.Errorf("embed char total %d exceeds Discord limit %d", total, messageCharLimit)
+	}
+}
+
+func TestBuildMessageAggregateBudgetBatched(t *testing.T) {
+	// Worst-case batch: more alerts than the embed cap, each with a max-length
+	// summary and every field. The shared budget must keep the whole message
+	// within Discord's 6000-char aggregate limit.
+	var alerts []Alert
+	for i := 0; i < 12; i++ {
+		alerts = append(alerts, Alert{
+			Status: "firing",
+			Labels: map[string]string{
+				"alertname": "A",
+				"service":   strings.Repeat("s", 100),
+				"severity":  "critical",
+				"instance":  strings.Repeat("i", 100),
+				"pod":       strings.Repeat("p", 100),
+				"namespace": strings.Repeat("n", 100),
+			},
+			Annotations: map[string]string{"summary": strings.Repeat("x", 4000)},
+		})
+	}
+
+	msg := BuildMessage(&AlertmanagerPayload{Status: "firing", Alerts: alerts})
+	if len(msg.Embeds) > maxEmbedsPerMessage {
+		t.Errorf("embeds %d > max %d", len(msg.Embeds), maxEmbedsPerMessage)
+	}
+	if len(msg.Embeds) == 0 {
+		t.Fatal("expected at least one embed to be kept")
+	}
+	if total := messageCharTotal(msg); total > messageCharLimit {
+		t.Errorf("message char total %d exceeds Discord limit %d", total, messageCharLimit)
+	}
+}
+
+func TestBuildMessageAggregateBudgetKeepsFirstEmbeds(t *testing.T) {
+	// Earlier alerts keep the most context; the shared budget is consumed in
+	// order, so the tail of a batch is trimmed instead of blowing past 6000.
+	var alerts []Alert
+	for i := 0; i < 4; i++ {
+		alerts = append(alerts, Alert{
+			Status:      "firing",
+			Labels:      map[string]string{"alertname": fmt.Sprintf("Alert%d", i), "service": "gateway"},
+			Annotations: map[string]string{"summary": strings.Repeat("d", 2000)},
+		})
+	}
+
+	msg := BuildMessage(&AlertmanagerPayload{Status: "firing", Alerts: alerts})
+	if len(msg.Embeds) == 0 {
+		t.Fatal("expected at least one embed")
+	}
+	if msg.Embeds[0].Title != "🔴 Alert0" {
+		t.Errorf("first embed should keep its title, got %q", msg.Embeds[0].Title)
+	}
+	if total := messageCharTotal(msg); total > messageCharLimit {
+		t.Errorf("message char total %d exceeds Discord limit %d", total, messageCharLimit)
+	}
+	if total := messageCharTotal(msg); total < 1000 {
+		t.Errorf("expected meaningful content, total = %d", total)
 	}
 }

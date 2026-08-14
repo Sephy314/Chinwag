@@ -153,6 +153,9 @@ func TestDiscordSendErrorIncludesBody(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
+	if !strings.Contains(err.Error(), "status 400") {
+		t.Errorf("error should include the HTTP status, got: %v", err)
+	}
 	if !strings.Contains(err.Error(), "Invalid Form Body") {
 		t.Errorf("error should include the Discord response body, got: %v", err)
 	}

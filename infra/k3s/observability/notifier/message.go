@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Discord embed colors (Discord's integer color codes).
@@ -29,6 +30,20 @@ const (
 	descriptionLimit = 2000 // Discord hard limit: 2048
 	titleLimit       = 250  // Discord hard limit: 256
 )
+
+// messageCharLimit is Discord's aggregate embed limit: the combined characters
+// of title + description + field.name + field.value (+ footer + author) across
+// ALL embeds attached to one message must not exceed 6000 (docs.discord.com —
+// "Message Resource -> Embed Object -> Embed Limits"). BuildMessage shares a
+// single budget across the embeds it generates so a batched notification can
+// never trigger a 400 from this aggregate limit.
+const messageCharLimit = 6000
+
+// charCount counts characters (runes), matching how Discord measures embed
+// limits — they count characters, not bytes.
+func charCount(s string) int {
+	return utf8.RuneCountInString(s)
+}
 
 // DiscordMessage is the payload sent to a Discord webhook.
 type DiscordMessage struct {
@@ -72,8 +87,17 @@ func BuildMessage(p *AlertmanagerPayload) DiscordMessage {
 		alerts = alerts[:maxEmbedsPerMessage]
 	}
 
+	// Discord caps the combined characters across all embeds in a message at
+	// messageCharLimit, so one shared budget is consumed in order: earlier
+	// alerts keep the most context, and once it's gone we stop adding embeds
+	// rather than risk a 400 from the aggregate limit.
+	remaining := messageCharLimit
 	for i := range alerts {
-		msg.Embeds = append(msg.Embeds, buildEmbed(&alerts[i], payloadStatus))
+		e := buildEmbed(&alerts[i], payloadStatus, &remaining)
+		if e.Title == "" && e.Description == "" && len(e.Fields) == 0 {
+			break // budget exhausted — an empty embed adds nothing
+		}
+		msg.Embeds = append(msg.Embeds, e)
 	}
 	return msg
 }
@@ -116,7 +140,7 @@ func groupByCategory(p *AlertmanagerPayload) map[string][]Alert {
 
 // buildEmbed renders a single alert as one Discord embed. Missing labels are
 // never required: absent values are simply omitted from the fields.
-func buildEmbed(a *Alert, payloadStatus string) DiscordEmbed {
+func buildEmbed(a *Alert, payloadStatus string, remaining *int) DiscordEmbed {
 	if a == nil {
 		a = &Alert{}
 	}
@@ -144,13 +168,42 @@ func buildEmbed(a *Alert, payloadStatus string) DiscordEmbed {
 		title = "🟢 " + alertname + " (resolved)"
 	}
 
-	embed := DiscordEmbed{
-		Title:       truncate(title, titleLimit),
-		Description: truncate(summary, descriptionLimit),
-		Color:       color,
-		URL:         validURL(a.GeneratorURL),
-		Fields:      buildFields(a, resolved),
+	// Everything below draws from the shared per-message budget (*remaining),
+	// so the total characters across all embeds never exceed messageCharLimit.
+	embed := DiscordEmbed{Color: color, URL: validURL(a.GeneratorURL)}
+
+	if *remaining > 0 {
+		budget := titleLimit
+		if *remaining < budget {
+			budget = *remaining
+		}
+		embed.Title = truncate(title, budget)
+		*remaining -= charCount(embed.Title)
 	}
+	if *remaining > 0 {
+		budget := descriptionLimit
+		if *remaining < budget {
+			budget = *remaining
+		}
+		embed.Description = truncate(summary, budget)
+		*remaining -= charCount(embed.Description)
+	}
+	for _, f := range buildFields(a, resolved) {
+		if *remaining <= 0 || charCount(f.Name) >= *remaining {
+			break // no budget left for this (or any later) field
+		}
+		valueBudget := *remaining - charCount(f.Name)
+		if valueBudget > fieldValueLimit {
+			valueBudget = fieldValueLimit
+		}
+		v := truncate(f.Value, valueBudget)
+		if v == "" {
+			break
+		}
+		embed.Fields = append(embed.Fields, DiscordField{Name: f.Name, Value: v, Inline: f.Inline})
+		*remaining -= charCount(f.Name) + charCount(v)
+	}
+
 	if !a.StartsAt.IsZero() {
 		embed.Timestamp = a.StartsAt.UTC().Format(time.RFC3339)
 	}
