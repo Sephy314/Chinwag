@@ -67,6 +67,9 @@ func (c *DiscordClient) Send(ctx context.Context, url string, msg DiscordMessage
 	// 4xx (e.g. Invalid Form Body: <field>) — including it in the error makes
 	// the exact reason visible in the logs. It never contains the webhook URL.
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	// Drain the rest so the connection can be reused (HTTP keep-alive) under
+	// alert bursts; leaving bytes unread forces a new connection each time.
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		errMsg := fmt.Sprintf("discord webhook returned status %d", resp.StatusCode)

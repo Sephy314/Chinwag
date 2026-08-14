@@ -19,9 +19,11 @@ const (
 // single notification can never exceed the Discord API limit.
 const maxEmbedsPerMessage = 10
 
-// Discord field/embed length limits (chars). We keep a small margin below the
-// hard limits so multi-byte / astral characters (emoji, CJK) can never push a
-// value over Discord's byte/UTF-16 budget and trigger a 400.
+// Discord field/embed length limits (chars). Truncation is rune-count based
+// (see truncate), so these are a best-effort safety buffer below Discord's
+// hard limits (1024/2048/256). The margin makes a 400 from a rune-heavy value
+// (emoji, CJK, astral pairs) much less likely, though it is not a strict
+// guarantee at the UTF-16 level.
 const (
 	fieldValueLimit  = 1000 // Discord hard limit: 1024
 	descriptionLimit = 2000 // Discord hard limit: 2048
