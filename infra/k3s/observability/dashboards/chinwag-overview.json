@@ -194,6 +194,63 @@
         "sortOrder": "Descending",
         "wrapLogMessage": false
       }
+    },
+    {
+      "type": "row",
+      "id": 9,
+      "title": "Alerting (Notifier → Discord)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 36 },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Alert deliveries per category (5m)",
+      "datasource": "Loki",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 37 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (category) (count_over_time({namespace=\"monitoring\", app=\"chinwag-notifier\"} | json | msg=\"alertmanager webhook delivered to discord\"[5m]))",
+          "legendFormat": "{{category}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 20, "lineWidth": 1, "showPoints": "never" },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 11,
+      "type": "logs",
+      "title": "Notifier logs (deliveries & errors)",
+      "datasource": "Loki",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 37 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=\"monitoring\", app=\"chinwag-notifier\"}"
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      }
     }
   ],
   "refresh": "30s",
@@ -205,6 +262,6 @@
   "timezone": "browser",
   "title": "Chinwag Overview",
   "uid": "chinwag-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
