@@ -101,6 +101,7 @@ export default function AdminUsersPage() {
           <thead>
             <tr className="border-b border-gray-800">
               <Th>Name</Th>
+              <Th>UUID</Th>
               <Th>Email</Th>
               <Th>Role</Th>
               <Th>Status</Th>
@@ -127,6 +128,7 @@ function UserRow({ user }: { user: AdminUser }) {
   return (
     <tr className="hover:bg-gray-900/50">
       <Td className="font-medium text-gray-100">{user.name}</Td>
+      <Td className="break-all font-mono text-xs">{user.id}</Td>
       <Td>{user.email}</Td>
       <Td>
         <RoleBadge role={user.role} deleted={user.deleted_at} />

@@ -14,9 +14,10 @@ type JwksRepository interface {
 	Load(context.Context) ([]domain.SigningKeyEntity, error)
 	Rotate(context.Context, domain.SigningKeyEntity) error
 	InActiveKey(context.Context, string) error
-	ExpireActiveKey(context.Context) error
+	ExpireActiveKey(context.Context, domain.KeyType) error
 	ClearRetiredKeys(context.Context) error
-	GetActiveKey(context.Context) (*domain.SigningKeyEntity, error)
+	GetActiveKey(context.Context, domain.KeyType) (*domain.SigningKeyEntity, error)
+	GetKeyByKid(context.Context, string) (*domain.SigningKeyEntity, error)
 	GetVersion(context.Context) (*time.Time, error)
 }
 
@@ -38,6 +39,7 @@ func (repo *JwksRepo) Load(ctx context.Context) ([]domain.SigningKeyEntity, erro
 		`
 		SELECT
 			kid,
+			key_type,
 			public_key,
 			private_key,
 			status,
@@ -89,7 +91,8 @@ func (repo *JwksRepo) Rotate(
 		ctx,
 		`UPDATE signing_keys
 				SET status = 'INACTIVE'
-				WHERE status = 'ACTIVE'`,
+				WHERE status = 'ACTIVE' AND key_type = $1`,
+		signingKey.Type,
 	)
 	if err != nil {
 		return err
@@ -98,14 +101,16 @@ func (repo *JwksRepo) Rotate(
 	_, err = tx.ExecContext(
 		ctx,
 		`INSERT INTO signing_keys
-			(kid, public_key, private_key, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
+			(kid, key_type, public_key, private_key, status, created_at, updated_at, expired_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		signingKey.Kid,
+		signingKey.Type,
 		signingKey.PublicKey,
 		signingKey.PrivateKey,
 		signingKey.Status,
 		signingKey.CreatedAt,
 		signingKey.UpdatedAt,
+		signingKey.ExpiredAt,
 	)
 	if err != nil {
 		return err
@@ -128,12 +133,13 @@ func (repo *JwksRepo) InActiveKey(ctx context.Context, kid string) error {
 	return err
 }
 
-func (repo *JwksRepo) ExpireActiveKey(ctx context.Context) error {
+func (repo *JwksRepo) ExpireActiveKey(ctx context.Context, keyType domain.KeyType) error {
 	_, err := repo.db.ExecContext(
 		ctx,
 		`UPDATE signing_keys
 			   SET status = 'EXPIRED'
-			   WHERE status = 'ACTIVE'`,
+			   WHERE status = 'ACTIVE' AND key_type = $1`,
+		keyType,
 	)
 	return err
 }
@@ -146,14 +152,35 @@ func (repo *JwksRepo) ClearRetiredKeys(ctx context.Context) error {
 	return err
 }
 
-func (repo *JwksRepo) GetActiveKey(ctx context.Context) (*domain.SigningKeyEntity, error) {
+func (repo *JwksRepo) GetActiveKey(ctx context.Context, keyType domain.KeyType) (*domain.SigningKeyEntity, error) {
 	var signingKey domain.SigningKeyEntity
 
 	err := sqlx.GetContext(
 		ctx,
 		repo.db,
 		&signingKey,
-		"SELECT * FROM signing_keys WHERE status = 'ACTIVE' LIMIT 1",
+		"SELECT * FROM signing_keys WHERE status = 'ACTIVE' AND key_type = $1 LIMIT 1",
+		keyType,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &signingKey, nil
+}
+
+// GetKeyByKid loads a signing key regardless of its current status so that
+// tokens signed with a rotated (now INACTIVE) key can still be verified for
+// the remainder of their lifetime.
+func (repo *JwksRepo) GetKeyByKid(ctx context.Context, kid string) (*domain.SigningKeyEntity, error) {
+	var signingKey domain.SigningKeyEntity
+
+	err := sqlx.GetContext(
+		ctx,
+		repo.db,
+		&signingKey,
+		"SELECT * FROM signing_keys WHERE kid = $1 LIMIT 1",
+		kid,
 	)
 	if err != nil {
 		return nil, err

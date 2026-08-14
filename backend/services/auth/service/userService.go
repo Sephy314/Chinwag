@@ -177,7 +177,7 @@ func (s *UserService) Login(ctx context.Context, email string, pw string, jkt st
 		return nil, errs.ErrInvalidCreds
 	}
 
-	key, err := s.JwkService.GetActiveKey(ctx)
+	key, err := s.JwkService.GetActiveAccessKey(ctx)
 	if err != nil {
 		s.log.Error("login failed: could not get active key", "email", email, "error", err)
 		return nil, err
@@ -189,15 +189,9 @@ func (s *UserService) Login(ctx context.Context, email string, pw string, jkt st
 		return nil, err
 	}
 
-	refreshToken := uuid.Must(uuid.NewV7()).String()
-
-	err = s.RefreshService.InsertRefreshToken(ctx, structs.RefreshToken{
-		Subject:      user.Id,
-		RefreshToken: refreshToken,
-		Jkt:          jkt,
-	})
+	refreshToken, err := s.RefreshService.IssueRefreshToken(ctx, user.Id, jkt, "")
 	if err != nil {
-		s.log.Error("login failed: could not insert refresh token", "email", email, "error", err)
+		s.log.Error("login failed: could not issue refresh token", "email", email, "error", err)
 		return nil, err
 	}
 

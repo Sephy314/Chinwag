@@ -65,6 +65,7 @@ func SigningKeyEntityToSigningKey(key domain.SigningKeyEntity) (*domain.SigningK
 
 	return &domain.SigningKey{
 		Kid:        key.Kid,
+		Type:       key.Type,
 		PublicKey:  pub,
 		PrivateKey: priv,
 		Status:     key.Status,
