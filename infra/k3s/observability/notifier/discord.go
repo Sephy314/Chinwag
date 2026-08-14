@@ -63,10 +63,11 @@ func (c *DiscordClient) Send(ctx context.Context, url string, msg DiscordMessage
 	}
 	defer resp.Body.Close()
 
-	// Capture a little of the response body. Discord returns a JSON error on
-	// 4xx (e.g. Invalid Form Body: <field>) — including it in the error makes
-	// the exact reason visible in the logs. It never contains the webhook URL.
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	// Capture the response body. Discord returns a JSON error on 4xx (e.g.
+	// Invalid Form Body with the offending field/index) — including it in the
+	// error makes the exact reason visible in the logs. It never contains the
+	// webhook URL.
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	// Drain the rest so the connection can be reused (HTTP keep-alive) under
 	// alert bursts; leaving bytes unread forces a new connection each time.
 	_, _ = io.Copy(io.Discard, resp.Body)

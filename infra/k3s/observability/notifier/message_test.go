@@ -214,16 +214,39 @@ func TestValidURL(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"http://prometheus.example/graph", "http://prometheus.example/graph"},
 		{"https://p.example/g?x=1&y=2", "https://p.example/g?x=1&y=2"},
+		{"http://10.42.0.1:9090/graph", "http://10.42.0.1:9090/graph"},
+		{"http://[::1]:9090/graph", "http://[::1]:9090/graph"},
+		{"http://prometheus-server-0.monitoring.svc.cluster.local/graph", "http://prometheus-server-0.monitoring.svc.cluster.local/graph"},
 		{"", ""},
 		{"not a url", ""},
 		{"ftp://x/y", ""},
-		{"http://", ""}, // no host
+		{"http://", ""},                 // no host
+		{"http://localhost:9090/x", ""}, // bare hostname — Discord rejects it
+		{"http://prometheus-server-0:9090/graph", ""}, // k8s pod hostname — Discord rejects it
 		{"javascript:alert(1)", ""},
 	}
 	for _, c := range cases {
 		if got := validURL(c.in); got != c.want {
 			t.Errorf("validURL(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestBuildMessageDropsBareHostGeneratorURL(t *testing.T) {
+	// Real-world generatorURLs use the bare pod hostname (prometheus-server-0),
+	// which Discord's embed url validation rejects with a 400. It must be
+	// dropped so the embed stays within Discord's accepted fields.
+	p := &AlertmanagerPayload{Status: "firing", Alerts: []Alert{{
+		Status:       "firing",
+		Labels:       map[string]string{"alertname": "ChinwagPVCLowSpace", "category": "warnings"},
+		GeneratorURL: "http://prometheus-server-0:9090/graph?g0.tab=1",
+	}}}
+	msg := BuildMessage(p)
+	if len(msg.Embeds) != 1 {
+		t.Fatalf("expected 1 embed, got %d", len(msg.Embeds))
+	}
+	if msg.Embeds[0].URL != "" {
+		t.Errorf("bare-host generatorURL should be dropped, got %q", msg.Embeds[0].URL)
 	}
 }
 
