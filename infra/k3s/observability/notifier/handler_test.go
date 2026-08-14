@@ -308,6 +308,7 @@ func TestAlertmanagerWebhookRoutesByCategory(t *testing.T) {
 	  "status": "firing",
 	  "alerts": [
 	    {"labels": {"alertname": "GatewayDown", "service": "gateway", "category": "incidents"}},
+	    {"labels": {"alertname": "ReplicasMismatch", "category": "deployments"}},
 	    {"labels": {"alertname": "TrafficSpike", "service": "gateway", "category": "traffic"}},
 	    {"labels": {"alertname": "HighCPU", "service": "auth", "category": "warnings"}},
 	    {"labels": {"alertname": "NoCategory"}}
@@ -317,14 +318,14 @@ func TestAlertmanagerWebhookRoutesByCategory(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if n := discord.Count(); n != 4 {
-		t.Fatalf("expected 4 discord calls (one per category), got %d", n)
+	if n := discord.Count(); n != 5 {
+		t.Fatalf("expected 5 discord calls (one per category), got %d", n)
 	}
 	paths := map[string]bool{}
 	for _, r := range discord.All() {
 		paths[r.Path] = true
 	}
-	for _, want := range []string{"incidents", "traffic", "warnings", "default"} {
+	for _, want := range []string{"incidents", "deployments", "traffic", "warnings", "default"} {
 		if !paths["/api/webhooks/123456/"+want] {
 			t.Errorf("expected a request to the %q webhook, got paths %v", want, paths)
 		}

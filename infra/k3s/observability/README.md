@@ -316,10 +316,35 @@ message. Repeat notifications for a still-firing alert come every 4h.
 `notifier/` has table-driven tests covering: valid firing/resolved payloads,
 invalid JSON, trailing data, empty `alerts`, missing webhook URL, Discord API
 errors, Discord timeouts, sparse alerts (missing labels/annotations), unknown
-fields, and embed formatting (title/color/fields/duration, embed cap). Discord
+fields, embed formatting (title/color/fields/duration, embed cap), **per-category
+webhook routing** (incidents/deployments/traffic/recoveries/warnings + default
+fallback), `LoadConfig` webhook env parsing, and `URLFor`/`HasWebhooks`. Discord
 calls use an in-process `httptest` mock — **no external network**. The tests are
 picked up automatically by the backend `make test` / `make vet` (the notifier is
 in the `SERVICES` list), so the CI `backend` job covers them.
+
+### Manual testing (per chat room)
+
+The real Discord test webhooks are **per chat room** and live in the gitignored
+`notifier/.env` (see `.env.example` for the mapping):
+
+```bash
+# 1) Fill notifier/.env with one test webhook per chat room (Discord: Server
+#    Settings -> Integrations -> Webhooks -> New Webhook):
+#    DISCORD_WEBHOOK_URL_INCIDENTS=https://discord.com/api/webhooks/...
+#    ... one per category ...
+
+# 2) Send a 🧪 test message to every configured chat room (direct to Discord):
+cd infra/k3s/observability/notifier
+./manual-test.sh                 # all categories
+./manual-test.sh incidents       # just the incidents chat room
+
+# 3) Optional: exercise the notifier routing end-to-end (run the notifier
+#    locally first:  go run .  then in another terminal):
+NOTIFIER_URL=http://localhost:9095 ./manual-test.sh --via-notifier
+```
+
+Check each Discord chat room for the 🧪 test embed to confirm the wiring.
 
 ---
 
