@@ -25,13 +25,24 @@ var (
 	}, []string{"service"})
 )
 
+// metricsPath is the Prometheus scrape endpoint. Scrape requests to it are
+// excluded from the application metrics so they never pollute
+// http_requests_total / latency-based alerts.
+const metricsPath = "/metrics"
+
 // MetricsMiddleware records every request into the Prometheus metrics above.
 // The `service` label is derived from the gateway route prefix (see
 // proxy.go), so each proxied backend (auth/room/chat/admin) gets its own
-// request / error / traffic series.
+// request / error / traffic series. Prometheus's own /metrics scrape requests
+// are skipped so they are not counted as application traffic.
 func MetricsMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
+			// Exclude Prometheus scrape requests from application metrics.
+			if c.Request().URL.Path == metricsPath {
+				return next(c)
+			}
+
 			start := time.Now()
 
 			err := next(c)
@@ -68,21 +79,29 @@ func MetricsHandler() echo.HandlerFunc {
 // Unknown paths (and the gateway's own endpoints) are attributed to "gateway".
 func serviceForPath(path string) string {
 	switch {
-	case strings.HasPrefix(path, "/auth"):
+	case pathPrefixMatch(path, "/auth"):
 		return "auth"
-	case strings.HasPrefix(path, "/rooms"):
+	case pathPrefixMatch(path, "/rooms"):
 		return "rooms"
-	case strings.HasPrefix(path, "/users"):
+	case pathPrefixMatch(path, "/users"):
 		return "users"
-	case strings.HasPrefix(path, "/chat"):
+	case pathPrefixMatch(path, "/chat"):
 		return "chat"
-	case strings.HasPrefix(path, "/admin"):
+	case pathPrefixMatch(path, "/admin"):
 		return "admin"
 	case path == "/health":
 		return "health"
-	case path == "/metrics":
+	case path == metricsPath:
 		return "metrics"
 	default:
 		return "gateway"
 	}
+}
+
+// pathPrefixMatch reports whether path equals prefix or begins with prefix
+// followed by a "/" boundary, so "/auth" matches "/auth" and "/auth/login"
+// but NOT "/author". Keeping the boundary check means a future route that
+// merely shares a textual prefix (e.g. "/author") is never mislabeled.
+func pathPrefixMatch(path, prefix string) bool {
+	return path == prefix || strings.HasPrefix(path, prefix+"/")
 }
