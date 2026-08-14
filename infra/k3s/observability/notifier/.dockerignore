@@ -1,5 +1,7 @@
-# Keep the build context clean — exclude local build artifacts.
+# Keep the build context clean — exclude local build artifacts and secrets.
+# .env* must stay out of the image so the Discord webhook URL is never baked in.
 notifier
 Dockerfile
 .dockerignore
 *.md
+.env*

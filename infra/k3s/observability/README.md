@@ -195,9 +195,12 @@ Prometheus ──(alert rules)──► Alertmanager ──(HTTP webhook)──�
 
 ### Notifier
 
-- Go module at `infra/k3s/observability/notifier/` — stdlib only (no external
-  Go modules). Deployed as a `Deployment` + `Service` in the `monitoring`
-  namespace (`notifier.yaml`), image `chinwag/notifier:latest`.
+- Go module at `infra/k3s/observability/notifier/` (only `joho/godotenv` for
+  local `.env` loading). Deployed as a `Deployment` + `Service` in the
+  `monitoring` namespace (`notifier.yaml`), image `chinwag/notifier:latest`.
+- Local runs: copy `notifier/.env.example` to `notifier/.env` (gitignored) and
+  fill in `DISCORD_WEBHOOK_URL` — godotenv loads it for `go run .`; in
+  Kubernetes the Secret / Deployment env take precedence.
 - Endpoints:
   - `POST /webhooks/alertmanager` — Alertmanager webhook receiver.
     `2xx` = accepted and delivered; `4xx` = malformed payload; `5xx` = internal

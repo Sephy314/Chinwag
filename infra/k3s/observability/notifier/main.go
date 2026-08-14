@@ -5,9 +5,15 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load a local .env if present (dev convenience). In Kubernetes the values
+	// come from the chinwag-notifier-secrets Secret / Deployment env instead.
+	_ = godotenv.Load()
+
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
 	cfg := LoadConfig()
