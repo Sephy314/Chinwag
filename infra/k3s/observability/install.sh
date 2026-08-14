@@ -214,6 +214,11 @@ fi
 
 echo "==> Applying Chinwag Notifier manifests (Deployment + Service)"
 "${KUBECTL}" apply -f notifier.yaml
+# The Deployment uses imagePullPolicy: IfNotPresent with a :latest tag, so a
+# plain apply never picks up a freshly built/imported image (the manifest is
+# unchanged). Restart explicitly so the new notifier build is actually rolled
+# out — otherwise install.sh silently keeps serving the previous image.
+"${KUBECTL}" -n monitoring rollout restart deploy/chinwag-notifier
 "${KUBECTL}" -n monitoring rollout status deploy/chinwag-notifier --timeout=120s >/dev/null ||
   { echo "ERROR: chinwag-notifier failed to roll out" >&2; exit 1; }
 
