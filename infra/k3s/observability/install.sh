@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Install the Chinwag Observability stack (Loki + Grafana Alloy + Grafana)
-# into the `monitoring` namespace using Helm.
+# Install the Chinwag Observability stack (Loki + Grafana Alloy + Prometheus +
+# Alertmanager + Grafana + Chinwag Notifier) into the `monitoring` namespace.
 #
 # Usage:   ./install.sh          (as the k3s user)
 #          sudo ./install.sh     (also works — root PATH often lacks helm)
@@ -12,12 +12,20 @@
 #   - installs a standalone `kubectl` when the one on PATH (e.g. the k3s
 #     wrapper) cannot reach the cluster as the current user
 #
+# The Chinwag Notifier (Alertmanager -> Discord) is also deployed here: its
+# image is built + imported into k3s (requires docker + k3s on this host), and
+# the Discord webhook URL is read from $DISCORD_WEBHOOK_URL (or a gitignored
+# ./notifier.env) and stored in the chinwag-notifier-secrets Secret — it is
+# NEVER committed to the repo or written to the logs.
+#
 # Order matters:
 #   1. monitoring namespace
 #   2. Loki (Alloy/Grafana depend on it)
 #   3. Alloy (ships logs into Loki)
-#   4. grafana-admin Secret (random password, never committed)
-#   5. Grafana (provisions the Loki datasource)
+#   4. Prometheus (+ Alertmanager, rules -> notifier webhook)
+#   5. Chinwag Notifier (receives Alertmanager webhooks, sends Discord embeds)
+#   6. grafana-admin Secret (random password, never committed)
+#   7. Grafana (provisions the Loki datasource)
 # =============================================================================
 set -euo pipefail
 
@@ -141,6 +149,49 @@ echo "==> Installing Prometheus (metrics: CPU/RAM via cAdvisor, pod counts via k
   --values prometheus-values.yaml \
   --wait --timeout 10m
 
+# --- Chinwag Notifier (Alertmanager -> Discord) ------------------------------
+# Stateless Go service that receives Alertmanager webhooks (the Alertmanager
+# receiver is configured in prometheus-values.yaml) and forwards Discord embeds
+# to a Discord webhook. The image is built + imported into k3s here. The Discord
+# webhook URL is read from $DISCORD_WEBHOOK_URL (or a gitignored ./notifier.env)
+# and stored in the chinwag-notifier-secrets Secret — never committed, never
+# echoed to the logs.
+echo "==> Deploying Chinwag Notifier (Alertmanager -> Discord)"
+
+if [ -f notifier.env ]; then
+  set -a; . ./notifier.env; set +a
+fi
+
+if [ -n "${DISCORD_WEBHOOK_URL:-}" ]; then
+  "${KUBECTL}" -n monitoring create secret generic chinwag-notifier-secrets \
+    --from-literal=DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL}" \
+    --dry-run=client -o yaml | "${KUBECTL}" -n monitoring apply -f -
+  echo "    chinwag-notifier-secrets Secret updated (DISCORD_WEBHOOK_URL)"
+else
+  echo "    WARNING: DISCORD_WEBHOOK_URL not set (env or notifier.env) — notifier will start but alerts will not be delivered"
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  echo "==> Building chinwag/notifier:latest"
+  docker build -t chinwag/notifier:latest -f notifier/Dockerfile notifier/
+  if sudo -n k3s ctr version >/dev/null 2>&1; then
+    echo "==> Importing chinwag/notifier:latest into k3s (containerd)"
+    docker save chinwag/notifier:latest | sudo k3s ctr images import -
+  elif sudo -n ctr version >/dev/null 2>&1; then
+    echo "==> Importing chinwag/notifier:latest into k3s (containerd)"
+    docker save chinwag/notifier:latest | sudo ctr -n k8s.io images import -
+  else
+    echo "    WARNING: no k3s/ctr available to import the image — assuming chinwag/notifier:latest is already loaded"
+  fi
+else
+  echo "    WARNING: docker not found — skipping image build (assuming chinwag/notifier:latest is already loaded)"
+fi
+
+echo "==> Applying Chinwag Notifier manifests (Deployment + Service)"
+"${KUBECTL}" apply -f notifier.yaml
+"${KUBECTL}" -n monitoring rollout status deploy/chinwag-notifier --timeout=120s >/dev/null ||
+  { echo "ERROR: chinwag-notifier failed to roll out" >&2; exit 1; }
+
 echo "==> Creating Grafana admin Secret (random password, not committed to Git)"
 if ! "${KUBECTL}" -n monitoring get secret grafana-admin >/dev/null 2>&1; then
   ADMIN_PASS="$(openssl rand -base64 24 | tr -d '=+/' | head -c 24)"
@@ -194,6 +245,10 @@ echo "    ${KUBECTL} get svc -n monitoring"
 echo "    ${KUBECTL} get daemonset -n monitoring"
 echo "    ${KUBECTL} -n monitoring get certificate grafana-tls"
 echo "    ${KUBECTL} -n monitoring get configmap grafana-dashboards"
+echo "    ${KUBECTL} -n monitoring get deploy/chinwag-notifier"
+echo
+echo "    # Alerting: set DISCORD_WEBHOOK_URL (or notifier.env), then"
+echo "    #   curl -s localhost:9095/health   (port-forward the notifier to test)"
 echo
 echo "    # Grafana UI (public, HTTPS): https://chinwag.duckdns.org/grafana"
 echo "    # Dashboard: Dashboards -> chinwag -> Chinwag Overview"

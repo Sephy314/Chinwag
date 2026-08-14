@@ -1,0 +1,5 @@
+# Keep the build context clean — exclude local build artifacts.
+notifier
+Dockerfile
+.dockerignore
+*.md

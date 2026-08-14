@@ -4,7 +4,7 @@
 |---|---|---|
 | `ci.yml` | push (any branch), pull_request, manual (`workflow_dispatch`) | Backend: `make test` + `make vet` · Frontend: `npm ci` → `npm test` → `npm run lint` → `npm run build` · K3s infra: `infra/ci-test.sh` (ephemeral k3d cluster, runs on every push/PR) |
 | `cd.yml` | push to `main`, manual (`workflow_dispatch`) | Self-hosted runner on the k3s node syncs `~/Chinwag` to `origin/main` and runs `infra/k3s/update.sh` (app images + manifests only — the observability stack is **not** updated on every deploy) |
-| `deploy-observability.yml` | after `CD` succeeds (`workflow_run`), manual (`workflow_dispatch`) | Self-hosted runner runs `infra/k3s/observability/install.sh` (Loki/Alloy/Prometheus/Grafana) — deploys the obs stack after every successful app deploy, or on demand |
+| `deploy-observability.yml` | after `CD` succeeds (`workflow_run`), manual (`workflow_dispatch`) | Self-hosted runner runs `infra/k3s/observability/install.sh` (Loki/Alloy/Prometheus+Alertmanager/Notifier/Grafana) — deploys the obs stack **automatically** after every successful app deploy, or on demand |
 
 ## CI
 
@@ -49,11 +49,14 @@ node**. The CD job runs on that runner, so `update.sh` executes natively with
 repo secrets.
 
 `update.sh` also updates the **observability stack** (`./observability/install.sh`:
-Loki, Alloy, Prometheus, Grafana via Helm — plus the `grafana-tls` cert and the
-`grafana-dashboards` ConfigMap). The runner needs `helm` and a working kubeconfig;
-`observability/install.sh` bootstraps both if missing (installs `helm`/standalone
-`kubectl` to `~/.local/bin`, or uses `/etc/rancher/k3s/k3s.yaml`), so no extra
-node setup is required beyond what's below.
+Loki, Alloy, Prometheus + Alertmanager, the **Chinwag Notifier** (Alertmanager →
+Discord, built + imported into k3s here), and Grafana — plus the `grafana-tls`
+cert, the `grafana-dashboards` ConfigMap, and the `chinwag-notifier-secrets`
+Secret for the Discord webhook URL). The runner needs `helm`, `docker`, and a
+working kubeconfig; `observability/install.sh` bootstraps `helm`/standalone
+`kubectl` if missing (installs them to `~/.local/bin`, or uses
+`/etc/rancher/k3s/k3s.yaml`), so no extra node setup is required beyond what's
+below.
 
 ### 1. Register a runner on the node
 

@@ -54,6 +54,13 @@ kind: Service
 metadata:
   name: gateway
   namespace: chinwag
+  # Scraped by Prometheus (observability stack) via the chart's built-in
+  # kubernetes-service-endpoints job. /metrics is served by the gateway and is
+  # only reachable on the cluster network — it is NOT exposed via the ingress.
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8000"
 spec:
   selector:
     app: gateway

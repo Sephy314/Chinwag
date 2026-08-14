@@ -1,8 +1,9 @@
 # =============================================================================
 # Prometheus — prometheus-community/prometheus (single server, small footprint)
 # Metrics source for Grafana: CPU / RAM (cAdvisor via kubelet), pod counts
-# (kube-state-metrics). App-level request counts & error rates are derived from
-# Loki logs in Grafana (the Go services are not instrumented with /metrics).
+# (kube-state-metrics). App-level request counts & error rates come from the
+# gateway's /metrics endpoint (backend/gateway/metrics.go) — the gateway is the
+# single edge for all HTTP traffic, so it captures per-service HTTP metrics.
 # Installed into the `monitoring` namespace:
 #   helm upgrade --install prometheus prometheus-community/prometheus \
 #     -n monitoring -f prometheus-values.yaml
@@ -52,11 +53,233 @@ kube-state-metrics:
     limits:
       memory: 256Mi
 
-# Not needed for this single-node stack — turn off alerting + pushgateway.
+# -----------------------------------------------------------------------------
+# Alertmanager -> Chinwag Notifier -> Discord
+#
+# Alertmanager is now enabled. It groups alerts and POSTs webhook notifications
+# to the stateless `chinwag-notifier` service (Deployment/Service in
+# `notifier.yaml`), which renders Discord embeds and forwards them to a Discord
+# webhook. The Discord webhook URL lives in the `chinwag-notifier-secrets`
+# Secret (created by install.sh) — it is never committed.
+#
+# Deduplication / spam control is handled entirely by Alertmanager's
+# grouping (group_by/group_wait/group_interval/repeat_interval) — the notifier
+# is stateless and stores nothing.
+# -----------------------------------------------------------------------------
 alertmanager:
-  enabled: false
+  enabled: true
+  # Scrape Alertmanager's own /metrics so its `up` is monitored too.
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "service", "severity"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: chinwag-discord
+    receivers:
+      - name: chinwag-discord
+        webhook_configs:
+          - url: http://chinwag-notifier.monitoring.svc.cluster.local:9095/webhooks/alertmanager
+            send_resolved: true
+
 prometheus-pushgateway:
   enabled: false
 
+# -----------------------------------------------------------------------------
+# Alert rules (serverFiles.alerting_rules.yml -> /etc/config/alerting_rules.yml)
+#
+# Only metrics that actually exist in this stack are used:
+#   - cAdvisor (kubelet /metrics/cadvisor): container_cpu_usage_seconds_total,
+#     container_memory_working_set_bytes
+#   - kube-state-metrics: kube_pod_status_*, kube_pod_container_status_*,
+#     kube_deployment_*, kube_pod_container_resource_requests
+#   - kubelet /metrics: kubelet_volume_stats_* (PVC space)
+#   - app traffic (gateway /metrics, added by backend/gateway/metrics.go):
+#     http_requests_total{service,method,code}, http_request_duration_seconds
+#   - up (Prometheus scrape health)
+#
+# Missing metrics simply never evaluate (a rule stays silent) — no rule
+# fabricates a metric that does not exist. Postgres/Redis/NATS have no
+# exporters in this stack, so dependency-down alerts are intentionally not
+# defined (see the README).
+# -----------------------------------------------------------------------------
+serverFiles:
+  alerting_rules.yml:
+    groups:
+      # --- Application HTTP health (edge gateway /metrics) -------------------
+      - name: chinwag-http
+        rules:
+          - alert: ChinwagHigh5xxRate
+            expr: sum by (service) (rate(http_requests_total{code=~"5.."}[5m])) / clamp_min(sum by (service) (rate(http_requests_total[5m])), 1e-6) > 0.05
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High 5xx error rate on {{ $labels.service }}"
+              description: '{{ $labels.service }} is returning 5xx for more than 5% of requests over the last 5 minutes (current 5xx ratio: {{ printf "%.3f" $value }}).'
+
+          - alert: ChinwagHigh4xxRate
+            expr: sum by (service) (rate(http_requests_total{code=~"4.."}[5m])) / clamp_min(sum by (service) (rate(http_requests_total[5m])), 1e-6) > 0.10
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High 4xx error rate on {{ $labels.service }}"
+              description: '{{ $labels.service }} is returning 4xx for more than 10% of requests over the last 5 minutes (current 4xx ratio: {{ printf "%.3f" $value }}).'
+
+          - alert: ChinwagTrafficSpike
+            expr: sum by (service) (rate(http_requests_total[5m])) / clamp_min(sum by (service) (rate(http_requests_total[1h])), 1e-6) > 3
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Traffic spike on {{ $labels.service }}"
+              description: '{{ $labels.service }} is receiving more than 3x its 1-hour average traffic for 10 minutes (current/baseline: {{ printf "%.1f" $value }}x).'
+
+          - alert: ChinwagHighLatency
+            expr: histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High latency on {{ $labels.service }}"
+              description: '95th percentile latency on {{ $labels.service }} has been above 1s for 10 minutes (currently {{ printf "%.2f" $value }}s).'
+
+      # --- Scrape target health (up) ----------------------------------------
+      - name: chinwag-targets
+        rules:
+          - alert: ChinwagGatewayDown
+            expr: up{service="gateway"} == 0
+            for: 3m
+            labels:
+              severity: critical
+              service: gateway
+            annotations:
+              summary: "Gateway is down"
+              description: "The API gateway has not been scrapable for more than 3 minutes ({{ $labels.instance }})."
+
+          - alert: ChinwagKubeStateMetricsDown
+            expr: up{service="kube-state-metrics"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "kube-state-metrics is down"
+              description: "kube-state-metrics has not been scrapable for more than 5 minutes — Kubernetes pod/deployment alerts may be stale."
+
+          - alert: ChinwagAlertmanagerDown
+            expr: up{service="prometheus-alertmanager"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Alertmanager is down"
+              description: "Alertmanager has not been scrapable for more than 5 minutes — no alerts will be delivered to Discord."
+
+      # --- Kubernetes workload health (kube-state-metrics) -------------------
+      - name: chinwag-kubernetes
+        rules:
+          - alert: ChinwagPodFailed
+            expr: kube_pod_status_phase{namespace=~"chinwag|monitoring", phase="Failed"} == 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.pod }} failed"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} entered the Failed phase."
+
+          - alert: ChinwagPodNotReady
+            expr: sum by (namespace, pod) (kube_pod_status_ready{namespace=~"chinwag|monitoring", condition="false"}) > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.pod }} is not ready"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not-ready for more than 5 minutes."
+
+          - alert: ChinwagPodCrashLoopBackOff
+            expr: kube_pod_container_status_waiting_reason{namespace=~"chinwag|monitoring", reason="CrashLoopBackOff"} == 1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.pod }} is CrashLoopBackOff"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is stuck in CrashLoopBackOff."
+
+          - alert: ChinwagPodOOMKilled
+            expr: kube_pod_container_status_last_terminated_reason{namespace=~"chinwag|monitoring", reason="OOMKilled"} == 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Container {{ $labels.container }} was OOMKilled"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) was terminated with OOMKilled."
+
+          - alert: ChinwagPodRestarting
+            expr: increase(kube_pod_container_status_restarts_total{namespace=~"chinwag|monitoring"}[15m]) > 3
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.pod }} is restarting repeatedly"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) restarted more than 3 times in the last 15 minutes."
+
+          - alert: ChinwagDeploymentReplicasMismatch
+            expr: (kube_deployment_spec_replicas{namespace=~"chinwag|monitoring"} - on(namespace, deployment) kube_deployment_status_replicas_available{namespace=~"chinwag|monitoring"}) != 0
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Deployment {{ $labels.deployment }} replica mismatch"
+              description: "Deployment {{ $labels.deployment }} ({{ $labels.namespace }}) has {{ $value }} fewer available replicas than desired for more than 10 minutes (rollout may be stuck)."
+
+      # --- Resource usage (cAdvisor + kube-state-metrics) --------------------
+      - name: chinwag-resources
+        rules:
+          - alert: ChinwagHighCPU
+            expr: |
+              (sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{namespace=~"chinwag|monitoring", container!="", container!="POD"}[5m])) / clamp_min(sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="cpu"}), 0.001)) > 0.9
+              and on(namespace, pod, container) sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="cpu"}) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU usage on {{ $labels.pod }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 90% of its CPU request for 10 minutes."
+
+          - alert: ChinwagHighMemory
+            expr: |
+              (sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=~"chinwag|monitoring", container!="", container!="POD"}) / clamp_min(sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="memory"}), 0.001)) > 0.9
+              and on(namespace, pod, container) sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="memory"}) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage on {{ $labels.pod }}"
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 90% of its memory request for 10 minutes."
+
+          # PVC disk space (kubelet_volume_stats_*). node-exporter is DISABLED
+          # on this WSL2 host, so node-level filesystem metrics do not exist;
+          # PVC usage from the kubelet is used instead. If a PVC has no data,
+          # the rule stays silent.
+          - alert: ChinwagPVCLowSpace
+            expr: |
+              (sum by (namespace, persistentvolumeclaim) (kubelet_volume_stats_available_bytes) / clamp_min(sum by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes), 1) < 0.15)
+              and on(namespace, persistentvolumeclaim) sum by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "PVC {{ $labels.persistentvolumeclaim }} is running low on space"
+              description: "PVC {{ $labels.persistentvolumeclaim }} ({{ $labels.namespace }}) has less than 15% free space."
+
 # Default scrape configs already include the kubelet (cAdvisor) job, node-exporter
-# and kube-state-metrics jobs — no extra ServiceMonitor CRDs required.
+# and kube-state-metrics jobs — no extra ServiceMonitor CRDs required. The
+# gateway is scraped via the prometheus.io/scrape annotations on its Service
+# (see infra/k3s/gateway.yaml), matched by the built-in kubernetes-service-endpoints
+# job.

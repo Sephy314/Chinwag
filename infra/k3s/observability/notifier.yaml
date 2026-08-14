@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+# Chinwag Notifier — Alertmanager -> Discord notification service.
+#
+# Stateless Deployment + ClusterIP Service in the `monitoring` namespace.
+# Alertmanager is configured (in prometheus-values.yaml) to POST webhooks to
+# this service; the Discord webhook URL is injected from the
+# `chinwag-notifier-secrets` Secret (created by observability/install.sh — the
+# URL is NEVER committed to this repo).
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chinwag-notifier
+  namespace: monitoring
+  labels:
+    app: chinwag-notifier
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chinwag-notifier
+  template:
+    metadata:
+      labels:
+        app: chinwag-notifier
+    spec:
+      containers:
+        - name: notifier
+          image: chinwag/notifier:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9095
+          env:
+            - name: NOTIFIER_PORT
+              value: "9095"
+          envFrom:
+            - secretRef:
+                name: chinwag-notifier-secrets
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chinwag-notifier
+  namespace: monitoring
+  labels:
+    app: chinwag-notifier
+spec:
+  selector:
+    app: chinwag-notifier
+  ports:
+    - name: http
+      port: 9095
+      targetPort: http

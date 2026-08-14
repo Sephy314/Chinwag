@@ -1,4 +1,8 @@
-SERVICES := gateway shared/auth services/auth services/room services/chat/command services/chat/query
+# Every Go module with tests is listed here so `make test` / `make vet` cover
+# them all from the CI backend job. The notifier (Alertmanager -> Discord
+# notification service) lives outside backend/ but is a standalone Go module,
+# so it is included via its relative path and picked up automatically.
+SERVICES := gateway shared/auth services/auth services/room services/chat/command services/chat/query ../infra/k3s/observability/notifier
 
 .PHONY: help fmt test test-race test-cover vet run-gateway run-auth run-room run-chat-command run-chat-query test-all
 

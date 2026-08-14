@@ -1,19 +1,22 @@
-# Chinwag Observability (Loki + Grafana Alloy + Grafana)
+# Chinwag Observability (Loki + Grafana Alloy + Prometheus/Alertmanager + Grafana + Notifier)
 
-Container log collection / search stack for the Chinwag k3s cluster.
+Container log collection / search / **alerting** stack for the Chinwag k3s cluster.
 
 ```
 Chinwag Pods
-    ↓
-Grafana Alloy (DaemonSet, collects container stdout/stderr via the Kubernetes API)
-    ↓
-Loki (monolithic / filesystem storage, namespace: monitoring)
-    ↓
-Grafana (Loki datasource auto-provisioned, namespace: monitoring)
+    │
+    ├─ stdout/stderr ──► Grafana Alloy (DaemonSet) ──► Loki ──► Grafana
+    │
+    └─ /metrics (gateway) ──► Prometheus ──► Alertmanager ──► Notifier ──► Discord
 ```
 
 - Log collector: **Grafana Alloy** (no Promtail)
-- Loki / Alloy / Grafana are all installed with **Helm** (in the `monitoring` namespace)
+- Metrics: **Prometheus** (cAdvisor + kube-state-metrics + gateway `/metrics`)
+- Alerting: **Alertmanager** groups alerts and POSTs webhooks to the **Chinwag Notifier**
+  (a stateless Go service) which renders Discord embeds and forwards them to a
+  **Discord webhook**
+- Loki / Alloy / Prometheus / Grafana are installed with **Helm** (in the `monitoring`
+  namespace); the **Notifier** is a plain `kubectl apply` (Deployment + Service)
 - The existing `infra/k3s/*.yaml` (kustomize / GitOps) structure is **left untouched**
 - Built for a small **single-node k3s** setup. No HA / replication.
 
@@ -26,12 +29,22 @@ infra/k3s/observability/
 ├── README.md                    # this document
 ├── loki-values.yaml             # Loki Helm values (monolithic / filesystem / 1 replica)
 ├── alloy-values.yaml            # Alloy Helm values (DaemonSet + River config)
-├── prometheus-values.yaml       # Prometheus Helm values (cAdvisor + kube-state-metrics)
+├── prometheus-values.yaml       # Prometheus + Alertmanager Helm values + alert rules
 ├── grafana-values.yaml          # Grafana Helm values (Loki+Prometheus datasources, dashboards)
 ├── grafana-certificate.yaml     # cert-manager Certificate for the /grafana ingress (TLS)
 ├── set-grafana-password.sh      # set a fixed Grafana admin user/password (incl. custom users)
 ├── dashboards/                  # provisioned Grafana dashboards (chinwag-overview.json)
-└── install.sh                   # Helm install script (creates namespace + secret + dashboards)
+├── notifier.yaml                # Notifier Deployment + Service (monitoring namespace)
+├── notifier/                    # Alertmanager -> Discord notification service (Go)
+│   ├── main.go                  # HTTP server (POST /webhooks/alertmanager, GET /health)
+│   ├── config.go                # env config (port, DISCORD_WEBHOOK_URL, timeout)
+│   ├── handler.go               # webhook handler (parse -> validate -> deliver)
+│   ├── discord.go               # Discord webhook client (stdlib http only)
+│   ├── message.go               # payload -> Discord embed formatting
+│   ├── payload.go               # Alertmanager webhook payload structs
+│   ├── *_test.go                # unit + HTTP tests (httptest, no external network)
+│   └── Dockerfile
+└── install.sh                   # install script (namespace + secrets + notifier + Helm)
 ```
 
 ## Prerequisites
@@ -67,23 +80,30 @@ cd infra/k3s/observability
 ### Production (CD) deployment
 
 The observability stack is **not** part of the GitOps `infra/k3s` kustomize
-resources — it is installed with Helm via `install.sh`. Deployment is **manual /
-on-demand**, so an app-only `main` deploy does not slow down with 4 Helm
-upgrades or risk an obs upgrade failing in the middle of CD:
+resources — it is installed via `install.sh` (Helm + a few `kubectl apply`
+manifests). Deployment is **automatic**:
 
 - **Dev** — `infra/k3s/deploy.sh` calls `./observability/install.sh` (skip with
   `--no-obs`).
-- **Production** — the **manual** workflow `.github/workflows/deploy-observability.yml`
-  (`workflow_dispatch`, Actions → "Deploy Observability (manual)") runs
-  `observability/install.sh` on the self-hosted runner on the k3s node.
+- **Production (automatic)** — `.github/workflows/deploy-observability.yml`
+  runs `observability/install.sh` on the self-hosted runner on the k3s node
+  **after every successful `CD` run on `main`** (`workflow_run`), or on demand
+  via `workflow_dispatch` (Actions → "Deploy Observability"). This means the
+  notifier image, Alertmanager config, alert rules and the whole obs stack are
+  re-deployed on every app deploy — the notifier is now under **automatic CD**.
   `infra/k3s/update.sh` (the CD fast path) also accepts `--obs` if you want to
   bundle the obs update into an app deploy, but it is **not** run by default.
 
-Both entry points are idempotent: the `grafana-admin` Secret is only created
-once (existing password is kept), dashboards ConfigMap is re-applied, and the
-`grafana-tls` Certificate auto-renews via cert-manager. Run the manual workflow
-whenever you change `loki-values.yaml` / `alloy-values.yaml` /
-`prometheus-values.yaml` / `grafana-values.yaml` / `dashboards/*`.
+All entry points are idempotent: the `grafana-admin` and
+`chinwag-notifier-secrets` Secrets are only created once (existing values kept),
+dashboards ConfigMap is re-applied, and the `grafana-tls` Certificate
+auto-renews via cert-manager.
+
+> **Safety**: the notifier's tests run in the CI `backend` job (via `make test`,
+> which includes `infra/k3s/observability/notifier`). To guarantee a failed
+> test can never deploy, require the `CI` workflow to pass on `main` (branch
+> protection) — `cd.yml` already only deploys `main`, and the obs workflow runs
+> after CD.
 
 What `install.sh` does (equivalent to doing it manually):
 
@@ -101,12 +121,24 @@ helm upgrade --install loki grafana/loki -n monitoring \
 helm upgrade --install alloy grafana/alloy -n monitoring \
   --version 1.11.1 -f alloy-values.yaml --wait
 
-# 3) Grafana admin Secret (random password, never committed to Git)
+# 3) Prometheus + Alertmanager + alert rules (webhook -> notifier)
+helm upgrade --install prometheus prometheus-community/prometheus -n monitoring \
+  --version 29.23.0 -f prometheus-values.yaml --wait
+
+# 4) Notifier (Alertmanager -> Discord) — build image, inject webhook secret, apply
+DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/<id>/<token>' \
+  docker build -t chinwag/notifier:latest -f notifier/Dockerfile notifier/
+kubectl -n monitoring create secret generic chinwag-notifier-secrets \
+  --from-literal=DISCORD_WEBHOOK_URL='<url>' \
+  --dry-run=client -o yaml | kubectl -n monitoring apply -f -
+kubectl apply -f notifier.yaml
+
+# 5) Grafana admin Secret (random password, never committed to Git)
 kubectl -n monitoring create secret generic grafana-admin \
   --from-literal=admin-user=admin \
   --from-literal=admin-password='<strong-password>'
 
-# 4) Grafana — Loki datasource auto-provisioned
+# 6) Grafana — Loki datasource auto-provisioned
 helm upgrade --install grafana grafana/grafana -n monitoring \
   --version 10.5.15 -f grafana-values.yaml --wait
 ```
@@ -142,6 +174,116 @@ cluster the local `kubectl` points at):
 scp infra/k3s/observability/set-grafana-password.sh sephy314@server:/tmp/
 ssh sephy314@server 'cd /tmp && ./set-grafana-password.sh'
 ```
+
+---
+
+## Alerting (Alertmanager → Notifier → Discord)
+
+```
+Prometheus ──(alert rules)──► Alertmanager ──(HTTP webhook)──► chinwag-notifier ──(Discord webhook)──► Discord
+```
+
+- **Prometheus** decides *when* something is wrong (alert rules in
+  `prometheus-values.yaml` → `serverFiles.alerting_rules.yml`).
+- **Alertmanager** manages the alert lifecycle and **groups** alerts
+  (`group_by: [alertname, service, severity]`, `group_wait: 30s`,
+  `group_interval: 5m`, `repeat_interval: 4h`) — this is the deduplication /
+  spam control layer. No state is kept in the notifier.
+- **Chinwag Notifier** (`notifier/`) is a stateless Go service that receives
+  Alertmanager webhooks and forwards Discord embeds. It has **no database /
+  Redis / NATS**.
+
+### Notifier
+
+- Go module at `infra/k3s/observability/notifier/` — stdlib only (no external
+  Go modules). Deployed as a `Deployment` + `Service` in the `monitoring`
+  namespace (`notifier.yaml`), image `chinwag/notifier:latest`.
+- Endpoints:
+  - `POST /webhooks/alertmanager` — Alertmanager webhook receiver.
+    `2xx` = accepted and delivered; `4xx` = malformed payload; `5xx` = internal
+    error (Discord failure / not configured).
+  - `GET /health` — liveness/readiness probe.
+- One webhook notification becomes **one Discord message** with one embed per
+  alert (capped at 10 embeds) — a batched Alertmanager notification does not
+  spam Discord. `firing` embeds are red (🔴), `resolved` embeds are green (🟢)
+  and include the duration.
+- Unknown/extra labels never fail parsing (the payload struct only declares the
+  fields the notifier uses), and missing labels/annotations fall back gracefully.
+
+### Discord webhook URL (secret)
+
+The URL is **never** committed. `install.sh` reads `DISCORD_WEBHOOK_URL` (env or
+a gitignored `./notifier.env`) and stores it in the `chinwag-notifier-secrets`
+Secret (key `DISCORD_WEBHOOK_URL`), which the Deployment injects via `envFrom`.
+The notifier never logs the URL.
+
+```bash
+# one time, on the deploy host:
+echo 'DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<id>/<token>' > infra/k3s/observability/notifier.env
+./infra/k3s/observability/install.sh
+```
+
+If the URL is missing, the notifier still starts and serves `/health`, but
+alert webhooks return `500` and nothing is delivered (a warning is logged).
+
+### Alert rules
+
+Rules are defined in `prometheus-values.yaml` under `serverFiles.alerting_rules.yml`
+and are evaluated by Prometheus every 15s. Only metrics that actually exist in
+this stack are used; a rule referencing a metric that never appears simply stays
+silent (no fabricated metrics).
+
+| Alert | Severity | Signals |
+|---|---|---|
+| `ChinwagHigh5xxRate` | critical | >5% 5xx of gateway traffic per service (5m) |
+| `ChinwagHigh4xxRate` | warning | >10% 4xx per service (10m) |
+| `ChinwagTrafficSpike` | warning | current 5m traffic >3x the 1h average (10m) |
+| `ChinwagHighLatency` | warning | p95 latency >1s (10m) |
+| `ChinwagGatewayDown` | critical | `up{service="gateway"} == 0` (3m) |
+| `ChinwagKubeStateMetricsDown` | critical | `up{service="kube-state-metrics"} == 0` (5m) |
+| `ChinwagAlertmanagerDown` | critical | `up{service="prometheus-alertmanager"} == 0` (5m) |
+| `ChinwagPodFailed` | critical | pod phase `Failed` (2m) |
+| `ChinwagPodNotReady` | critical | pod not-ready (5m) |
+| `ChinwagPodCrashLoopBackOff` | critical | container waiting `CrashLoopBackOff` (5m) |
+| `ChinwagPodOOMKilled` | critical | container last terminated `OOMKilled` (2m) |
+| `ChinwagPodRestarting` | warning | >3 restarts / 15m (10m) |
+| `ChinwagDeploymentReplicasMismatch` | critical | desired ≠ available replicas (10m) |
+| `ChinwagHighCPU` | warning | >90% of CPU request (10m) |
+| `ChinwagHighMemory` | warning | >90% of memory request (10m) |
+| `ChinwagPVCLowSpace` | warning | PVC <15% free (10m, via kubelet volume stats) |
+
+App-level HTTP metrics come from the **gateway's `/metrics`** endpoint
+(`backend/gateway/middleware/metrics.go`) — the gateway is the single edge for
+all HTTP traffic, so `http_requests_total{service,method,code}` and
+`http_request_duration_seconds` give per-service error/traffic/latency signals
+(the `service` label maps gateway route prefixes → auth/room/chat/admin). The
+gateway Service carries `prometheus.io/scrape` annotations
+(`infra/k3s/gateway.yaml`) and is scraped by the chart's built-in
+`kubernetes-service-endpoints` job over the cluster network — `/metrics` is
+**not** exposed on the public ingress.
+
+> **Dependencies**: Postgres / Redis / NATS have **no exporters** in this stack,
+> so no dependency-health rules are defined (per the "don't fabricate metrics"
+> rule). A backend outage still surfaces through gateway 5xx alerts (the gateway
+> returns 503 when a backend is unreachable). To monitor dependencies directly,
+> add `postgres-exporter` / `redis-exporter` / a NATS exporter and extend the
+> rules.
+
+### Severity → Discord grouping
+
+Alertmanager groups by `alertname + service + severity`, so all `critical`
+instances of one alert are grouped into a single webhook → single Discord
+message. Repeat notifications for a still-firing alert come every 4h.
+
+### Tests
+
+`notifier/` has table-driven tests covering: valid firing/resolved payloads,
+invalid JSON, trailing data, empty `alerts`, missing webhook URL, Discord API
+errors, Discord timeouts, sparse alerts (missing labels/annotations), unknown
+fields, and embed formatting (title/color/fields/duration, embed cap). Discord
+calls use an in-process `httptest` mock — **no external network**. The tests are
+picked up automatically by the backend `make test` / `make vet` (the notifier is
+in the `SERVICES` list), so the CI `backend` job covers them.
 
 ---
 
