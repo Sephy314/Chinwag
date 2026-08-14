@@ -126,12 +126,25 @@ func (m *MockJwksService) GetJwkSet(ctx context.Context) (jwk.Set, error) {
 	return args.Get(0).(jwk.Set), args.Error(1)
 }
 
-func (m *MockJwksService) Rotate(ctx context.Context) error {
+func (m *MockJwksService) RotateAccess(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)
 }
 
-func (m *MockJwksService) GetActiveKey(ctx context.Context) (*domain.SigningKey, error) {
+func (m *MockJwksService) RotateRefresh(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockJwksService) GetActiveAccessKey(ctx context.Context) (*domain.SigningKey, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.SigningKey), args.Error(1)
+}
+
+func (m *MockJwksService) GetActiveRefreshKey(ctx context.Context) (*domain.SigningKey, error) {
 	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -147,31 +160,39 @@ func (m *MockJwksService) GetPublicKey(ctx context.Context, kid string) (*ecdsa.
 	return args.Get(0).(*ecdsa.PublicKey), args.Error(1)
 }
 
+func (m *MockJwksService) GetRefreshKeyByKid(ctx context.Context, kid string) (*domain.SigningKey, error) {
+	args := m.Called(ctx, kid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.SigningKey), args.Error(1)
+}
+
 // ---- Refresh token service ----
 
 type MockRefreshTokenService struct {
 	mock.Mock
 }
 
-func (m *MockRefreshTokenService) GetRefreshToken(ctx context.Context, refreshToken string) (*structs.RefreshTokenRecord, error) {
-	args := m.Called(ctx, refreshToken)
+func (m *MockRefreshTokenService) ValidateRefreshToken(ctx context.Context, rawToken, jkt string) (*structs.RefreshTokenClaims, error) {
+	args := m.Called(ctx, rawToken, jkt)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*structs.RefreshTokenRecord), args.Error(1)
+	return args.Get(0).(*structs.RefreshTokenClaims), args.Error(1)
 }
 
-func (m *MockRefreshTokenService) InsertRefreshToken(ctx context.Context, token structs.RefreshToken) error {
-	args := m.Called(ctx, token)
-	return args.Error(0)
-}
-
-func (m *MockRefreshTokenService) ConsumeRefreshToken(ctx context.Context, refreshToken string) (*structs.RefreshTokenRecord, error) {
-	args := m.Called(ctx, refreshToken)
+func (m *MockRefreshTokenService) RotateRefreshToken(ctx context.Context, claims *structs.RefreshTokenClaims) (*structs.RotatedRefreshToken, error) {
+	args := m.Called(ctx, claims)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*structs.RefreshTokenRecord), args.Error(1)
+	return args.Get(0).(*structs.RotatedRefreshToken), args.Error(1)
+}
+
+func (m *MockRefreshTokenService) IssueRefreshToken(ctx context.Context, subject, jkt, sid string) (string, error) {
+	args := m.Called(ctx, subject, jkt, sid)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockRefreshTokenService) RevokeLineage(ctx context.Context, lineageID string) error {
@@ -422,13 +443,13 @@ func setAdminClaims(c *echo.Context) {
 
 func newAdminUserHandler(userRepo repo.UserRepository, cache cache.Cache, audit repo.AuditRepoInterface) *AdminUserHandler {
 	userSvc := service.NewUserService(userRepo, new(MockJwksService), new(MockRefreshTokenService), &noopLogger{})
-	refreshSvc := service.NewRefreshTokenService(cache, "refresh:", time.Hour)
+	refreshSvc := service.NewRefreshTokenService(cache, new(MockJwksService), "refresh:", time.Hour)
 	auditSvc := service.NewAuditService(audit)
 	return NewAdminUserHandler(userSvc, refreshSvc, auditSvc, &noopLogger{})
 }
 
 func newAdminSessionHandler(cache cache.Cache, audit repo.AuditRepoInterface) *AdminSessionHandler {
-	refreshSvc := service.NewRefreshTokenService(cache, "refresh:", time.Hour)
+	refreshSvc := service.NewRefreshTokenService(cache, new(MockJwksService), "refresh:", time.Hour)
 	auditSvc := service.NewAuditService(audit)
 	return NewAdminSessionHandler(refreshSvc, auditSvc, &noopLogger{})
 }

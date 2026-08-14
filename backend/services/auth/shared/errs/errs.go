@@ -67,6 +67,48 @@ var (
 		Message: "Refresh token revoked",
 	}
 
+	// ErrInvalidRefreshToken is returned when a refresh-token JWT fails
+	// cryptographic validation (parse, alg, signature, or claims).
+	ErrInvalidRefreshToken = &AppError{
+		Status:  http.StatusUnauthorized,
+		Message: "Invalid refresh token",
+	}
+
+	// ErrInvalidGrant is returned when a cryptographically valid refresh token
+	// has no valid Redis grant state (e.g. its state expired or is missing).
+	ErrInvalidGrant = &AppError{
+		Status:  http.StatusUnauthorized,
+		Message: "Invalid grant",
+	}
+
+	// ErrRefreshTokenBindingMismatch is returned when the presented DPoP key
+	// does not match the refresh token's cnf.jkt claim.
+	ErrRefreshTokenBindingMismatch = &AppError{
+		Status:  http.StatusUnauthorized,
+		Message: "Refresh token DPoP binding mismatch",
+	}
+
+	// ErrDependencyUnavailable signals a degraded mode: the Redis dependency
+	// could not be reached, so rotation/reuse detection could not run. It must
+	// never be conflated with "invalid refresh token".
+	ErrDependencyUnavailable = &AppError{
+		Status:  http.StatusServiceUnavailable,
+		Message: "Refresh service temporarily unavailable",
+	}
+
+	// ErrDependencyTimeout signals a degraded mode where Redis timed out.
+	ErrDependencyTimeout = &AppError{
+		Status:  http.StatusServiceUnavailable,
+		Message: "Refresh service temporarily unavailable",
+	}
+
+	// ErrRotationFailed signals that a new refresh token could not be produced
+	// (signing key unavailable or signing failure). No Redis state changed.
+	ErrRotationFailed = &AppError{
+		Status:  http.StatusInternalServerError,
+		Message: "Refresh rotation failed",
+	}
+
 	ErrInvalidRole = &AppError{
 		Status:  http.StatusBadRequest,
 		Message: "Invalid role",

@@ -277,7 +277,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleU
 		}
 	}
 
-	key, err := h.JwkService.GetActiveKey(ctx)
+	key, err := h.JwkService.GetActiveAccessKey(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -287,12 +287,7 @@ func (h *GoogleOAuthHandler) findOrCreateUser(ctx context.Context, info *googleU
 		return nil, err
 	}
 
-	refreshToken := uuid.Must(uuid.NewV7()).String()
-	err = h.RefreshService.InsertRefreshToken(ctx, structs.RefreshToken{
-		Subject:      user.Id,
-		RefreshToken: refreshToken,
-		Jkt:          jkt,
-	})
+	refreshToken, err := h.RefreshService.IssueRefreshToken(ctx, user.Id, jkt, "")
 	if err != nil {
 		return nil, err
 	}

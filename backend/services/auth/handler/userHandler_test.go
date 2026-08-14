@@ -282,11 +282,11 @@ func TestUserHandler_Login_Success(t *testing.T) {
 	proof := makeProof(t)
 
 	dpopSvc.On("Validate", mock.Anything, mock.Anything).Return(proof, "nonce-1", nil).Once()
-	refresh.On("InsertRefreshToken", mock.Anything, mock.Anything).Return(nil).Once()
+	refresh.On("IssueRefreshToken", mock.Anything, "u1", mock.Anything, "").Return("new-refresh-token", nil).Once()
 	userRepo.On("GetUserByEmail", mock.Anything, "alice@example.com").Return(
 		&domain.User{Id: "u1", Email: "alice@example.com", Password: mustHash(t, "secret")}, nil,
 	).Once()
-	jwk.On("GetActiveKey", mock.Anything).Return(makeSigningKey(t), nil).Once()
+	jwk.On("GetActiveAccessKey", mock.Anything).Return(makeSigningKey(t), nil).Once()
 
 	c, rec := echotest.ContextConfig{
 		Headers: map[string][]string{

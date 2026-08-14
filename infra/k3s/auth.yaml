@@ -1,6 +1,12 @@
 # ---------------------------------------------------------------------------
 # Auth Service — users, JWT/DPoP, JWKS, refresh tokens, optional Google OAuth.
 # Runs DB migrations at startup (goose) so it must wait for postgres+redis.
+#
+# replicas >= 2: the service is stateless (signing/verification state is shared
+# via the signing_keys table + Redis), so a single Pod failure never causes a
+# full authentication outage. A refresh token issued by one Pod is verifiable
+# by any other Pod (jti state lives in shared Redis; keys live in shared
+# Postgres).
 # ---------------------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
@@ -10,7 +16,12 @@ metadata:
   labels:
     app: auth
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: auth

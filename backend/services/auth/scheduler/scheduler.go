@@ -8,7 +8,8 @@ import (
 )
 
 type KeyRotator interface {
-	Rotate(ctx context.Context) error
+	RotateAccess(ctx context.Context) error
+	RotateRefresh(ctx context.Context) error
 }
 
 type KeyRotationScheduler struct {
@@ -36,11 +37,16 @@ func (s *KeyRotationScheduler) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			err := s.rotator.Rotate(ctx)
-			if err != nil {
-				s.log.Error("key rotation scheduler error", "error", err)
+			// Access and Refresh key lifecycles are independent.
+			if err := s.rotator.RotateAccess(ctx); err != nil {
+				s.log.Error("key rotation scheduler error (access)", "error", err)
 			} else {
-				s.log.Info("key rotation completed")
+				s.log.Info("access key rotation completed")
+			}
+			if err := s.rotator.RotateRefresh(ctx); err != nil {
+				s.log.Error("key rotation scheduler error (refresh)", "error", err)
+			} else {
+				s.log.Info("refresh key rotation completed")
 			}
 		case <-s.stop:
 			s.log.Info("key rotation scheduler stopped")

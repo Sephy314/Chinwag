@@ -5,10 +5,16 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
+// ToJWKSet builds the PUBLIC JWKS served to token verifiers (gateway, frontend,
+// other services). Only Access-token signing keys are published — Refresh keys
+// are verified internally by the auth service and are never exposed to clients.
 func ToJWKSet(keys []domain.SigningKeyEntity) (jwk.Set, error) {
 	set := jwk.NewSet()
 
 	for _, k := range keys {
+		if k.Type != domain.KeyTypeAccess {
+			continue
+		}
 		if !k.Status.IncludeInJWKS() {
 			continue
 		}
