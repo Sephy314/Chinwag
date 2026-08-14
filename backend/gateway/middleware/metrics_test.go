@@ -15,6 +15,7 @@ func TestServiceForPath(t *testing.T) {
 		"/auth":            "auth",
 		"/author":          "gateway", // prefix must be a path boundary
 		"/authx":           "gateway",
+		"/authenticate":    "gateway",
 		"/rooms":           "rooms",
 		"/rooms/1":         "rooms",
 		"/roomship":        "gateway",
@@ -24,6 +25,7 @@ func TestServiceForPath(t *testing.T) {
 		"/admin/rooms":     "admin",
 		"/admin":           "admin",
 		"/adminpanel":      "gateway",
+		"/administrator":   "gateway",
 		"/health":          "health",
 		"/metrics":         "metrics",
 		"/":                "gateway",
