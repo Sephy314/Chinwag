@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +138,23 @@ func TestDiscordURLFor(t *testing.T) {
 	only := &DiscordClient{Webhooks: map[string]string{"incidents": "https://discord.example/incidents"}}
 	if got := only.URLFor("warnings"); got != "" {
 		t.Errorf("URLFor(warnings) with no default = %q, want empty", got)
+	}
+}
+
+func TestDiscordSendErrorIncludesBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"code":50035,"message":"Invalid Form Body: embed.fields"}`))
+	}))
+	defer srv.Close()
+
+	client := &DiscordClient{HTTPClient: srv.Client()}
+	err := client.Send(context.Background(), srv.URL, DiscordMessage{})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "Invalid Form Body") {
+		t.Errorf("error should include the Discord response body, got: %v", err)
 	}
 }
 

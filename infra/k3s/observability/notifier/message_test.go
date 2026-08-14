@@ -208,3 +208,20 @@ func TestGroupByCategoryNilPayload(t *testing.T) {
 		t.Errorf("expected no groups for nil payload, got %d", len(g))
 	}
 }
+
+func TestValidURL(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"http://prometheus.example/graph", "http://prometheus.example/graph"},
+		{"https://p.example/g?x=1&y=2", "https://p.example/g?x=1&y=2"},
+		{"", ""},
+		{"not a url", ""},
+		{"ftp://x/y", ""},
+		{"http://", ""}, // no host
+		{"javascript:alert(1)", ""},
+	}
+	for _, c := range cases {
+		if got := validURL(c.in); got != c.want {
+			t.Errorf("validURL(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

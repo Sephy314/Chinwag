@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // DiscordClient posts messages to Discord webhooks. It keeps the webhook URLs
@@ -62,12 +63,17 @@ func (c *DiscordClient) Send(ctx context.Context, url string, msg DiscordMessage
 	}
 	defer resp.Body.Close()
 
-	// Drain a little of the body so the connection can be reused; Discord
-	// returns an error message in the body on 4xx that we log only as status.
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	// Capture a little of the response body. Discord returns a JSON error on
+	// 4xx (e.g. Invalid Form Body: <field>) — including it in the error makes
+	// the exact reason visible in the logs. It never contains the webhook URL.
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("discord webhook returned status %d", resp.StatusCode)
+		errMsg := fmt.Sprintf("discord webhook returned status %d", resp.StatusCode)
+		if body := strings.TrimSpace(string(respBody)); body != "" {
+			errMsg += ": " + body
+		}
+		return fmt.Errorf("%s", errMsg)
 	}
 	return nil
 }

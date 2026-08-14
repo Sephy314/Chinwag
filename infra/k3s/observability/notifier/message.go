@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -18,8 +19,14 @@ const (
 // single notification can never exceed the Discord API limit.
 const maxEmbedsPerMessage = 10
 
-// fieldValueLimit is Discord's per-field value length limit (1024 chars).
-const fieldValueLimit = 1024
+// Discord field/embed length limits (chars). We keep a small margin below the
+// hard limits so multi-byte / astral characters (emoji, CJK) can never push a
+// value over Discord's byte/UTF-16 budget and trigger a 400.
+const (
+	fieldValueLimit  = 1000 // Discord hard limit: 1024
+	descriptionLimit = 2000 // Discord hard limit: 2048
+	titleLimit       = 250  // Discord hard limit: 256
+)
 
 // DiscordMessage is the payload sent to a Discord webhook.
 type DiscordMessage struct {
@@ -136,16 +143,30 @@ func buildEmbed(a *Alert, payloadStatus string) DiscordEmbed {
 	}
 
 	embed := DiscordEmbed{
-		Title:       title,
-		Description: truncate(summary, fieldValueLimit),
+		Title:       truncate(title, titleLimit),
+		Description: truncate(summary, descriptionLimit),
 		Color:       color,
-		URL:         a.GeneratorURL,
+		URL:         validURL(a.GeneratorURL),
 		Fields:      buildFields(a, resolved),
 	}
 	if !a.StartsAt.IsZero() {
 		embed.Timestamp = a.StartsAt.UTC().Format(time.RFC3339)
 	}
 	return embed
+}
+
+// validURL returns s only when it is a valid http(s) URL with a host. Discord
+// rejects an embed `url` field that is not a valid URL with a 400, so a
+// malformed generatorURL must never be included.
+func validURL(s string) string {
+	u, err := url.Parse(s)
+	if err != nil {
+		return ""
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return ""
+	}
+	return s
 }
 
 // buildFields collects the readable label/annotation rows for an embed.
