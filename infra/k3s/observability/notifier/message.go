@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -210,16 +211,25 @@ func buildEmbed(a *Alert, payloadStatus string, remaining *int) DiscordEmbed {
 	return embed
 }
 
-// validURL returns s only when it is a valid http(s) URL with a host. Discord
-// rejects an embed `url` field that is not a valid URL with a 400, so a
-// malformed generatorURL must never be included.
+// validURL returns s only when it is an http(s) URL whose host Discord's embed
+// validation will accept. Discord rejects a bare single-label hostname (e.g.
+// the k8s pod name "prometheus-server-0") with a 400 "Invalid Form Body", but
+// accepts domain-style hosts (with a dot) and IP literals. A generatorURL we
+// cannot guarantee Discord accepts must never be included.
 func validURL(s string) string {
 	u, err := url.Parse(s)
 	if err != nil {
 		return ""
 	}
-	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if u.Scheme != "http" && u.Scheme != "https" {
 		return ""
+	}
+	host := u.Hostname() // strips the port / IPv6 brackets
+	if host == "" {
+		return ""
+	}
+	if net.ParseIP(host) == nil && !strings.Contains(host, ".") {
+		return "" // bare single-label hostname — Discord would reject it
 	}
 	return s
 }
