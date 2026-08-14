@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
 	appMiddleware "github.com/Sephy314/chinwag/backend/gateway/middleware"
+	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
@@ -22,6 +22,7 @@ func main() {
 
 	e.Use(appMiddleware.RequestID())
 	e.Use(appMiddleware.AccessLogger())
+	e.Use(appMiddleware.MetricsMiddleware())
 
 	e.Pre(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},
@@ -49,6 +50,11 @@ func main() {
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// Prometheus scrape endpoint (cluster-internal only; not exposed via the
+	// public ingress). Scraped by the chart's kubernetes-service-endpoints job
+	// through the annotations on infra/k3s/gateway.yaml.
+	e.GET("/metrics", appMiddleware.MetricsHandler())
 
 	setupRoutes(e, cfg)
 

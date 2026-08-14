@@ -10,6 +10,9 @@ infra/k3s/*.secret.yaml
 infra/k3s/.tls/
 # Observability — Grafana admin password if install.sh's optional dump is used
 infra/k3s/observability/.grafana-admin.txt
+# Observability — optional local Discord webhook URL for the notifier (read by
+# install.sh; the URL is stored in a k8s Secret, never committed)
+infra/k3s/observability/notifier.env
 .vscode
 # Dev mTLS material for service-to-service internal endpoints (scripts/gen-dev-mtls.sh)
 **/.mtls/
