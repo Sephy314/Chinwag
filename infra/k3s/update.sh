@@ -24,11 +24,13 @@
 #   ./update.sh --obs           # ALSO update the observability stack
 #                               #   (Loki/Alloy/Prometheus/Grafana via Helm)
 #
-# The observability stack is NOT updated by default: it is unchanged on most
-# app-only deploys, so running install.sh (4 Helm upgrades with --wait) on every
-# CD run just slows the deploy down. Update it explicitly with --obs, or use the
-# dedicated manual workflow (.github/workflows/deploy-observability.yml) which
-# runs observability/install.sh on the self-hosted runner.
+# The observability stack is opt-in with --obs. CD passes --obs (see cd.yml),
+# so a normal merge-to-main deploy also updates it: install.sh rebuilds +
+# imports + rollout-restarts the notifier, applies the dashboards, and
+# Helm-upgrades Loki/Alloy/Prometheus/Grafana. Omit --obs for a fast app-only
+# refresh. The standalone manual workflow
+# (.github/workflows/deploy-observability.yml) can re-run
+# observability/install.sh on demand.
 # =============================================================================
 set -euo pipefail
 

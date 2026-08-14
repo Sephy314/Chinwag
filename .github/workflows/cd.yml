@@ -6,6 +6,12 @@ name: CD
 # so docker/k3s/kubectl are all available locally — no inbound SSH, no keys,
 # no repo secrets.
 #
+# update.sh is run with --obs, so every deploy ALSO updates the observability
+# stack (observability/install.sh: Loki/Alloy/Prometheus+Alertmanager, the
+# Chinwag Notifier, Grafana + dashboards). The notifier image is rebuilt,
+# imported and rollout-restarted here, so Discord alerting changes ship with
+# every app deploy.
+#
 # The runner operates on a persistent checkout at ~/Chinwag, which
 # must contain the gitignored infra/k3s/secret.yaml (created once from
 # secret.yaml.example). See .github/workflows/README.md for runner
@@ -43,8 +49,10 @@ jobs:
           git reset --hard origin/main
           git status --short
 
-      - name: Run infra/k3s/update.sh
+      - name: Run infra/k3s/update.sh (app + observability stack)
         run: |
           set -euo pipefail
           cd "$HOME/Chinwag/infra/k3s"
-          ./update.sh
+          # --obs: also update the observability stack. install.sh rebuilds +
+          # imports + rollout-restarts the notifier, and applies the dashboards.
+          ./update.sh --obs
