@@ -56,3 +56,28 @@ jobs:
           # --obs: also update the observability stack. install.sh rebuilds +
           # imports + rollout-restarts the notifier, and applies the dashboards.
           ./update.sh --obs
+
+      # Send a deploy notification to the Discord "deployments" channel (the
+      # same webhook the notifier uses for the `deployments` category). The URL
+      # is read from the gitignored infra/k3s/secret.yaml — never committed.
+      # Runs on success AND failure (green 🚀 / red 🚨).
+      - name: Notify Discord (deployments channel)
+        if: always()
+        run: |
+          set -euo pipefail
+          cd "$HOME/Chinwag"
+          URL="$(grep -E '^[[:space:]]*DISCORD_WEBHOOK_URL_DEPLOYMENTS:' infra/k3s/secret.yaml | head -1 | sed -E 's/^[[:space:]]*[A-Za-z_]+:[[:space:]]*//; s/^"//; s/"$//')"
+          [ -n "$URL" ] || URL="$(grep -E '^[[:space:]]*DISCORD_WEBHOOK_URL:' infra/k3s/secret.yaml | head -1 | sed -E 's/^[[:space:]]*[A-Za-z_]+:[[:space:]]*//; s/^"//; s/"$//')"
+          if [ -z "$URL" ]; then
+            echo "WARN: no Discord webhook in infra/k3s/secret.yaml — skipping deploy notification"
+            exit 0
+          fi
+          SHA="$(git rev-parse --short HEAD)"
+          if [ "${{ job.status }}" = "success" ]; then
+            COLOR=5763719; TITLE="🚀 Deploy finished"
+          else
+            COLOR=15548997; TITLE="🚨 Deploy failed"
+          fi
+          PAYLOAD="{\"embeds\":[{\"title\":\"$TITLE\",\"description\":\"Commit **$SHA** deployed to production.\",\"color\":$COLOR}]}"
+          curl -fsS -m 15 -H 'Content-Type: application/json' -d "$PAYLOAD" "$URL" >/dev/null \
+            || echo "WARN: deploy notification to Discord failed" >&2
