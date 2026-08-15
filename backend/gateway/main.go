@@ -20,6 +20,12 @@ func main() {
 
 	e := echo.New()
 
+	// Resolve the real client IP through Traefik's X-Forwarded-For so the rate
+	// limiter keys on the actual client, not the Traefik pod. Traefik always
+	// appends the connecting client IP as the rightmost XFF entry; the default
+	// trusts private/cluster networks as the proxy hop.
+	e.IPExtractor = echo.ExtractIPFromXFFHeader()
+
 	e.Use(appMiddleware.RequestID())
 	e.Use(appMiddleware.AccessLogger())
 	e.Use(appMiddleware.MetricsMiddleware())
@@ -47,6 +53,13 @@ func main() {
 		AllowCredentials: true,
 	}))
 
+	// Rate limit as a Pre middleware registered BEFORE setupRoutes. The proxy
+	// router lives in a Pre middleware (see proxy.go) and short-circuits — it
+	// proxies the request and returns, bypassing the Use chain. So the limiter
+	// must run earlier in the Pre chain to actually throttle the proxied API
+	// routes (/auth, /rooms, /chat, /users, /admin), not just /health.
+	e.Pre(appMiddleware.RateLimit(cfg.RateLimitEnabled, cfg.RateLimitRate, cfg.RateLimitBurst))
+
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -58,7 +71,13 @@ func main() {
 
 	setupRoutes(e, cfg)
 
-	slog.Info("gateway starting", "port", cfg.Port, "routes", len(cfg.Routes))
+	slog.Info("gateway starting",
+		"port", cfg.Port,
+		"routes", len(cfg.Routes),
+		"rate_limit_enabled", cfg.RateLimitEnabled,
+		"rate_limit_rate", cfg.RateLimitRate,
+		"rate_limit_burst", cfg.RateLimitBurst,
+	)
 
 	if err := e.Start("0.0.0.0:" + cfg.Port); err != nil {
 		slog.Error("gateway failed to start", "error", err)

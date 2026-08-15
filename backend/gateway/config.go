@@ -1,6 +1,9 @@
 package main
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 type ServiceRoute struct {
 	Prefix      string
@@ -13,12 +16,36 @@ type ServiceRoute struct {
 type Config struct {
 	Port   string
 	Routes []ServiceRoute
+
+	// Per-IP rate limiting (token bucket). The gateway is the single edge for
+	// all HTTP traffic, so this throttles abusive clients before they reach
+	// the backend services.
+	RateLimitEnabled bool
+	RateLimitRate    float64
+	RateLimitBurst   int
 }
 
 func LoadConfig() *Config {
 	port := os.Getenv("GATEWAY_PORT")
 	if port == "" {
 		port = "8000"
+	}
+
+	// Rate limiting is on by default (generous limits: 20 req/s per IP, burst
+	// 60). Disable with GATEWAY_RATE_LIMIT_ENABLED=false, or tune the numbers
+	// via env without a rebuild.
+	rateLimitEnabled := os.Getenv("GATEWAY_RATE_LIMIT_ENABLED") != "false"
+	rateLimitRate := 20.0
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_RATE"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			rateLimitRate = f
+		}
+	}
+	rateLimitBurst := 60
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_BURST"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			rateLimitBurst = n
+		}
 	}
 
 	var routes []ServiceRoute
@@ -69,7 +96,10 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		Port:   port,
-		Routes: routes,
+		Port:             port,
+		Routes:           routes,
+		RateLimitEnabled: rateLimitEnabled,
+		RateLimitRate:    rateLimitRate,
+		RateLimitBurst:   rateLimitBurst,
 	}
 }
