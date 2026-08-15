@@ -85,14 +85,20 @@ manifests). Deployment is **automatic**:
 
 - **Dev** — `infra/k3s/deploy.sh` calls `./observability/install.sh` (skip with
   `--no-obs`).
-- **Production (automatic)** — `.github/workflows/deploy-observability.yml`
-  runs `observability/install.sh` on the self-hosted runner on the k3s node
-  **after every successful `CD` run on `main`** (`workflow_run`), or on demand
-  via `workflow_dispatch` (Actions → "Deploy Observability"). This means the
-  notifier image, Alertmanager config, alert rules and the whole obs stack are
-  re-deployed on every app deploy — the notifier is now under **automatic CD**.
-  `infra/k3s/update.sh` (the CD fast path) also accepts `--obs` if you want to
-  bundle the obs update into an app deploy, but it is **not** run by default.
+- **Production (automatic)** — `cd.yml` runs `infra/k3s/update.sh --obs` on the
+  self-hosted runner on the k3s node after every push to `main`, so **every**
+  deploy also updates the observability stack. `update.sh --obs` calls
+  `observability/install.sh`, which Helm-upgrades Loki/Alloy/
+  Prometheus+Alertmanager/Grafana, re-applies the dashboards, and **rebuilds +
+  imports + rollout-restarts the notifier** (the Deployment uses `:latest` +
+  `IfNotPresent`, so a plain apply would never pick up a new image). Alert
+  rules, the notifier and the whole obs stack always match `main` after a merge.
+- **Manual fallback** — `.github/workflows/deploy-observability.yml` is
+  **manual-only** (`workflow_dispatch`, Actions → "Deploy Observability") for an
+  on-demand reinstall without a full app deploy. It is **not** triggered by CD
+  (that would run `install.sh` twice).
+- `infra/k3s/update.sh` **without** `--obs` gives a fast app-only refresh;
+  CI/CD always passes `--obs`.
 
 All entry points are idempotent: the `grafana-admin` and
 `chinwag-notifier-secrets` Secrets are only created once (existing values kept),
@@ -125,13 +131,19 @@ helm upgrade --install alloy grafana/alloy -n monitoring \
 helm upgrade --install prometheus prometheus-community/prometheus -n monitoring \
   --version 29.23.0 -f prometheus-values.yaml --wait
 
-# 4) Notifier (Alertmanager -> Discord) — build image, inject webhook secret, apply
+# 4) Notifier (Alertmanager -> Discord) — build image, inject webhook secret,
+#    apply, then FORCE a rollout so the freshly imported :latest image is used
 DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/<id>/<token>' \
   docker build -t chinwag/notifier:latest -f notifier/Dockerfile notifier/
+docker save chinwag/notifier:latest | sudo k3s ctr images import -
 kubectl -n monitoring create secret generic chinwag-notifier-secrets \
   --from-literal=DISCORD_WEBHOOK_URL='<url>' \
   --dry-run=client -o yaml | kubectl -n monitoring apply -f -
 kubectl apply -f notifier.yaml
+# imagePullPolicy: IfNotPresent + :latest — a plain apply never rolls out a new
+# image, so restart explicitly (install.sh does this automatically):
+kubectl -n monitoring rollout restart deploy/chinwag-notifier
+kubectl -n monitoring rollout status deploy/chinwag-notifier --timeout=120s
 
 # 5) Grafana admin Secret (random password, never committed to Git)
 kubectl -n monitoring create secret generic grafana-admin \
@@ -210,6 +222,17 @@ Prometheus ──(alert rules)──► Alertmanager ──(HTTP webhook)──�
   alert (capped at 10 embeds) — a batched Alertmanager notification does not
   spam Discord. `firing` embeds are red (🔴), `resolved` embeds are green (🟢)
   and include the duration.
+- **Discord API safety** (the notifier must never produce a 400):
+  - Per-field caps: title 250 / description 2000 / field value 1000 chars.
+  - A shared **6000-char aggregate budget** across **all embeds in one message**
+    (Discord's limit) — earlier alerts keep the most context, and once the
+    budget is used up the remaining alerts are dropped instead of risking a 400.
+  - `validURL` only keeps a `generatorURL` whose host is a **domain (contains a
+    dot) or an IP literal**. Discord rejects bare single-label hostnames (e.g.
+    the k8s pod name in `http://prometheus-server-0:9090/graph?...`) with a 400
+    `{"embeds":["0"]}`, so such URLs are dropped.
+  - On a Discord 4xx the response body (up to 4096 bytes) is included in the
+    logged error, so the exact reason is visible.
 - Unknown/extra labels never fail parsing (the payload struct only declares the
   fields the notifier uses), and missing labels/annotations fall back gracefully.
 
@@ -288,6 +311,12 @@ silent (no fabricated metrics).
 | `ChinwagHighMemory` | warning | warnings | >90% of memory request (10m) |
 | `ChinwagPVCLowSpace` | warning | warnings | PVC <15% free (10m, via kubelet volume stats) |
 
+> **local-path caveat (PVCLowSpace)**: with the `local-path` storage class,
+> kubelet volume stats report the **host filesystem** (not an independent
+> per-PVC quota), so `ChinwagPVCLowSpace` effectively fires when the **host disk**
+> is low — e.g. `storage-volume-prometheus-server-0` showing <15% free means the
+> host `/data` is ~91% full. Treat it as host-disk-pressure on a single-node setup.
+
 App-level HTTP metrics come from the **gateway's `/metrics`** endpoint
 (`backend/gateway/middleware/metrics.go`) — the gateway is the single edge for
 all HTTP traffic, so `http_requests_total{service,method,code}` and
@@ -315,13 +344,16 @@ message. Repeat notifications for a still-firing alert come every 4h.
 
 `notifier/` has table-driven tests covering: valid firing/resolved payloads,
 invalid JSON, trailing data, empty `alerts`, missing webhook URL, Discord API
-errors, Discord timeouts, sparse alerts (missing labels/annotations), unknown
-fields, embed formatting (title/color/fields/duration, embed cap), **per-category
+errors (incl. that the error includes the HTTP status **and** the response body),
+Discord timeouts, sparse alerts (missing labels/annotations), unknown fields,
+embed formatting (title/color/fields/duration, embed cap), **per-category
 webhook routing** (incidents/deployments/traffic/recoveries/warnings + default
-fallback), `LoadConfig` webhook env parsing, and `URLFor`/`HasWebhooks`. Discord
-calls use an in-process `httptest` mock — **no external network**. The tests are
-picked up automatically by the backend `make test` / `make vet` (the notifier is
-in the `SERVICES` list), so the CI `backend` job covers them.
+fallback), **aggregate embed budget** (worst-case single/batched messages never
+exceed 6000 chars), **URL validation** (bare hostname dropped / IP / FQDN kept),
+`LoadConfig` webhook env parsing, and `URLFor`/`HasWebhooks`. Discord calls use
+an in-process `httptest` mock — **no external network**. The tests are picked up
+automatically by the backend `make test` / `make vet` (the notifier is in the
+`SERVICES` list), so the CI `backend` job covers them.
 
 ### Manual testing (per chat room)
 
@@ -507,10 +539,12 @@ And in Grafana Explore the same logs are visible with:
 ## Metrics (Prometheus) & dashboards
 
 Prometheus (`prometheus-community/prometheus`) collects metrics from the
-**kubelet cAdvisor** (per-container CPU/RAM) and **kube-state-metrics**
-(pod/deployment counts). App-level request counts and error rates are derived
-from the **Loki** logs in Grafana (the Go services are not instrumented with
-`/metrics`).
+**kubelet cAdvisor** (per-container CPU/RAM), **kube-state-metrics**
+(pod/deployment counts), and the **gateway's `/metrics`** endpoint
+(`backend/gateway/middleware/metrics.go`: request counter + latency histogram,
+labeled by service/method/code, scraped cluster-internally via Service
+annotations — `/metrics` is not exposed on the public ingress). Request counts /
+error rates in Grafana also come from **Loki** logs.
 
 - Datasources in Grafana: **Loki** (default) + **Prometheus**
   (`http://prometheus-server.monitoring.svc.cluster.local:80`).
@@ -519,7 +553,8 @@ from the **Loki** logs in Grafana (the Go services are not instrumented with
   (`dashboardsConfigMaps` + `dashboardProviders` in grafana-values.yaml).
 - Panels: CPU usage per service, memory usage per service, pod count per
   service, request count per service (Loki), error rate per service (Loki),
-  recent error logs (Loki).
+  recent error logs (Loki), and an **Alerting (Notifier → Discord)** section:
+  alert deliveries per category (Loki) + a live notifier log stream.
 - On **WSL2**, `prometheus-node-exporter` is disabled (host `/` mount is not
   shared/slave); container metrics come from cAdvisor, so this is fine.
 
@@ -653,6 +688,16 @@ kubectl -n monitoring exec deploy/loki -- sh -c 'wget -qO- http://localhost:3100
 helm upgrade --install loki grafana/loki -n monitoring --version 7.2.0 -f loki-values.yaml
 helm upgrade --install alloy grafana/alloy -n monitoring --version 1.11.1 -f alloy-values.yaml
 helm upgrade --install grafana grafana/grafana -n monitoring --version 10.5.15 -f grafana-values.yaml
+
+# Notifier 400 {"embeds":["0"]} from Discord — the alert's generatorURL host is a
+# bare single-label hostname (e.g. prometheus-server-0), which Discord rejects.
+# The notifier's validURL drops such URLs (notifier/message.go); logged errors
+# include the Discord response body (4096 bytes) so the exact reason is visible.
+
+# Notifier still serving an old image after a deploy — install.sh now
+# rollout-restarts it, but you can force it manually:
+kubectl -n monitoring rollout restart deploy/chinwag-notifier
+kubectl -n monitoring rollout status deploy/chinwag-notifier --timeout=120s
 ```
 
 ## Teardown
