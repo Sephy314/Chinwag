@@ -30,6 +30,14 @@ spec:
           envFrom:
             - configMapRef:
                 name: chinwag-config
+          # Redis password for the distributed rate limiter (Redis is the
+          # authoritative per-IP limit shared across the 2 gateway replicas).
+          env:
+            - name: GATEWAY_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chinwag-secrets
+                  key: REDIS_PASSWORD
           readinessProbe:
             httpGet:
               path: /health

@@ -26,6 +26,25 @@ func main() {
 	// trusts private/cluster networks as the proxy hop.
 	e.IPExtractor = echo.ExtractIPFromXFFHeader()
 
+	// Distributed rate limiting: Redis is the authoritative global state
+	// (shared across the 2 gateway replicas), with a per-pod L1 in-memory
+	// limiter as the fast path and Redis-outage fallback. In "memory" backend
+	// (local dev without Redis) only L1 runs.
+	var redisLimiter appMiddleware.Limiter
+	if cfg.RateLimitBackend == "redis" {
+		redisLimiter = appMiddleware.NewRedisLimiter(
+			cfg.RedisAddr, cfg.RedisPassword,
+			cfg.RateLimitRate, cfg.RateLimitBurst,
+			cfg.RedisKeyTTL, cfg.RedisTimeout,
+		)
+		slog.Info("rate limiter backend", "backend", "redis",
+			"addr", cfg.RedisAddr, "rate", cfg.RateLimitRate, "burst", cfg.RateLimitBurst,
+			"ttl", cfg.RedisKeyTTL.String(), "timeout", cfg.RedisTimeout.String())
+	} else {
+		slog.Info("rate limiter backend", "backend", "memory (L1 only)",
+			"rate", cfg.RateLimitRate, "burst", cfg.RateLimitBurst)
+	}
+
 	e.Use(appMiddleware.RequestID())
 	e.Use(appMiddleware.AccessLogger())
 	e.Use(appMiddleware.MetricsMiddleware())
@@ -58,7 +77,14 @@ func main() {
 	// proxies the request and returns, bypassing the Use chain. So the limiter
 	// must run earlier in the Pre chain to actually throttle the proxied API
 	// routes (/auth, /rooms, /chat, /users, /admin), not just /health.
-	e.Pre(appMiddleware.RateLimit(cfg.RateLimitEnabled, cfg.RateLimitRate, cfg.RateLimitBurst))
+	e.Pre(appMiddleware.RateLimit(appMiddleware.RateLimitConfig{
+		Enabled:      cfg.RateLimitEnabled,
+		Rate:         cfg.RateLimitRate,
+		Burst:        cfg.RateLimitBurst,
+		Redis:        redisLimiter,
+		RedisTimeout: cfg.RedisTimeout,
+		L1ExpiresIn:  cfg.L1ExpiresIn,
+	}))
 
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})

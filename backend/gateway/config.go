@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 type ServiceRoute struct {
@@ -19,10 +20,19 @@ type Config struct {
 
 	// Per-IP rate limiting (token bucket). The gateway is the single edge for
 	// all HTTP traffic, so this throttles abusive clients before they reach
-	// the backend services.
+	// the backend services. Redis is the authoritative distributed state
+	// (shared across gateway replicas); an L1 in-memory limiter is the fast
+	// path and the Redis-outage fallback.
 	RateLimitEnabled bool
 	RateLimitRate    float64
 	RateLimitBurst   int
+
+	RateLimitBackend string        // "redis" (default when Redis is configured) | "memory" (L1 only)
+	RedisAddr        string        // e.g. "redis:6379" (from GATEWAY_REDIS_ADDR / REDIS_ADDR)
+	RedisPassword    string        // cluster Redis requires auth
+	RedisKeyTTL      time.Duration // per-IP rate-limit key TTL (idle cleanup)
+	RedisTimeout     time.Duration // bounds a single Redis round-trip
+	L1ExpiresIn      time.Duration // idle L1 bucket expiry
 }
 
 func LoadConfig() *Config {
@@ -45,6 +55,50 @@ func LoadConfig() *Config {
 	if v := os.Getenv("GATEWAY_RATE_LIMIT_BURST"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			rateLimitBurst = n
+		}
+	}
+
+	// Redis (authoritative distributed state). Empty address → memory backend.
+	redisAddr := os.Getenv("GATEWAY_REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = os.Getenv("REDIS_ADDR")
+	}
+	redisPassword := os.Getenv("GATEWAY_REDIS_PASSWORD")
+	if redisPassword == "" {
+		redisPassword = os.Getenv("REDIS_PASSWORD")
+	}
+	if redisPassword == "" {
+		redisPassword = os.Getenv("REDIS_PW")
+	}
+
+	// Backend: explicit GATEWAY_RATE_LIMIT_BACKEND wins; otherwise use Redis
+	// when an address is configured (k8s) and fall back to memory for local
+	// dev (no Redis → would otherwise add a 50ms timeout to every request).
+	rateLimitBackend := os.Getenv("GATEWAY_RATE_LIMIT_BACKEND")
+	if rateLimitBackend == "" {
+		if redisAddr != "" {
+			rateLimitBackend = "redis"
+		} else {
+			rateLimitBackend = "memory"
+		}
+	}
+
+	redisKeyTTL := 120 * time.Second
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_REDIS_TTL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			redisKeyTTL = d
+		}
+	}
+	redisTimeout := 50 * time.Millisecond
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_REDIS_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			redisTimeout = d
+		}
+	}
+	l1ExpiresIn := 5 * time.Minute
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_L1_EXPIRES"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			l1ExpiresIn = d
 		}
 	}
 
@@ -101,5 +155,11 @@ func LoadConfig() *Config {
 		RateLimitEnabled: rateLimitEnabled,
 		RateLimitRate:    rateLimitRate,
 		RateLimitBurst:   rateLimitBurst,
+		RateLimitBackend: rateLimitBackend,
+		RedisAddr:        redisAddr,
+		RedisPassword:    redisPassword,
+		RedisKeyTTL:      redisKeyTTL,
+		RedisTimeout:     redisTimeout,
+		L1ExpiresIn:      l1ExpiresIn,
 	}
 }
