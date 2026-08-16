@@ -308,7 +308,7 @@ silent (no fabricated metrics).
 | `ChinwagPodRestarting` | warning | warnings | >3 restarts / 15m (10m) |
 | `ChinwagDeploymentReplicasMismatch` | critical | deployments | desired ≠ available replicas (10m) |
 | `ChinwagHighCPU` | warning | warnings | >90% of CPU request (10m) |
-| `ChinwagHighMemory` | warning | warnings | >90% of memory request (10m) |
+| `ChinwagHighMemory` | warning | warnings | >150% of memory request **and ≥128Mi working set** (10m) |
 | `ChinwagPVCLowSpace` | warning | warnings | PVC <15% free (10m, via kubelet volume stats) |
 
 > **local-path caveat (PVCLowSpace)**: with the `local-path` storage class,

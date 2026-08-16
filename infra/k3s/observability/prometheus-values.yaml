@@ -266,9 +266,17 @@ serverFiles:
               summary: "High CPU usage on {{ $labels.pod }}"
               description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 90% of its CPU request for 10 minutes."
 
+          # High memory usage relative to the pod's memory REQUEST. Two
+          # conditions must hold to avoid false positives: (1) working set must
+          # exceed 150% of the (often small) request — verified against live
+          # data where grafana sits at ~90-110% and prometheus-server at ~120-
+          # 140% of request while staying well under their memory limits — and
+          # (2) working set must be at least 128Mi so tiny-request containers
+          # (Go services 64Mi, notifier 32Mi) never fire on trivial usage.
           - alert: ChinwagHighMemory
             expr: |
-              (sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=~"chinwag|monitoring", container!="", container!="POD"}) / clamp_min(sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="memory"}), 0.001)) > 0.9
+              (sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=~"chinwag|monitoring", container!="", container!="POD"}) / clamp_min(sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="memory"}), 0.001)) > 1.5
+              and on(namespace, pod, container) sum by (namespace, pod, container) (container_memory_working_set_bytes{namespace=~"chinwag|monitoring", container!="", container!="POD"}) > 134217728
               and on(namespace, pod, container) sum by (namespace, pod, container) (kube_pod_container_resource_requests{namespace=~"chinwag|monitoring", resource="memory"}) > 0
             for: 10m
             labels:
@@ -276,7 +284,7 @@ serverFiles:
               category: warnings
             annotations:
               summary: "High memory usage on {{ $labels.pod }}"
-              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 90% of its memory request for 10 minutes."
+              description: "Container {{ $labels.container }} in pod {{ $labels.pod }} ({{ $labels.namespace }}) is using more than 150% of its memory request (and at least 128Mi) for 10 minutes."
 
           # PVC disk space (kubelet_volume_stats_*). node-exporter is DISABLED
           # on this WSL2 host, so node-level filesystem metrics do not exist;
