@@ -30,6 +30,7 @@
 - Tech Stack
 - API Docs
 - Deployment (k3s)
+- Observability (Loki + Prometheus + Grafana)
 - Directory Structure
 - License
 
@@ -252,7 +253,35 @@ Key deployment facts:
 
 ---
 
-## 📁 Directory Structure
+## � Observability (Loki + Prometheus + Grafana)
+
+A container log collection / search / **alerting** stack for the k3s cluster. All artifacts live in [`infra/k3s/observability`](infra/k3s/observability); full docs are in its own [README](infra/k3s/observability/README.md).
+
+```
+Chinwag Pods
+    │
+    ├─ stdout/stderr ──► Grafana Alloy (DaemonSet) ──► Loki ──► Grafana
+    │
+    └─ /metrics (gateway) ──► Prometheus ──► Alertmanager ──► Notifier ──► Discord
+```
+
+| Component | Role |
+|:---|:---|
+| **Grafana Alloy** | Log collector (DaemonSet), ships stdout/stderr → Loki |
+| **Loki** | Log storage & query (monolithic, filesystem) |
+| **Prometheus + Alertmanager** | Metrics (cAdvisor + kube-state-metrics + gateway `/metrics`), alert rules, grouping / dedup |
+| **Grafana** | Dashboards (provisioned `chinwag-overview`), Loki + Prometheus datasources |
+| **Chinwag Notifier** | Stateless Go service: Alertmanager webhook → **Discord** embeds |
+
+- **Metrics**: app-level HTTP metrics come from the gateway's `/metrics` (per-service `http_requests_total`, `http_request_duration_seconds`); the gateway Service carries `prometheus.io/scrape` annotations and `/metrics` is cluster-network only (never exposed on the public ingress).
+- **Alerting → Discord**: Prometheus rules (`prometheus-values.yaml`) → Alertmanager (groups by alert/service/severity, repeats every 4h) → Notifier → **per-category Discord webhooks** (`incidents`, `deployments`, `traffic`, `recoveries`, `warnings`) so each channel can be muted independently. Webhook URLs live only in the gitignored `infra/k3s/secret.yaml` and are never committed.
+- **Alert rules**: ~18 rules covering HTTP 5xx/4xx, latency, traffic spikes, gateway / dependency down, pod failures / restarts / OOM, deployment replica mismatch, CPU / memory (memory = >150% of request **and** ≥128Mi working set), PVC low space — each scoped to metrics that actually exist in the stack.
+- **Deployment**: installed by `infra/k3s/observability/install.sh` (Helm for Loki / Alloy / Prometheus / Grafana, plain `kubectl apply` for the Notifier) into the `monitoring` namespace. `infra/k3s/deploy.sh` calls it (skip with `--no-obs`); CD (`cd.yml`) runs `update.sh --obs` after every push to `main`; the manual-only `.github/workflows/deploy-observability.yml` re-runs it on demand.
+- **Grafana access**: served at `/grafana` behind the ingress (cert-manager TLS). The admin password is random and stored in the `grafana-admin` Secret (`kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d`); change it with `set-grafana-password.sh`.
+
+---
+
+## �📁 Directory Structure
 
 ```
 backend/
@@ -268,6 +297,7 @@ backend/
 
 frontend/                    # Next.js web client (minimal)
 infra/k3s/                   # k3s deployment manifests + scripts
+└── observability/           # obs stack: Loki/Alloy/Prometheus/Grafana + notifier
 ```
 
 ---
