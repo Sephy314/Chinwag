@@ -38,6 +38,13 @@ type RateLimitConfig struct {
 	// falls back to L1 (fail-open). Client read/write timeouts also apply.
 	RedisTimeout time.Duration
 
+	// Redis circuit breaker: after RedisCircuitThreshold consecutive failures
+	// the breaker opens and requests skip the Redis round-trip (immediate
+	// L1-only) instead of each paying RedisTimeout; a probe after
+	// RedisCircuitCooldown re-checks Redis and closes on success.
+	RedisCircuitThreshold int
+	RedisCircuitCooldown  time.Duration
+
 	// L1ExpiresIn is how long idle per-IP L1 buckets live before cleanup
 	// (lazy initialisation — no key preload, idle state expires).
 	L1ExpiresIn time.Duration
@@ -93,6 +100,20 @@ func RateLimit(cfg RateLimitConfig) echo.MiddlewareFunc {
 		},
 	)
 
+	// Circuit breaker around the Redis call (see circuit_breaker.go).
+	var breaker *circuitBreaker
+	if cfg.Redis != nil {
+		threshold := cfg.RedisCircuitThreshold
+		if threshold <= 0 {
+			threshold = 3
+		}
+		cooldown := cfg.RedisCircuitCooldown
+		if cooldown <= 0 {
+			cooldown = 5 * time.Second
+		}
+		breaker = newCircuitBreaker(threshold, cooldown)
+	}
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			if rateLimitSkipper(c) {
@@ -107,8 +128,17 @@ func RateLimit(cfg RateLimitConfig) echo.MiddlewareFunc {
 				return deny429(c, identifier)
 			}
 
-			// Redis is authoritative when available.
+			// Redis is authoritative when available (behind a circuit breaker:
+			// once an outage is detected, requests skip the Redis round-trip
+			// instead of each blocking on RedisTimeout).
 			if cfg.Redis != nil {
+				if !breaker.allow() {
+					// Breaker open — degraded L1-only fast path, fail-open.
+					rateLimitL1Fallback.Inc()
+					rateLimitAllowed.WithLabelValues("l1").Inc()
+					return next(c)
+				}
+
 				ctx, cancel := context.WithTimeout(c.Request().Context(), cfg.RedisTimeout)
 				defer cancel()
 
@@ -119,11 +149,13 @@ func RateLimit(cfg RateLimitConfig) echo.MiddlewareFunc {
 				if err != nil {
 					// Degraded mode: Redis unavailable. Do NOT fail closed —
 					// the L1 decision above already allowed this request.
+					breaker.failure()
 					rateLimitRedisErrors.Inc()
 					rateLimitL1Fallback.Inc()
 					rateLimitAllowed.WithLabelValues("l1").Inc()
 					return next(c)
 				}
+				breaker.success()
 				if !allowed {
 					rateLimitRejected.WithLabelValues("redis").Inc()
 					return deny429(c, identifier)

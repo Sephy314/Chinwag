@@ -21,10 +21,16 @@ func main() {
 	e := echo.New()
 
 	// Resolve the real client IP through Traefik's X-Forwarded-For so the rate
-	// limiter keys on the actual client, not the Traefik pod. Traefik always
-	// appends the connecting client IP as the rightmost XFF entry; the default
-	// trusts private/cluster networks as the proxy hop.
-	e.IPExtractor = echo.ExtractIPFromXFFHeader()
+	// limiter keys on the actual client, not the Traefik pod. Trust is scoped
+	// to the proxy hop ONLY (Traefik's source = the k3s pod CIDR, see
+	// GATEWAY_TRUSTED_PROXY_CIDR) — no blanket private-net trust — so a client
+	// on another network can't forge XFF to rotate its rate-limit key.
+	ipExtractor, err := appMiddleware.NewXFFIPExtractor(cfg.TrustedProxyCIDR)
+	if err != nil {
+		slog.Error("invalid trusted proxy CIDR", "error", err)
+		os.Exit(1)
+	}
+	e.IPExtractor = ipExtractor
 
 	// Distributed rate limiting: Redis is the authoritative global state
 	// (shared across the 2 gateway replicas), with a per-pod L1 in-memory
@@ -78,12 +84,14 @@ func main() {
 	// must run earlier in the Pre chain to actually throttle the proxied API
 	// routes (/auth, /rooms, /chat, /users, /admin), not just /health.
 	e.Pre(appMiddleware.RateLimit(appMiddleware.RateLimitConfig{
-		Enabled:      cfg.RateLimitEnabled,
-		Rate:         cfg.RateLimitRate,
-		Burst:        cfg.RateLimitBurst,
-		Redis:        redisLimiter,
-		RedisTimeout: cfg.RedisTimeout,
-		L1ExpiresIn:  cfg.L1ExpiresIn,
+		Enabled:               cfg.RateLimitEnabled,
+		Rate:                  cfg.RateLimitRate,
+		Burst:                 cfg.RateLimitBurst,
+		Redis:                 redisLimiter,
+		RedisTimeout:          cfg.RedisTimeout,
+		RedisCircuitThreshold: cfg.RedisCircuitThreshold,
+		RedisCircuitCooldown:  cfg.RedisCircuitCooldown,
+		L1ExpiresIn:           cfg.L1ExpiresIn,
 	}))
 
 	e.GET("/health", func(c *echo.Context) error {

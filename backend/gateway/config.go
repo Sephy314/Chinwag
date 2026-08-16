@@ -33,6 +33,18 @@ type Config struct {
 	RedisKeyTTL      time.Duration // per-IP rate-limit key TTL (idle cleanup)
 	RedisTimeout     time.Duration // bounds a single Redis round-trip
 	L1ExpiresIn      time.Duration // idle L1 bucket expiry
+
+	// TrustedProxyCIDR is the only proxy hop whose X-Forwarded-For is trusted
+	// (Traefik's source — the k3s pod CIDR). Everything else is treated as the
+	// client, so an internal client can't spoof XFF to rotate rate-limit keys.
+	TrustedProxyCIDR string
+
+	// Redis circuit breaker: after RedisCircuitThreshold consecutive failures
+	// within an outage, the breaker opens and requests skip the Redis round-trip
+	// (immediate L1-only) instead of each paying the full RedisTimeout. A probe
+	// after RedisCircuitCooldown re-checks Redis and closes on success.
+	RedisCircuitThreshold int
+	RedisCircuitCooldown  time.Duration
 }
 
 func LoadConfig() *Config {
@@ -102,6 +114,26 @@ func LoadConfig() *Config {
 		}
 	}
 
+	// Traefik → Gateway traffic originates from the k3s pod CIDR (Traefik pod
+	// IPs). Default to the k3s default pod CIDR; override for other setups.
+	trustedProxyCIDR := os.Getenv("GATEWAY_TRUSTED_PROXY_CIDR")
+	if trustedProxyCIDR == "" {
+		trustedProxyCIDR = "10.42.0.0/16"
+	}
+
+	redisCircuitThreshold := 3
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_REDIS_CIRCUIT_THRESHOLD"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			redisCircuitThreshold = n
+		}
+	}
+	redisCircuitCooldown := 5 * time.Second
+	if v := os.Getenv("GATEWAY_RATE_LIMIT_REDIS_CIRCUIT_COOLDOWN"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			redisCircuitCooldown = d
+		}
+	}
+
 	var routes []ServiceRoute
 
 	if authURL := os.Getenv("AUTH_SERVICE_URL"); authURL != "" {
@@ -150,16 +182,19 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		Port:             port,
-		Routes:           routes,
-		RateLimitEnabled: rateLimitEnabled,
-		RateLimitRate:    rateLimitRate,
-		RateLimitBurst:   rateLimitBurst,
-		RateLimitBackend: rateLimitBackend,
-		RedisAddr:        redisAddr,
-		RedisPassword:    redisPassword,
-		RedisKeyTTL:      redisKeyTTL,
-		RedisTimeout:     redisTimeout,
-		L1ExpiresIn:      l1ExpiresIn,
+		Port:                  port,
+		Routes:                routes,
+		RateLimitEnabled:      rateLimitEnabled,
+		RateLimitRate:         rateLimitRate,
+		RateLimitBurst:        rateLimitBurst,
+		RateLimitBackend:      rateLimitBackend,
+		RedisAddr:             redisAddr,
+		RedisPassword:         redisPassword,
+		RedisKeyTTL:           redisKeyTTL,
+		RedisTimeout:          redisTimeout,
+		L1ExpiresIn:           l1ExpiresIn,
+		TrustedProxyCIDR:      trustedProxyCIDR,
+		RedisCircuitThreshold: redisCircuitThreshold,
+		RedisCircuitCooldown:  redisCircuitCooldown,
 	}
 }

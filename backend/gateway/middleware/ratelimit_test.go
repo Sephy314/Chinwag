@@ -35,10 +35,15 @@ func doGetXFF(e *echo.Echo, path, ip string) *httptest.ResponseRecorder {
 }
 
 // newRateLimitedEcho builds an Echo with the limiter registered and the XFF
-// IP extractor set (as main.go does) so per-client-IP keying works via XFF.
+// IP extractor set to the production scoped trust (Traefik pod CIDR) so
+// per-client-IP keying works via XFF.
 func newRateLimitedEcho(cfg RateLimitConfig) *echo.Echo {
 	e := echo.New()
-	e.IPExtractor = echo.ExtractIPFromXFFHeader()
+	ex, err := NewXFFIPExtractor("10.42.0.0/16")
+	if err != nil {
+		panic(err)
+	}
+	e.IPExtractor = ex
 	e.Use(RateLimit(cfg))
 	return e
 }
@@ -79,6 +84,8 @@ type fakeRedis struct {
 	tokens map[string]float64
 	ts     map[string]int64
 	err    error
+
+	allowCalls atomic.Int64 // number of Allow() calls (for breaker assertions)
 }
 
 func newFakeRedis(rate float64, burst int) *fakeRedis {
@@ -86,6 +93,7 @@ func newFakeRedis(rate float64, burst int) *fakeRedis {
 }
 
 func (f *fakeRedis) Allow(_ context.Context, id string) (bool, error) {
+	f.allowCalls.Add(1)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
@@ -176,7 +184,8 @@ func TestRateLimitDisabledIsNoop(t *testing.T) {
 // (like setupRoutes in proxy.go). Guards the proxy-bypass regression.
 func TestRateLimitFullChain(t *testing.T) {
 	e := echo.New()
-	e.IPExtractor = echo.ExtractIPFromXFFHeader()
+	ex, _ := NewXFFIPExtractor("10.42.0.0/16")
+	e.IPExtractor = ex
 	e.Use(RequestID())
 	e.Use(AccessLogger())
 	e.Use(MetricsMiddleware())
@@ -270,6 +279,7 @@ func TestRateLimitRedisErrorFallsBackToL1(t *testing.T) {
 	cfg := l1OnlyCfg(0.001, 2)
 	cfg.Redis = redis
 	cfg.RedisTimeout = time.Second
+	cfg.RedisCircuitThreshold = 100 // don't trip the breaker here — isolate the fallback
 
 	e := newRateLimitedEcho(cfg)
 	e.GET("/", func(c *echo.Context) error { return c.String(http.StatusOK, "ok") })
@@ -350,5 +360,64 @@ func TestRateLimitRedisRecovery(t *testing.T) {
 	}
 	if got := doGetXFF(e, "/", "198.51.100.9").Code; got != http.StatusTooManyRequests {
 		t.Fatalf("phase3 B req3: got %d, want 429 (Redis authoritative)", got)
+	}
+}
+
+// TestNewXFFIPExtractorScopesTrust verifies the security fix: only the Traefik
+// proxy CIDR is trusted for X-Forwarded-For, so an internal client on another
+// network cannot spoof XFF to rotate its rate-limit key.
+func TestNewXFFIPExtractorScopesTrust(t *testing.T) {
+	ex, err := NewXFFIPExtractor("10.42.0.0/16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extract := func(remoteAddr, xff string) string {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = remoteAddr
+		if xff != "" {
+			req.Header.Set("X-Forwarded-For", xff)
+		}
+		return ex(req)
+	}
+
+	// Via Traefik (pod CIDR): the XFF client IP is trusted.
+	if got := extract("10.42.0.9:1234", "203.0.113.5"); got != "203.0.113.5" {
+		t.Errorf("via Traefik pod: got %q, want 203.0.113.5", got)
+	}
+	// Untrusted private source (e.g. 192.168.x): XFF is NOT trusted — the
+	// direct IP wins, so the client can't forge the rate-limit key.
+	if got := extract("192.168.1.10:1234", "203.0.113.5"); got != "192.168.1.10" {
+		t.Errorf("untrusted private source: got %q, want 192.168.1.10", got)
+	}
+	// Public source directly: XFF not trusted either.
+	if got := extract("8.8.8.8:1234", "203.0.113.5"); got != "8.8.8.8" {
+		t.Errorf("public source: got %q, want 8.8.8.8", got)
+	}
+}
+
+// TestRateLimitRedisCircuitBreakerSkipsRedis verifies that after the breaker
+// opens, requests stop paying the Redis round-trip (immediate L1-only).
+func TestRateLimitRedisCircuitBreakerSkipsRedis(t *testing.T) {
+	redis := newFakeRedis(0.001, 100)
+	redis.err = errors.New("connection refused")
+	cfg := redisCfg(redis, time.Second)
+	cfg.RedisCircuitThreshold = 1 // open after the first failure
+
+	e := newRateLimitedEcho(cfg)
+	e.GET("/", func(c *echo.Context) error { return c.String(http.StatusOK, "ok") })
+
+	// Request 1 trips the breaker (failure #1 → threshold 1 → open) and falls
+	// back to L1 (fail-open).
+	if got := doGetXFF(e, "/", "203.0.113.5").Code; got != http.StatusOK {
+		t.Fatalf("req1: got %d, want 200 (L1 fallback)", got)
+	}
+	// Requests 2..4 skip Redis entirely (breaker open) — still 200 via L1.
+	for i := 0; i < 3; i++ {
+		if got := doGetXFF(e, "/", "203.0.113.5").Code; got != http.StatusOK {
+			t.Fatalf("req%d: got %d, want 200 (L1, breaker open)", i+2, got)
+		}
+	}
+	if got := redis.allowCalls.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 Redis call (breaker open), got %d", got)
 	}
 }
