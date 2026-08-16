@@ -327,6 +327,33 @@ gateway Service carries `prometheus.io/scrape` annotations
 `kubernetes-service-endpoints` job over the cluster network — `/metrics` is
 **not** exposed on the public ingress.
 
+### Gateway rate limiting (per-IP, Redis-backed)
+
+The gateway throttles per-client-IP with a token bucket (default 20 req/s,
+burst 60 — `GATEWAY_RATE_LIMIT_RATE` / `GATEWAY_RATE_LIMIT_BURST`). Because the
+gateway runs **2 replicas**, the limit is **distributed**: Redis is the
+authoritative state (one atomic EVALSHA per request, keyed by the real client
+IP via Traefik `X-Forwarded-For`, with a TTL per key), and a per-pod **L1
+in-memory limiter** is a cheap fast-path gate.
+
+- **Redis healthy** → `L1 → Redis (authoritative) → backend`; a global per-IP
+  budget is shared across replicas.
+- **Redis down / timeout** → the request is **not** failed closed: it falls
+  back to the L1 limiter (`fail-open`), so the service stays available with
+  local degraded protection. Redis recovery is automatic (L1 state is **never
+  written back** to Redis).
+- `GATEWAY_RATE_LIMIT_BACKEND=memory` forces L1-only (local dev without Redis).
+- Observable via `/metrics`: `rate_limit_allowed_total{mode}`,
+  `rate_limit_rejected_total{mode}`, `rate_limit_redis_errors_total`,
+  `rate_limit_l1_fallback_total`, `rate_limit_redis_latency_seconds` — alert on
+  `rate_limit_redis_errors_total`/`rate_limit_l1_fallback_total` to detect a
+  Redis outage.
+
+> **Caveat**: during an L1-only period (Redis down or memory backend) the
+> global per-IP limit is **approximate** across replicas — each pod enforces
+> its own local budget. This is intentional (abuse protection degrades
+> gracefully rather than taking the gateway down).
+
 > **Dependencies**: Postgres / Redis / NATS have **no exporters** in this stack,
 > so no dependency-health rules are defined (per the "don't fabricate metrics"
 > rule). A backend outage still surfaces through gateway 5xx alerts (the gateway
