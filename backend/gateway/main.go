@@ -20,6 +20,37 @@ func main() {
 
 	e := echo.New()
 
+	// Resolve the real client IP through Traefik's X-Forwarded-For so the rate
+	// limiter keys on the actual client, not the Traefik pod. Trust is scoped
+	// to the proxy hop ONLY (Traefik's source = the k3s pod CIDR, see
+	// GATEWAY_TRUSTED_PROXY_CIDR) — no blanket private-net trust — so a client
+	// on another network can't forge XFF to rotate its rate-limit key.
+	ipExtractor, err := appMiddleware.NewXFFIPExtractor(cfg.TrustedProxyCIDR)
+	if err != nil {
+		slog.Error("invalid trusted proxy CIDR", "error", err)
+		os.Exit(1)
+	}
+	e.IPExtractor = ipExtractor
+
+	// Distributed rate limiting: Redis is the authoritative global state
+	// (shared across the 2 gateway replicas), with a per-pod L1 in-memory
+	// limiter as the fast path and Redis-outage fallback. In "memory" backend
+	// (local dev without Redis) only L1 runs.
+	var redisLimiter appMiddleware.Limiter
+	if cfg.RateLimitBackend == "redis" {
+		redisLimiter = appMiddleware.NewRedisLimiter(
+			cfg.RedisAddr, cfg.RedisPassword,
+			cfg.RateLimitRate, cfg.RateLimitBurst,
+			cfg.RedisKeyTTL, cfg.RedisTimeout,
+		)
+		slog.Info("rate limiter backend", "backend", "redis",
+			"addr", cfg.RedisAddr, "rate", cfg.RateLimitRate, "burst", cfg.RateLimitBurst,
+			"ttl", cfg.RedisKeyTTL.String(), "timeout", cfg.RedisTimeout.String())
+	} else {
+		slog.Info("rate limiter backend", "backend", "memory (L1 only)",
+			"rate", cfg.RateLimitRate, "burst", cfg.RateLimitBurst)
+	}
+
 	e.Use(appMiddleware.RequestID())
 	e.Use(appMiddleware.AccessLogger())
 	e.Use(appMiddleware.MetricsMiddleware())
@@ -47,6 +78,22 @@ func main() {
 		AllowCredentials: true,
 	}))
 
+	// Rate limit as a Pre middleware registered BEFORE setupRoutes. The proxy
+	// router lives in a Pre middleware (see proxy.go) and short-circuits — it
+	// proxies the request and returns, bypassing the Use chain. So the limiter
+	// must run earlier in the Pre chain to actually throttle the proxied API
+	// routes (/auth, /rooms, /chat, /users, /admin), not just /health.
+	e.Pre(appMiddleware.RateLimit(appMiddleware.RateLimitConfig{
+		Enabled:               cfg.RateLimitEnabled,
+		Rate:                  cfg.RateLimitRate,
+		Burst:                 cfg.RateLimitBurst,
+		Redis:                 redisLimiter,
+		RedisTimeout:          cfg.RedisTimeout,
+		RedisCircuitThreshold: cfg.RedisCircuitThreshold,
+		RedisCircuitCooldown:  cfg.RedisCircuitCooldown,
+		L1ExpiresIn:           cfg.L1ExpiresIn,
+	}))
+
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -58,7 +105,13 @@ func main() {
 
 	setupRoutes(e, cfg)
 
-	slog.Info("gateway starting", "port", cfg.Port, "routes", len(cfg.Routes))
+	slog.Info("gateway starting",
+		"port", cfg.Port,
+		"routes", len(cfg.Routes),
+		"rate_limit_enabled", cfg.RateLimitEnabled,
+		"rate_limit_rate", cfg.RateLimitRate,
+		"rate_limit_burst", cfg.RateLimitBurst,
+	)
 
 	if err := e.Start("0.0.0.0:" + cfg.Port); err != nil {
 		slog.Error("gateway failed to start", "error", err)
