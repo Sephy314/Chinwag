@@ -30,6 +30,7 @@
 - 기술 스택
 - API 문서
 - 배포 (k3s)
+- 옵저버빌리티 (Loki + Prometheus + Grafana)
 - 디렉토리 구조
 - 라이선스
 
@@ -227,7 +228,35 @@ k3s 매니페스트 기반 배포(Helm 불필요). 모든 배포 산출물은 [`
 
 ---
 
-## 📁 디렉토리 구조
+## � 옵저버빌리티 (Loki + Prometheus + Grafana)
+
+k3s 클러스터용 컨테이너 로그 수집/검색 + **알람** 스택. 모든 산출물은 [`infra/k3s/observability`](infra/k3s/observability)에 있으며, 상세 문서는 [전용 README](infra/k3s/observability/README.md) 참조.
+
+```
+Chinwag Pods
+    │
+    ├─ stdout/stderr ──► Grafana Alloy (DaemonSet) ──► Loki ──► Grafana
+    │
+    └─ /metrics (gateway) ──► Prometheus ──► Alertmanager ──► Notifier ──► Discord
+```
+
+| 구성요소 | 역할 |
+|:---|:---|
+| **Grafana Alloy** | 로그 수집기 (DaemonSet), stdout/stderr → Loki 전송 |
+| **Loki** | 로그 저장·검색 (monolithic, filesystem) |
+| **Prometheus + Alertmanager** | 메트릭(cAdvisor + kube-state-metrics + gateway `/metrics`), 알람 규칙, 그룹핑/중복 제거 |
+| **Grafana** | 대시보드(프로비저닝된 `chinwag-overview`), Loki + Prometheus 데이터소스 |
+| **Chinwag Notifier** | 무상태 Go 서비스: Alertmanager 웹훅 → **Discord** embed 전송 |
+
+- **메트릭**: 앱 레벨 HTTP 메트릭은 gateway의 `/metrics`에서 제공(서비스별 `http_requests_total`, `http_request_duration_seconds`). gateway Service에 `prometheus.io/scrape` 어노테이션이 있으며 `/metrics`는 클러스터 네트워크 전용(공용 ingress에 절대 노출 안 됨).
+- **알람 → Discord**: Prometheus 규칙(`prometheus-values.yaml`) → Alertmanager(알람/서비스/심각도별 그룹핑, 4시간마다 반복) → Notifier → **카테고리별 Discord 웹훅**(`incidents`, `deployments`, `traffic`, `recoveries`, `warnings`)으로 채널별 독립 음소거 가능. 웹훅 URL은 gitignore된 `infra/k3s/secret.yaml`에만 존재하며 절대 커밋되지 않음.
+- **알람 규칙**: HTTP 5xx/4xx, 지연시간, 트래픽 급증, gateway/의존성 다운, 파드 실패/재시작/OOM, 디플로이먼트 레플리카 불일치, CPU/메모리(메모리 = request 대비 >150% **그리고** working set ≥128Mi), PVC 용량 부족 등 약 18개 — 스택에 실제 존재하는 메트릭만 사용.
+- **배포**: `infra/k3s/observability/install.sh`로 `monitoring` 네임스페이스에 설치(Loki/Alloy/Prometheus/Grafana는 Helm, Notifier는 plain `kubectl apply`). `infra/k3s/deploy.sh`가 호출(`--no-obs`로 생략 가능), CD(`cd.yml`)는 `main` 푸시마다 `update.sh --obs` 실행, 수동 재설치는 `.github/workflows/deploy-observability.yml` 워크플로(수동 전용).
+- **Grafana 접근**: `/grafana` URL로 ingress 뒤에서 접속(cert-manager TLS). admin 비밀번호는 랜덤 생성되어 `grafana-admin` Secret에 저장(`kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d`), `set-grafana-password.sh`로 변경 가능.
+
+---
+
+## �📁 디렉토리 구조
 
 ```
 backend/
@@ -243,6 +272,7 @@ backend/
 
 frontend/                    # Next.js 웹 클라이언트 (최소 구성)
 infra/k3s/                   # k3s 배포 매니페스트 + 스크립트
+└── observability/           # 옵저버빌리티 스택 (Loki/Alloy/Prometheus/Grafana/Notifier)
 ```
 
 ---
