@@ -197,7 +197,7 @@ NATS JetStream (CHAT_EVENTS) ──▶ consumer (chat-projection) ──▶ proj
 
 ---
 
-## �️ Admin Panel
+## ⚙️ Admin Panel
 
 The platform ships with a **role-gated admin panel** for platform operators. Access is enforced **on the backend** (`RequireRole(ADMIN)`), never by the UI alone.
 
@@ -222,7 +222,7 @@ Notes:
 
 ---
 
-## �📚 API Docs
+## 📚 API Docs
 
 Each service exposes a **Swagger UI** at `/docs`, reachable through the gateway's `/auth`, `/rooms`, and `/chat` paths.
 
