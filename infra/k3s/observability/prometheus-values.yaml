@@ -191,15 +191,23 @@ serverFiles:
       # --- Kubernetes workload health (kube-state-metrics) -------------------
       - name: chinwag-kubernetes
         rules:
+          # Fires when a pod enters the Failed phase. To avoid paging on stale
+          # orphaned pods — node/kubelet restarts (common on this WSL2 host)
+          # leave pods in Failed with ContainerStatusUnknown that kubelet GC
+          # never collects and the Deployment controller has already moved
+          # past — only pods created in the last 24h are matched. Freshly
+          # broken deployments still alert; long-lingering orphans are ignored.
           - alert: ChinwagPodFailed
-            expr: kube_pod_status_phase{namespace=~"chinwag|monitoring", phase="Failed"} == 1
+            expr: |
+              kube_pod_status_phase{namespace=~"chinwag|monitoring", phase="Failed"} == 1
+              and on(namespace, pod) (time() - kube_pod_created{namespace=~"chinwag|monitoring"}) < 86400
             for: 2m
             labels:
               severity: critical
               category: incidents
             annotations:
               summary: "Pod {{ $labels.pod }} failed"
-              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} entered the Failed phase."
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} entered the Failed phase (created within the last 24h)."
 
           - alert: ChinwagPodNotReady
             expr: sum by (namespace, pod) (kube_pod_status_ready{namespace=~"chinwag|monitoring", condition="false"}) > 0
