@@ -162,6 +162,17 @@ else
   echo "==> Skipping observability stack (default — pass --obs to update it)"
 fi
 
+# --- Clean up orphaned Failed pods --------------------------------------------
+# Node/kubelet restarts (common on this WSL2 host) can leave orphaned pods in
+# the Failed phase (ContainerStatusUnknown) that kubelet GC never collects and
+# the Deployment controller has already moved past. Delete them so the
+# ChinwagPodFailed alert doesn't page on dead leftovers.
+echo "==> Cleaning up orphaned Failed pods (chinwag, monitoring)"
+for ns in chinwag monitoring; do
+  ${KUBECTL} -n "${ns}" get pods --field-selector=status.phase=Failed -o name 2>/dev/null |
+    xargs -r -n 1 ${KUBECTL} -n "${ns}" delete --force --grace-period=0
+done
+
 # --- Verify -------------------------------------------------------------------
 echo "==> Pods"
 ${KUBECTL} -n chinwag get pods

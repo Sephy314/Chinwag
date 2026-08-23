@@ -131,6 +131,16 @@ else
   echo "==> Skipping observability stack (--no-obs)"
 fi
 
+# --- Clean up orphaned Failed pods --------------------------------------------
+# Same orphan-pod cleanup as update.sh — node/kubelet restarts leave stale
+# Failed pods (ContainerStatusUnknown) that nobody GCs, so remove them to keep
+# the ChinwagPodFailed alert from paging on dead leftovers.
+echo "==> Cleaning up orphaned Failed pods (chinwag, monitoring)"
+for ns in chinwag monitoring; do
+  ${KUBECTL} -n "${ns}" get pods --field-selector=status.phase=Failed -o name 2>/dev/null |
+    xargs -r -n 1 ${KUBECTL} -n "${ns}" delete --force --grace-period=0
+done
+
 # --- Verify -------------------------------------------------------------------
 echo "==> Pods"
 ${KUBECTL} -n chinwag get pods
