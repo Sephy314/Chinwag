@@ -209,15 +209,22 @@ serverFiles:
               summary: "Pod {{ $labels.pod }} failed"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} entered the Failed phase (created within the last 24h)."
 
+          # Same orphan-guard as ChinwagPodFailed: node/kubelet restarts leave
+          # stale pods not-ready (Ready=false, ContainerStatusUnknown) that
+          # never recover, so only pods created in the last 24h are matched.
+          # Freshly deployed-but-broken pods still alert; long-lingering
+          # orphans are ignored.
           - alert: ChinwagPodNotReady
-            expr: sum by (namespace, pod) (kube_pod_status_ready{namespace=~"chinwag|monitoring", condition="false"}) > 0
+            expr: |
+              sum by (namespace, pod) (kube_pod_status_ready{namespace=~"chinwag|monitoring", condition="false"}) > 0
+              and on(namespace, pod) (time() - kube_pod_created{namespace=~"chinwag|monitoring"}) < 86400
             for: 5m
             labels:
               severity: critical
               category: incidents
             annotations:
               summary: "Pod {{ $labels.pod }} is not ready"
-              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not-ready for more than 5 minutes."
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not-ready for more than 5 minutes (created within the last 24h)."
 
           - alert: ChinwagPodCrashLoopBackOff
             expr: kube_pod_container_status_waiting_reason{namespace=~"chinwag|monitoring", reason="CrashLoopBackOff"} == 1

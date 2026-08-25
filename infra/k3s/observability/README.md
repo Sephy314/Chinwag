@@ -302,7 +302,7 @@ silent (no fabricated metrics).
 | `ChinwagKubeStateMetricsDown` | critical | incidents | `up{service="kube-state-metrics"} == 0` (5m) |
 | `ChinwagAlertmanagerDown` | critical | incidents | `up{service="prometheus-alertmanager"} == 0` (5m) |
 | `ChinwagPodFailed` | critical | incidents | pod phase `Failed` (2m, **created <24h** — stale orphaned pods ignored) |
-| `ChinwagPodNotReady` | critical | incidents | pod not-ready (5m) |
+| `ChinwagPodNotReady` | critical | incidents | pod not-ready (5m, **created <24h** — stale orphaned pods ignored) |
 | `ChinwagPodCrashLoopBackOff` | critical | incidents | container waiting `CrashLoopBackOff` (5m) |
 | `ChinwagPodOOMKilled` | critical | incidents | container last terminated `OOMKilled` (2m) |
 | `ChinwagPodRestarting` | warning | warnings | >3 restarts / 15m (10m) |
